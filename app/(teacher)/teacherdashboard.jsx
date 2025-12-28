@@ -328,7 +328,7 @@ const TeacherDashboard = () => {
       {/* --- PREMIUM PROFILE BOTTOM SHEET --- */}
       <Modal
         visible={profileModalVisible}
-        animationType="fade" // Fade background, slide content manually
+        animationType="slide" // Fade background, slide content manually
         transparent={true}
         onRequestClose={() => setProfileModalVisible(false)}
       >

@@ -9,19 +9,16 @@ import {
   TextInput,
   FlatList,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { auth, db } from "../../config/firebaseConfig";
-import {
-  collection,
-  addDoc,
-  doc,
-  getDoc,
-  query,
-  where,
-  onSnapshot,
-} from "firebase/firestore";
+
+// NATIVE SDK
+import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
+
 import CustomToast from "../../components/CustomToast";
 
 const TeacherClassUpdates = () => {
@@ -29,90 +26,114 @@ const TeacherClassUpdates = () => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
-  const [myClasses, setMyClasses] = useState([]);
-  const [selectedClass, setSelectedClass] = useState("");
-  const [mySubjects, setMySubjects] = useState([]);
-  const [selectedSubject, setSelectedSubject] = useState("");
-  const [teacherName, setTeacherName] = useState("");
+  // Data State
+  const [teachingProfile, setTeachingProfile] = useState([]);
+  const [uniqueClasses, setUniqueClasses] = useState([]);
+  const [availableSubjects, setAvailableSubjects] = useState([]);
   const [history, setHistory] = useState([]);
 
+  // Selections
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [selectedTag, setSelectedTag] = useState("General"); // Quick Tag
+
+  // Form
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [teacherName, setTeacherName] = useState("");
 
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState("success");
-
-  const showToast = (msg, type = "success") => {
-    setToastMessage(msg);
-    setToastType(type);
-    setToastVisible(true);
+  // Toast
+  const [toast, setToast] = useState({
+    visible: false,
+    msg: "",
+    type: "success",
+  });
+  const showToast = (msg, type = "success") =>
+    setToast({ visible: true, msg, type });
+  const theme = {
+    bg: "bg-[#282C34]",
+    card: "bg-[#333842]",
+    accent: "text-[#f49b33]",
+    text: "text-white",
+    subText: "text-gray-400",
+    borderColor: "border-[#4C5361]",
+    send: "#f49b33",
   };
 
-  const colors = {
-    BG: "#282C34",
-    CARD: "#333842",
-    ACCENT: "#f49b33",
-    TEXT: "#FFFFFF",
-    SUB_TEXT: "#BBBBBB",
-    INPUT_BORDER: "#616A7D",
-    SEND: "#4CAF50",
-  };
-
+  // --- 1. FETCH PROFILE & HISTORY ---
   useEffect(() => {
-    let unsubscribe;
-
     const init = async () => {
       try {
-        const user = auth.currentUser;
-        if (user) {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
+        const uid = auth().currentUser?.uid;
+        if (!uid) return;
 
+        // Fetch User Profile
+        const userDoc = await firestore().collection("users").doc(uid).get();
+        if (userDoc.exists) {
+          const data = userDoc.data();
+          setTeacherName(data.name || "Teacher");
+
+          const profile = data.teachingProfile || [];
+          if (profile.length > 0) {
+            setTeachingProfile(profile);
+            const classes = [...new Set(profile.map((item) => item.class))];
+            setUniqueClasses(classes);
+            // Auto-select first
+            if (classes.length > 0) handleClassChange(classes[0], profile);
+          } else {
+            // Fallback
             const classes = data.classesTaught || [];
-            setMyClasses(classes);
-            if (classes.length > 0) setSelectedClass(classes[0]);
-
             const subjects = data.subjects || [];
-            setMySubjects(subjects);
-            if (subjects.length > 0) setSelectedSubject(subjects[0]);
-
-            setTeacherName(data.name || "Teacher");
+            setUniqueClasses(classes);
+            setTeachingProfile(
+              classes.flatMap((c) =>
+                subjects.map((s) => ({ class: c, subject: s }))
+              )
+            );
+            if (classes.length > 0) {
+              setSelectedClass(classes[0]);
+              setAvailableSubjects(subjects);
+              if (subjects.length > 0) setSelectedSubject(subjects[0]);
+            }
           }
-
-          const q = query(
-            collection(db, "class_notices"),
-            where("teacherId", "==", user.uid)
-          );
-
-          unsubscribe = onSnapshot(q, (snapshot) => {
-            const list = snapshot.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            }));
-            list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-            setHistory(list);
-          });
         }
+
+        // Fetch History
+        const historySnap = await firestore()
+          .collection("class_notices")
+          .where("teacherId", "==", uid)
+          .orderBy("createdAt", "desc")
+          .limit(20)
+          .get();
+
+        const list = historySnap.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setHistory(list);
       } catch (error) {
-        console.log(error);
+        console.log("Init Error:", error);
       } finally {
         setLoading(false);
       }
     };
 
     init();
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
   }, []);
 
-  const getTodayDate = () => {
-    const date = new Date();
-    return `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}`;
+  // --- 2. HANDLE SELECTION ---
+  const handleClassChange = (cls, profileData = teachingProfile) => {
+    setSelectedClass(cls);
+    const relevant = profileData
+      .filter((item) => item.class === cls)
+      .map((item) => item.subject);
+    setAvailableSubjects(relevant);
+
+    if (relevant.length > 0) setSelectedSubject(relevant[0]);
+    else setSelectedSubject(null);
   };
 
+  // --- 3. SEND NOTICE ---
   const handleSend = async () => {
     if (
       !title.trim() ||
@@ -120,235 +141,225 @@ const TeacherClassUpdates = () => {
       !selectedClass ||
       !selectedSubject
     ) {
-      showToast("Please fill all fields (Class, Subject, Title, Message).", "error");
+      showToast("Please fill all fields.", "error");
       return;
     }
 
     setSending(true);
     try {
-      await addDoc(collection(db, "class_notices"), {
+      const noticeData = {
         title: title.trim(),
         subject: selectedSubject,
+        tag: selectedTag,
         message: message.trim(),
-        content: message.trim(),
+        content: message.trim(), // Legacy support
         classId: selectedClass,
-        teacherId: auth.currentUser.uid,
+        teacherId: auth().currentUser.uid,
         teacherName: teacherName,
-        date: getTodayDate(),
-        createdAt: new Date().toISOString(),
+        date: new Date().toLocaleDateString("en-GB"),
+        createdAt: firestore.FieldValue.serverTimestamp(),
         type: "Class Update",
-      });
+      };
 
-      showToast(`Update sent to Class ${selectedClass}!`, "success");
+      const docRef = await firestore()
+        .collection("class_notices")
+        .add(noticeData);
+
+      // Update local history immediately
+      setHistory((prev) => [
+        { id: docRef.id, ...noticeData, createdAt: new Date() },
+        ...prev,
+      ]);
+
+      showToast(`Sent to ${selectedClass}!`, "success");
       setTitle("");
       setMessage("");
+      setSelectedTag("General");
     } catch (error) {
-      showToast(error.message, "error");
+      showToast("Failed to send.", "error");
     } finally {
       setSending(false);
     }
   };
 
-  const renderHistoryItem = ({ item }) => (
-    <View
-      style={{ backgroundColor: colors.CARD, borderLeftColor: colors.SEND }}
-      className="p-4 rounded-xl mb-3 border-l-4"
-    >
-      <View className="flex-row justify-between items-start">
-        <View className="flex-1 pr-2">
-          <Text
-            style={{ color: colors.TEXT }}
-            className="text-base font-semibold mb-1"
-          >
-            {item.title}
-          </Text>
-          <View className="flex-row flex-wrap mb-2">
-            <Text
-              style={{ color: colors.ACCENT }}
-              className="text-xs font-bold mr-2"
-            >
-              [{item.subject || "General"}]
-            </Text>
-            <Text style={{ color: colors.SUB_TEXT }} className="text-xs italic">
-              To: {item.classId}
-            </Text>
+  // --- RENDER HISTORY CARD ---
+  const renderHistoryItem = ({ item }) => {
+    // Determine Icon based on Tag
+    let icon = "notifications";
+    if (item.tag === "Homework") icon = "book";
+    if (item.tag === "Test") icon = "document-text";
+    if (item.tag === "Urgent") icon = "alert-circle";
+    if (item.tag === "Holiday") icon = "airplane";
+
+    return (
+      <View
+        className={`${theme.card} p-4 rounded-2xl mb-4 border ${theme.borderColor}`}
+      >
+        <View className="flex-row justify-between items-start mb-2">
+          <View className="flex-row items-center">
+            <View className="bg-[#f49b33]/20 p-2 rounded-full mr-3">
+              <Ionicons name={icon} size={16} color="#f49b33" />
+            </View>
+            <View>
+              <Text className="text-white font-bold text-base">
+                {item.title}
+              </Text>
+              <Text className="text-gray-400 text-xs">
+                {item.classId} • {item.subject}
+              </Text>
+            </View>
           </View>
-          <Text style={{ color: colors.TEXT }} className="text-sm">
-            {item.content}
+          <Text className="text-gray-500 text-[10px]">{item.date}</Text>
+        </View>
+
+        <View className="bg-[#282C34] p-3 rounded-xl border border-[#4C5361]/50">
+          <Text className="text-gray-300 text-sm leading-5">
+            {item.message || item.content}
           </Text>
         </View>
       </View>
-      <Text
-        style={{ color: colors.SUB_TEXT }}
-        className="text-xs text-right mt-2"
-      >
-        {item.date}
-      </Text>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${colors.BG} justify-center items-center`}
+        className={`flex-1 ${theme.bg} justify-center items-center`}
       >
-        <ActivityIndicator size="large" color={colors.ACCENT} />
+        <ActivityIndicator size="large" color="#f49b33" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.BG }}
-      className="pt-8"
-    >
-      <StatusBar backgroundColor={colors.BG} barStyle="light-content" />
-
-      <CustomToast 
-        visible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onHide={() => setToastVisible(false)}
+    <SafeAreaView className={`flex-1 ${theme.bg}`}>
+      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+      <CustomToast
+        visible={toast.visible}
+        message={toast.msg}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      <View className="px-4 pb-4 py-7 flex-row items-center">
-        <Ionicons
-          name="arrow-back"
-          size={24}
-          color={colors.TEXT}
+      {/* --- HEADER --- */}
+      <View className="px-5 pt-10 pb-2 flex-row items-center justify-between">
+        <TouchableOpacity
           onPress={() => router.back()}
-        />
-        <Text
-          style={{ color: colors.TEXT }}
-          className="text-2xl font-semibold ml-4"
+          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
         >
-          Notify Students
-        </Text>
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        <Text className="text-white text-xl font-bold">New Announcement</Text>
+        <View className="w-10" />
       </View>
 
-      <ScrollView className="flex-1">
-        <View className="px-4 mb-4">
-          <View className="flex-row justify-between mb-4">
-            <View style={{ width: "48%" }}>
-              <Text style={{ color: colors.SUB_TEXT }} className="text-xs mb-1">
-                Class
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  if (myClasses.length > 1) {
-                    const currentIndex = myClasses.indexOf(selectedClass);
-                    const nextIndex = (currentIndex + 1) % myClasses.length;
-                    setSelectedClass(myClasses[nextIndex]);
-                  } else if (myClasses.length === 0) {
-                    showToast("No classes assigned to you.", "warning");
-                  }
-                }}
-                style={{
-                  borderColor: colors.INPUT_BORDER,
-                  backgroundColor: colors.CARD,
-                }}
-                className="p-3 rounded-lg border flex-row justify-between items-center"
-              >
-                <Text
-                  style={{ color: colors.TEXT }}
-                  numberOfLines={1}
-                  className="text-base font-semibold"
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1"
+      >
+        <ScrollView
+          className="flex-1 px-5 pt-4"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* --- SELECTORS --- */}
+          <View className="mb-6">
+            <Text className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1">
+              Target Class
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              className="mb-4"
+            >
+              {uniqueClasses.map((cls) => (
+                <TouchableOpacity
+                  key={cls}
+                  onPress={() => handleClassChange(cls)}
+                  className={`mr-3 px-5 py-2 rounded-xl border ${selectedClass === cls ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-[#4C5361]"}`}
                 >
-                  {selectedClass || "..."}
+                  <Text
+                    className={`font-bold ${selectedClass === cls ? "text-[#282C34]" : "text-gray-400"}`}
+                  >
+                    {cls}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {selectedClass && (
+              <>
+                <Text className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1">
+                  Target Subject
                 </Text>
-                <Ionicons name="caret-down" size={14} color={colors.SUB_TEXT} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ width: "48%" }}>
-              <Text style={{ color: colors.SUB_TEXT }} className="text-xs mb-1">
-                Subject
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  if (mySubjects.length > 1) {
-                    const currentIndex = mySubjects.indexOf(selectedSubject);
-                    const nextIndex = (currentIndex + 1) % mySubjects.length;
-                    setSelectedSubject(mySubjects[nextIndex]);
-                  } else if (mySubjects.length === 0) {
-                    showToast("No subjects assigned to you.", "warning");
-                  }
-                }}
-                style={{
-                  borderColor: colors.INPUT_BORDER,
-                  backgroundColor: colors.CARD,
-                }}
-                className="p-3 rounded-lg border flex-row justify-between items-center"
-              >
-                <Text
-                  style={{ color: colors.TEXT }}
-                  numberOfLines={1}
-                  className="text-base font-semibold"
-                >
-                  {selectedSubject || "..."}
-                </Text>
-                <Ionicons name="caret-down" size={14} color={colors.SUB_TEXT} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        <View className="px-4">
-          <Text style={{ color: colors.SUB_TEXT }} className="text-sm mb-2">
-            Title
-          </Text>
-          <TextInput
-            placeholder="E.g. Chapter 5 Test"
-            placeholderTextColor={colors.SUB_TEXT}
-            value={title}
-            onChangeText={setTitle}
-            style={{
-              backgroundColor: colors.CARD,
-              color: colors.TEXT,
-              borderColor: colors.INPUT_BORDER,
-            }}
-            className="p-3 rounded-lg border mb-4 text-base"
-          />
-
-          <Text style={{ color: colors.SUB_TEXT }} className="text-sm mb-2">
-            Message
-          </Text>
-          <TextInput
-            multiline
-            numberOfLines={6}
-            placeholder="Type your announcement..."
-            placeholderTextColor={colors.SUB_TEXT}
-            value={message}
-            onChangeText={setMessage}
-            style={{
-              backgroundColor: colors.CARD,
-              color: colors.TEXT,
-              borderColor: colors.INPUT_BORDER,
-              textAlignVertical: "top",
-            }}
-            className="p-3 rounded-lg border mb-6 text-base"
-          />
-
-          <TouchableOpacity
-            onPress={handleSend}
-            disabled={sending}
-            style={{ backgroundColor: colors.SEND }}
-            className="py-3 rounded-xl items-center mb-8"
-          >
-            {sending ? (
-              <ActivityIndicator color={colors.BG} />
-            ) : (
-              <Text style={{ color: colors.BG }} className="text-lg font-bold">
-                Send Update
-              </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {availableSubjects.map((sub) => (
+                    <TouchableOpacity
+                      key={sub}
+                      onPress={() => setSelectedSubject(sub)}
+                      className={`mr-3 px-5 py-2 rounded-xl border ${selectedSubject === sub ? "bg-blue-500 border-blue-500" : "bg-[#333842] border-[#4C5361]"}`}
+                    >
+                      <Text
+                        className={`font-bold ${selectedSubject === sub ? "text-white" : "text-gray-400"}`}
+                      >
+                        {sub}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
             )}
-          </TouchableOpacity>
+          </View>
 
-          <Text
-            style={{ color: colors.ACCENT }}
-            className="text-xl font-semibold mb-4"
+          {/* --- COMPOSER CARD --- */}
+          <View
+            className={`${theme.card} p-4 rounded-2xl border ${theme.borderColor} mb-6`}
           >
-            History
+
+            <TextInput
+              placeholder="Title (e.g. Test Syllabus)"
+              placeholderTextColor="#666"
+              value={title}
+              onChangeText={setTitle}
+              className="bg-[#282C34] text-white p-4 rounded-xl border border-[#4C5361] mb-3 font-bold text-base"
+            />
+
+            <TextInput
+              placeholder="Write your message here..."
+              placeholderTextColor="#666"
+              multiline
+              numberOfLines={5}
+              value={message}
+              onChangeText={setMessage}
+              className="bg-[#282C34] text-white p-4 rounded-xl border border-[#4C5361] mb-4 text-sm"
+              style={{ textAlignVertical: "top" }}
+            />
+
+            <TouchableOpacity
+              onPress={handleSend}
+              disabled={sending}
+              className="bg-[#f49b33] py-4 rounded-xl flex-row justify-center items-center shadow-lg"
+            >
+              {sending ? (
+                <ActivityIndicator color="#282C34" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="send"
+                    size={20}
+                    color="#282C34"
+                    className="mr-2"
+                  />
+                  <Text className="text-[#282C34] font-bold text-lg">
+                    Post Announcement
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* --- HISTORY --- */}
+          <Text className="text-[#f49b33] font-bold text-lg mb-4 px-1">
+            Recent Updates
           </Text>
           <FlatList
             data={history}
@@ -356,16 +367,21 @@ const TeacherClassUpdates = () => {
             renderItem={renderHistoryItem}
             scrollEnabled={false}
             ListEmptyComponent={() => (
-              <Text
-                style={{ color: colors.SUB_TEXT }}
-                className="text-center italic"
-              >
-                No updates sent yet.
-              </Text>
+              <View className="items-center py-10 opacity-30">
+                <MaterialCommunityIcons
+                  name="bell-sleep"
+                  size={50}
+                  color="gray"
+                />
+                <Text className="text-gray-400 mt-2">
+                  No updates sent recently.
+                </Text>
+              </View>
             )}
           />
-        </View>
-      </ScrollView>
+          <View className="h-10" />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };

@@ -7,566 +7,689 @@ import {
   SafeAreaView,
   StatusBar,
   TextInput,
-  Linking,
   ActivityIndicator,
+  Platform,
+  Image,
+  KeyboardAvoidingView,
+  FlatList,
+  Alert,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { auth, db } from "../../config/firebaseConfig";
-import {
-  collection,
-  addDoc,
-  doc,
-  getDoc,
-  query,
-  where,
-  onSnapshot,
-} from "firebase/firestore";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+
+// NATIVE SDK
+import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
+import storage from "@react-native-firebase/storage";
+
 import CustomToast from "../../components/CustomToast";
+import CustomAlert from "../../components/CustomAlert";
 
 const TeacherNotesUploader = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
-  const [mySubjects, setMySubjects] = useState([]);
-  const [selectedSubject, setSelectedSubject] = useState("");
+  // Data
+  const [teachingProfile, setTeachingProfile] = useState([]);
   const [myClasses, setMyClasses] = useState([]);
-  const [selectedClass, setSelectedClass] = useState("");
+  const [mySubjects, setMySubjects] = useState([]);
   const [history, setHistory] = useState([]);
 
+  // Form
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [selectedSubject, setSelectedSubject] = useState(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [attachment, setAttachment] = useState(null);
 
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastConfig, setToastConfig] = useState({});
+  // Attachments Array (Multi-select)
+  const [attachments, setAttachments] = useState([]);
 
-  const showToast = (message, type) => {
-    setToastConfig({ message, type });
-    setToastVisible(true);
+  // UI
+  const [toast, setToast] = useState({
+    visible: false,
+    msg: "",
+    type: "success",
+  });
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+  });
+
+  const showToast = (msg, type = "success") =>
+    setToast({ visible: true, msg, type });
+
+  const theme = {
+    bg: "bg-[#282C34]",
+    card: "bg-[#333842]",
+    accent: "text-[#f49b33]",
+    text: "text-white",
+    subText: "text-gray-400",
+    borderColor: "border-[#4C5361]",
   };
 
-  const colors = {
-    BG: "#282C34",
-    CARD: "#333842",
-    ACCENT: "#f49b33",
-    TEXT: "#FFFFFF",
-    SUB_TEXT: "#BBBBBB",
-    INPUT_BORDER: "#616A7D",
-    UPLOAD: "#1E88E5",
-  };
-
+  // --- 1. INITIAL FETCH ---
   useEffect(() => {
-    let unsubscribe;
+    let unsubscribeSnapshot;
+
     const init = async () => {
       try {
-        const user = auth.currentUser;
-        if (user) {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            const classes = userDoc.data().classesTaught || [];
-            setMyClasses(classes);
-            if (classes.length > 0) setSelectedClass(classes[0]);
-
-            const subjects = data.subjects || [];
-            setMySubjects(subjects);
-            if (subjects.length > 0) setSelectedSubject(subjects[0]);
-          }
-
-          const q = query(
-            collection(db, "materials"),
-            where("teacherId", "==", user.uid)
-          );
-          unsubscribe = onSnapshot(q, (snapshot) => {
-            const list = snapshot.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            }));
-            list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-            setHistory(list);
-          });
+        const currentUser = auth().currentUser;
+        if (!currentUser) {
+          setLoading(false);
+          return;
         }
+
+        // A. Fetch Teacher Profile
+        const userDoc = await firestore()
+          .collection("users")
+          .doc(currentUser.uid)
+          .get();
+
+        if (userDoc.exists) {
+          const data = userDoc.data();
+          const profile = data.teachingProfile || [];
+
+          if (profile && profile.length > 0) {
+            setTeachingProfile(profile);
+            const classes = [...new Set(profile.map((item) => item.class))];
+            setMyClasses(classes);
+            if (classes.length > 0) handleClassChange(classes[0], profile);
+          } else {
+            // Legacy Fallback
+            const classes = data.classesTaught || [];
+            const subjects = data.subjects || [];
+            setMyClasses(classes);
+
+            const artificialProfile = classes.flatMap((c) =>
+              subjects.map((s) => ({ class: c, subject: s }))
+            );
+            setTeachingProfile(artificialProfile);
+
+            if (classes.length > 0)
+              handleClassChange(classes[0], artificialProfile);
+          }
+        }
+
+        // B. Real-time History Listener
+        unsubscribeSnapshot = firestore()
+          .collection("materials")
+          .where("teacherId", "==", currentUser.uid)
+          .orderBy("createdAt", "desc")
+          .onSnapshot(
+            (snapshot) => {
+              if (snapshot) {
+                const list = snapshot.docs.map((doc) => ({
+                  id: doc.id,
+                  ...doc.data(),
+                }));
+                setHistory(list);
+              }
+              setLoading(false);
+            },
+            (error) => {
+              console.log("History Error:", error);
+              setLoading(false);
+            }
+          );
       } catch (error) {
-        console.log(error);
-      } finally {
+        console.log("Init Error:", error);
         setLoading(false);
       }
     };
+
     init();
     return () => {
-      if (unsubscribe) unsubscribe();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
     };
   }, []);
 
-  const pickImage = async (useCamera) => {
-    try {
-      let result;
-      const options = {
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.7,
-        allowsEditing: true,
-      };
-
-      if (useCamera) {
-        await ImagePicker.requestCameraPermissionsAsync();
-        result = await ImagePicker.launchCameraAsync(options);
-      } else {
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-        result = await ImagePicker.launchImageLibraryAsync(options);
-      }
-
-      if (!result.canceled) {
-        const asset = result.assets[0];
-        setAttachment({
-          uri: asset.uri,
-          name: asset.fileName || `note_img_${Date.now()}.jpg`,
-          type: "image",
-          mimeType: "image/jpeg",
-        });
-        showToast("Image selected", "success");
-      }
-    } catch (e) {
-      showToast("Error picking image", "error");
-    }
+  // --- 2. LOGIC ---
+  const handleClassChange = (cls, profileData = teachingProfile) => {
+    setSelectedClass(cls);
+    const relevantSubjects = profileData
+      .filter((item) => item.class === cls)
+      .map((item) => item.subject);
+    const uniqueSubs = [...new Set(relevantSubjects)];
+    setMySubjects(uniqueSubs);
+    if (uniqueSubs.length > 0) setSelectedSubject(uniqueSubs[0]);
+    else setSelectedSubject(null);
   };
+
+  const formatDate = (timestamp) => {
+    if (!timestamp) return "Just Now";
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleDateString("en-GB");
+  };
+
+  const pickImage = async () => {
+      try {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          quality: 0.7,
+        });
+        if (!result.canceled) {
+          const asset = result.assets[0];
+          const name = asset.uri.split("/").pop();
+          setAttachments([
+            ...attachments,
+            { uri: asset.uri, name: name, type: "image" },
+          ]);
+        }
+      } catch (e) {
+        showToast("Error picking image", "error");
+      }
+    };
+  
+    const takePhoto = async () => {
+      try {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (permission.granted === false) {
+          showToast("Camera permission required", "warning");
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          quality: 0.7,
+        });
+        if (!result.canceled) {
+          const asset = result.assets[0];
+          const name = `camera_${Date.now()}.jpg`;
+          setAttachments([
+            ...attachments,
+            { uri: asset.uri, name: name, type: "image" },
+          ]);
+        }
+      } catch (e) {
+        showToast("Error taking photo", "error");
+      }
+    };
 
   const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: "application/pdf",
         copyToCacheDirectory: true,
+        multiple: true, // ALLOW MULTIPLE PDFS
       });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const doc = result.assets[0];
-        setAttachment({
+      if (!result.canceled) {
+        const newDocs = result.assets.map((doc) => ({
           uri: doc.uri,
           name: doc.name,
           type: "pdf",
           mimeType: "application/pdf",
-        });
-        showToast("PDF selected", "success");
+        }));
+        setAttachments((prev) => [...prev, ...newDocs]);
       }
     } catch (e) {
       showToast("Error picking document", "error");
     }
   };
 
-  const uploadToCloudinary = async (file) => {
-    if (!file) return "";
+  const removeAttachment = (index) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
 
-    const CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const IMAGE_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_IMAGE_PRESET;
-    const RAW_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_RAW_PRESET;
-
-    if (!CLOUD_NAME || !IMAGE_PRESET || !RAW_PRESET) {
-      throw new Error("Missing Cloudinary environment variables");
-    }
-
-    const data = new FormData();
-    data.append("file", {
-      uri: file.uri,
-      type: file.mimeType,
-      name: file.name,
-    });
-
-    const isPdf = file.type === "pdf";
-
-    const uploadPreset = isPdf ? RAW_PRESET : IMAGE_PRESET;
-    const endpoint = isPdf
-      ? `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/raw/upload`
-      : `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
-
-    data.append("upload_preset", uploadPreset);
-
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        body: data,
-      });
-
-      const result = await res.json();
-
-      if (!result.secure_url) {
-        throw new Error("Cloudinary upload failed");
-      }
-
-      if (isPdf && !result.secure_url.endsWith(".pdf")) {
-        return `${result.secure_url}.pdf`;
-      }
-
-      return result.secure_url;
-    } catch (error) {
-      console.log("Upload Error:", error);
-      throw error;
-    }
+  // --- 4. UPLOAD & SUBMIT ---
+  const uploadFile = async (uri, filename) => {
+    const reference = storage().ref(
+      `materials/${auth().currentUser.uid}/${Date.now()}_${filename}`
+    );
+    await reference.putFile(uri);
+    return await reference.getDownloadURL();
   };
 
   const handleUpload = async () => {
-    if (!title.trim() || !selectedClass) {
-      showToast("Title and Class are required.", "error");
+    if (!title.trim() || !selectedClass || !selectedSubject) {
+      showToast("Title, Class and Subject are required.", "error");
       return;
     }
 
     setUploading(true);
     try {
-      let fileUrl = "";
-      if (attachment) {
-        fileUrl = await uploadToCloudinary(attachment);
+      // 1. Upload All Files
+      const uploadedFiles = [];
+      for (const file of attachments) {
+        const url = await uploadFile(file.uri, file.name);
+        uploadedFiles.push({
+          name: file.name,
+          url: url,
+          type: file.type,
+        });
       }
 
-      await addDoc(collection(db, "materials"), {
-        title,
-        link: fileUrl,
-        description,
+      // 2. Prepare Data (Backward Compatible)
+      // We store the full array in 'attachments'
+      // We store the FIRST file in 'link'/'attachmentName' for old app versions
+      const docData = {
+        title: title.trim(),
+        description: description.trim(),
+
+        // Multi-file support
+        attachments: uploadedFiles,
+
+        // Legacy support (points to 1st file)
+        link: uploadedFiles.length > 0 ? uploadedFiles[0].url : "",
+        attachmentName: uploadedFiles.length > 0 ? uploadedFiles[0].name : "",
+        fileType: uploadedFiles.length > 0 ? uploadedFiles[0].type : "none",
+
         classId: selectedClass,
         subject: selectedSubject,
-        teacherId: auth.currentUser.uid,
-        attachmentName: attachment ? attachment.name : "",
-        createdAt: new Date().toISOString(),
-        date: new Date().toLocaleDateString(),
-      });
+        teacherId: auth().currentUser.uid,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+      };
+
+      await firestore().collection("materials").add(docData);
 
       showToast("Material shared successfully!", "success");
       setTitle("");
       setDescription("");
-      setAttachment(null);
+      setAttachments([]);
     } catch (error) {
-      showToast(error.message || "Upload Failed", "error");
+      console.error("Upload Error:", error);
+      if (error.code === "storage/unauthorized") {
+        showToast("Permission denied. Check Storage Rules.", "error");
+      } else {
+        showToast("Upload Failed. Try again.", "error");
+      }
     } finally {
       setUploading(false);
     }
   };
 
-  const openAttachment = (item) => {
-    if (!item.link) {
-      showToast("No attachment found", "info");
-      return;
-    }
-
-    router.push({
-      pathname: "/(teacher)/view_attachment",
-      params: {
-        url: encodeURIComponent(item.link),
-        title: item.title,
-        type: item.link.endsWith(".pdf") ? "pdf" : "image",
+  const handleDelete = (id) => {
+    setAlertConfig({
+      visible: true,
+      title: "Delete Material?",
+      message: "This will remove the file from student access.",
+      confirmText: "Delete",
+      type: "warning",
+      onConfirm: async () => {
+        setAlertConfig((prev) => ({ ...prev, visible: false }));
+        try {
+          await firestore().collection("materials").doc(id).delete();
+          showToast("Deleted successfully", "success");
+        } catch (e) {
+          showToast("Delete failed", "error");
+        }
       },
     });
   };
 
-  const renderItem = (item) => (
-    <View
-      key={item.id}
-      style={{ backgroundColor: colors.CARD }}
-      className="p-4 rounded-xl mb-3 border border-[#4C5361]"
-    >
-      <View className="flex-row justify-between items-start">
-        <View className="flex-1 mr-2">
-          <Text style={{ color: colors.TEXT }} className="font-bold text-base">
-            {item.title}
-          </Text>
-          <Text
-            style={{
-              color: colors.ACCENT,
-              fontSize: 12,
-              fontWeight: "bold",
-              marginTop: 2,
-            }}
-          >
-            {item.subject}
-          </Text>
-          <Text style={{ color: colors.SUB_TEXT, fontSize: 12, marginTop: 2 }}>
-            {item.description}
-          </Text>
-        </View>
+  const openAttachment = (fileUrl, fileName, fileType) => {
+    if (!fileUrl) return;
+    router.push({
+      pathname: "/(teacher)/view_attachment",
+      params: {
+        url: encodeURIComponent(fileUrl),
+        title: fileName,
+        type: fileType || (fileUrl.endsWith(".pdf") ? "pdf" : "image"),
+      },
+    });
+  };
 
-        <View className="items-end">
-          <Text
-            style={{ color: colors.ACCENT, fontSize: 12, fontWeight: "bold" }}
-          >
-            {item.classId}
-          </Text>
-          <Text style={{ color: colors.SUB_TEXT, fontSize: 10, marginTop: 2 }}>
-            {item.date}
-          </Text>
+  // --- RENDER HISTORY ITEM ---
+  const renderItem = ({ item }) => {
+    // Merge legacy single attachment into the array for display if 'attachments' is missing
+    const displayAttachments =
+      item.attachments ||
+      (item.link
+        ? [{ name: item.attachmentName, url: item.link, type: item.fileType }]
+        : []);
+
+    return (
+      <View
+        className={`${theme.card} p-4 rounded-2xl mb-4 border ${theme.borderColor} shadow-sm`}
+      >
+        <View className="flex-row justify-between items-start">
+          <View className="flex-1 mr-2">
+            <Text className="text-white font-bold text-lg mb-1">
+              {item.title}
+            </Text>
+            <View className="flex-row flex-wrap mb-2">
+              <View className="bg-[#f49b33]/20 px-2 py-0.5 rounded mr-2 mb-1">
+                <Text className="text-[#f49b33] text-[10px] font-bold">
+                  {item.classId}
+                </Text>
+              </View>
+              <View className="bg-blue-500/20 px-2 py-0.5 rounded mb-1">
+                <Text className="text-blue-400 text-[10px] font-bold">
+                  {item.subject}
+                </Text>
+              </View>
+            </View>
+            {item.description ? (
+              <Text className="text-gray-400 text-sm mb-2">
+                {item.description}
+              </Text>
+            ) : null}
+          </View>
+
           <TouchableOpacity
-            onPress={() => openAttachment(item)}
-            className="mt-2"
+            onPress={() => handleDelete(item.id)}
+            className="p-2 mb-2 bg-red-500/10 rounded-lg"
           >
-            <Ionicons
-              name="cloud-download-outline"
-              size={20}
-              color={item.link ? colors.UPLOAD : colors.SUB_TEXT}
-            />
+            <Ionicons name="trash-outline" size={18} color="#ef4444" />
           </TouchableOpacity>
         </View>
+
+        {/* Attachments List */}
+        {displayAttachments.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="mt-2 border-t border-[#4C5361]/50 pt-3"
+          >
+            {displayAttachments.map((file, idx) => (
+              <TouchableOpacity
+                key={idx}
+                onPress={() => openAttachment(file.url, file.name, file.type)}
+                className="bg-[#282C34] px-3 py-2 rounded-lg border border-[#4C5361] flex-row items-center mr-2"
+              >
+                <Ionicons
+                  name={file.type === "pdf" ? "document-text" : "image"}
+                  size={16}
+                  color="#f49b33"
+                  className="mr-2"
+                />
+                <Text
+                  className="text-gray-400 text-xs max-w-[120px]"
+                  numberOfLines={1}
+                >
+                  {file.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
+        <View className="mt-2 items-end">
+          <Text className="text-gray-600 text-[10px]">
+            {formatDate(item.createdAt)}
+          </Text>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${colors.BG} justify-center items-center`}
+        className={`flex-1 ${theme.bg} justify-center items-center`}
       >
-        <ActivityIndicator size="large" color={colors.ACCENT} />
+        <ActivityIndicator size="large" color="#f49b33" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.BG }}
-      className="pt-8"
-    >
-      <StatusBar backgroundColor={colors.BG} barStyle="light-content" />
+    <SafeAreaView className={`flex-1 ${theme.bg}`}>
+      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
       <CustomToast
-        visible={toastVisible}
-        message={toastConfig.message}
-        type={toastConfig.type}
-        onHide={() => setToastVisible(false)}
+        visible={toast.visible}
+        message={toast.msg}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
+      />
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        confirmText={alertConfig.confirmText}
+        type={alertConfig.type}
+        onConfirm={alertConfig.onConfirm}
+        onCancel={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
       />
 
-      <View className="px-4 pb-4 py-7 flex-row items-center">
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={colors.TEXT} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: colors.TEXT }}
-          className="text-2xl font-semibold ml-4"
+      {/* --- HEADER --- */}
+      <View className="px-5 pt-10 pb-2 flex-row items-center justify-between">
+        <TouchableOpacity
+          onPress={() => router.back()}
+          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
         >
-          Upload Notes
-        </Text>
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        <Text className="text-white text-xl font-bold">Upload Notes</Text>
+        <View className="w-10" />
       </View>
 
-      <ScrollView className="flex-1 px-4">
-        <View className="flex-row justify-between mb-4">
-          <View style={{ width: "48%" }}>
-            <Text style={{ color: colors.SUB_TEXT }} className="text-xs mb-1">
-              Class
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1"
+      >
+        <ScrollView
+          className="flex-1 px-5 pt-4"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* --- SELECTORS --- */}
+          <View className="mb-4">
+            <Text className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1">
+              Select Class
             </Text>
-            <TouchableOpacity
-              onPress={() => {
-                if (myClasses.length > 1) {
-                  const curr = myClasses.indexOf(selectedClass);
-                  setSelectedClass(myClasses[(curr + 1) % myClasses.length]);
-                }
-              }}
-              style={{
-                borderColor: colors.INPUT_BORDER,
-                backgroundColor: colors.CARD,
-              }}
-              className="p-3 rounded-lg border flex-row justify-between items-center"
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              className="mb-3"
             >
-              <Text
-                style={{ color: colors.TEXT }}
-                numberOfLines={1}
-                className="text-base font-semibold"
-              >
-                {selectedClass || "..."}
-              </Text>
-              <Ionicons name="caret-down" size={14} color={colors.SUB_TEXT} />
-            </TouchableOpacity>
+              {myClasses.length > 0 ? (
+                myClasses.map((cls) => (
+                  <TouchableOpacity
+                    key={cls}
+                    onPress={() => handleClassChange(cls)}
+                    className={`mr-3 px-5 py-2 rounded-xl border ${selectedClass === cls ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-[#4C5361]"}`}
+                  >
+                    <Text
+                      className={`font-bold ${selectedClass === cls ? "text-[#282C34]" : "text-gray-400"}`}
+                    >
+                      {cls}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <Text className="text-gray-500 italic ml-1">
+                  No classes found.
+                </Text>
+              )}
+            </ScrollView>
+
+            {selectedClass && (
+              <>
+                <Text className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1">
+                  Select Subject
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  className="mb-2"
+                >
+                  {mySubjects.map((sub) => (
+                    <TouchableOpacity
+                      key={sub}
+                      onPress={() => setSelectedSubject(sub)}
+                      className={`mr-3 px-5 py-2 rounded-xl border ${selectedSubject === sub ? "bg-blue-600 border-blue-600" : "bg-[#333842] border-[#4C5361]"}`}
+                    >
+                      <Text
+                        className={`font-bold ${selectedSubject === sub ? "text-white" : "text-gray-400"}`}
+                      >
+                        {sub}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
           </View>
 
-          <View style={{ width: "48%" }}>
-            <Text style={{ color: colors.SUB_TEXT }} className="text-xs mb-1">
-              Subject
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                if (mySubjects.length > 1) {
-                  const curr = mySubjects.indexOf(selectedSubject);
-                  setSelectedSubject(
-                    mySubjects[(curr + 1) % mySubjects.length]
-                  );
-                }
-              }}
-              style={{
-                borderColor: colors.INPUT_BORDER,
-                backgroundColor: colors.CARD,
-              }}
-              className="p-3 rounded-lg border flex-row justify-between items-center"
-            >
-              <Text
-                style={{ color: colors.TEXT }}
-                numberOfLines={1}
-                className="text-base font-semibold"
-              >
-                {selectedSubject || "..."}
-              </Text>
-              <Ionicons name="caret-down" size={14} color={colors.SUB_TEXT} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <Text style={{ color: colors.SUB_TEXT }} className="text-sm mb-2">
-          Title
-        </Text>
-        <TextInput
-          placeholder="Enter title..."
-          placeholderTextColor={colors.SUB_TEXT}
-          value={title}
-          onChangeText={setTitle}
-          style={{
-            backgroundColor: colors.CARD,
-            color: colors.TEXT,
-            borderColor: colors.INPUT_BORDER,
-          }}
-          className="p-3 rounded-lg border mb-4 text-base"
-        />
-
-        <Text style={{ color: colors.SUB_TEXT }} className="text-sm mb-2">
-          Attach File (Optional)
-        </Text>
-
-        {attachment ? (
+          {/* --- COMPOSER CARD --- */}
           <View
-            style={{
-              borderColor: colors.ACCENT,
-              backgroundColor: colors.CARD,
-            }}
-            className="flex-row items-center p-3 rounded-lg border mb-4"
+            className={`${theme.card} p-4 rounded-3xl border ${theme.borderColor} mb-6`}
           >
-            <Ionicons
-              name={attachment.type === "pdf" ? "document-text" : "image"}
-              size={24}
-              color={colors.ACCENT}
+            <Text className="text-[#f49b33] text-xs font-bold uppercase tracking-widest mb-3">
+              New Material
+            </Text>
+
+            <TextInput
+              placeholder="Title (e.g. History Ch-2 Notes)"
+              placeholderTextColor="#666"
+              value={title}
+              onChangeText={setTitle}
+              className="bg-[#282C34] text-white p-3 rounded-xl border border-[#4C5361] mb-3 font-bold"
             />
-            <Text className="flex-1 ml-3 text-white" numberOfLines={1}>
-              {attachment.name}
-            </Text>
-            <TouchableOpacity onPress={() => setAttachment(null)}>
-              <Ionicons name="close-circle" size={24} color="#F44336" />
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View className="flex-row justify-between mb-4">
-            <TouchableOpacity
-              onPress={() => pickImage(true)}
-              style={{
-                backgroundColor: colors.CARD,
-                borderColor: colors.INPUT_BORDER,
-              }}
-              className="items-center justify-center p-4 rounded-xl border w-[30%]"
-            >
-              <Ionicons name="camera" size={28} color={colors.ACCENT} />
-              <Text
-                style={{
-                  color: colors.SUB_TEXT,
-                  fontSize: 10,
-                  marginTop: 4,
-                }}
-              >
-                Camera
-              </Text>
-            </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => pickImage(false)}
-              style={{
-                backgroundColor: colors.CARD,
-                borderColor: colors.INPUT_BORDER,
-              }}
-              className="items-center justify-center p-4 rounded-xl border w-[30%]"
-            >
-              <Ionicons name="images" size={28} color="#29B6F6" />
-              <Text
-                style={{
-                  color: colors.SUB_TEXT,
-                  fontSize: 10,
-                  marginTop: 4,
-                }}
-              >
-                Gallery
-              </Text>
-            </TouchableOpacity>
+            <TextInput
+              placeholder="Description (Optional)"
+              placeholderTextColor="#666"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              numberOfLines={3}
+              style={{ textAlignVertical: "top" }}
+              className="bg-[#282C34] text-white p-3 rounded-xl border border-[#4C5361] mb-4 text-sm"
+            />
 
-            <TouchableOpacity
-              onPress={pickDocument}
-              style={{
-                backgroundColor: colors.CARD,
-                borderColor: colors.INPUT_BORDER,
-              }}
-              className="items-center justify-center p-4 rounded-xl border w-[30%]"
-            >
-              <Ionicons name="document-text" size={28} color="#4CAF50" />
-              <Text
-                style={{
-                  color: colors.SUB_TEXT,
-                  fontSize: 10,
-                  marginTop: 4,
-                }}
+            {/* ATTACHMENT BUTTONS (LARGE & DISTINCT) */}
+            <View className="flex-row justify-between mb-4 mt-2">
+              <TouchableOpacity
+                onPress={() => pickImage(true)}
+                className="flex-1 bg-[#282C34] py-4 rounded-xl border border-[#4C5361] items-center mr-2 active:bg-[#f49b33]/10"
               >
-                PDF
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <Text style={{ color: colors.SUB_TEXT }} className="text-sm mb-2">
-          Description
-        </Text>
-        <TextInput
-          multiline
-          numberOfLines={3}
-          placeholder="Short description..."
-          placeholderTextColor={colors.SUB_TEXT}
-          value={description}
-          onChangeText={setDescription}
-          style={{
-            backgroundColor: colors.CARD,
-            color: colors.TEXT,
-            borderColor: colors.INPUT_BORDER,
-            textAlignVertical: "top",
-          }}
-          className="p-3 rounded-lg border mb-6 text-base"
-        />
-
-        <TouchableOpacity
-          onPress={handleUpload}
-          disabled={uploading}
-          style={{ backgroundColor: colors.ACCENT }}
-          className="py-3 rounded-xl items-center mb-8"
-        >
-          {uploading ? (
-            <View className="flex-row items-center">
-              <ActivityIndicator color={colors.BG} />
-              <Text
-                style={{
-                  color: colors.BG,
-                  marginLeft: 8,
-                  fontWeight: "bold",
-                }}
+                <Ionicons name="camera" size={24} color="#f49b33" />
+                <Text className="text-white font-bold text-xs mt-1">
+                  Camera
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => pickImage(false)}
+                className="flex-1 bg-[#282C34] py-4 rounded-xl border border-[#4C5361] items-center mr-2 active:bg-[#29B6F6]/10"
               >
-                Uploading...
-              </Text>
+                <Ionicons name="images" size={24} color="#29B6F6" />
+                <Text className="text-white font-bold text-xs mt-1">
+                  Gallery
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={pickDocument}
+                className="flex-1 bg-[#282C34] py-4 rounded-xl border border-[#4C5361] items-center active:bg-[#EF5350]/10"
+              >
+                <Ionicons name="document-text" size={24} color="#EF5350" />
+                <Text className="text-white font-bold text-xs mt-1">PDF</Text>
+              </TouchableOpacity>
             </View>
-          ) : (
-            <Text style={{ color: colors.BG }} className="text-lg font-bold">
-              Share Material
+
+            {/* SELECTED FILES PREVIEW (SCROLLABLE CHIPS) */}
+            {attachments.length > 0 && (
+              <View className="mb-4">
+                <Text className="text-gray-400 text-[10px] uppercase mb-2 ml-1">
+                  Selected Files
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {attachments.map((file, idx) => (
+                    <View key={idx} className="mr-3 relative pt-2 pr-2">
+                      <View className="bg-[#282C34] p-3 rounded-xl border border-[#4C5361] items-center w-20 h-20 justify-center">
+                        {file.type === "image" ? (
+                          <Image
+                            source={{ uri: file.uri }}
+                            className="w-8 h-8 rounded mb-1"
+                          />
+                        ) : (
+                          <Ionicons
+                            name="document-text"
+                            size={24}
+                            color="#f49b33"
+                            className="mb-1"
+                          />
+                        )}
+                        <Text
+                          className="text-gray-400 text-[8px] text-center"
+                          numberOfLines={2}
+                        >
+                          {file.name}
+                        </Text>
+                      </View>
+
+                      {/* Close Button with HitSlop */}
+                      <TouchableOpacity
+                        onPress={() => removeAttachment(idx)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          right: 0,
+                          zIndex: 10,
+                        }}
+                        className="bg-red-500 rounded-full p-1 shadow-sm"
+                      >
+                        <Ionicons name="close" size={10} color="white" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            <TouchableOpacity
+              onPress={handleUpload}
+              disabled={uploading}
+              className="bg-[#f49b33] py-4 rounded-xl flex-row justify-center items-center shadow-lg mt-2"
+            >
+              {uploading ? (
+                <ActivityIndicator color="#282C34" size="small" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="cloud-upload"
+                    size={20}
+                    color="#282C34"
+                    className="mr-2"
+                  />
+                  <Text className="text-[#282C34] font-bold text-lg">
+                    Upload Material
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* --- HISTORY --- */}
+          <View className="flex-row items-center mb-4">
+            <MaterialCommunityIcons
+              name="history"
+              size={20}
+              color="#f49b33"
+              className="mr-2"
+            />
+            <Text className="text-white font-bold text-lg">
+              Uploaded Resources
             </Text>
-          )}
-        </TouchableOpacity>
+          </View>
 
-        <Text
-          style={{ color: colors.ACCENT }}
-          className="text-xl font-semibold mb-4 border-t border-[#4C5361] pt-4"
-        >
-          Recent Uploads
-        </Text>
-
-        {history.map((item) => renderItem(item))}
-        {history.length === 0 && (
-          <Text style={{ color: colors.SUB_TEXT }} className="text-center">
-            No uploads yet.
-          </Text>
-        )}
-      </ScrollView>
+          <FlatList
+            data={history}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            scrollEnabled={false}
+            contentContainerStyle={{ paddingBottom: 50 }}
+            ListEmptyComponent={() => (
+              <View className="items-center py-10 opacity-30">
+                <MaterialCommunityIcons
+                  name="folder-open-outline"
+                  size={60}
+                  color="gray"
+                />
+                <Text className="text-gray-400 mt-2">
+                  No materials uploaded yet.
+                </Text>
+              </View>
+            )}
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
