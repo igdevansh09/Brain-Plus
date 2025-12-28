@@ -1,90 +1,69 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
   SafeAreaView,
   StatusBar,
+  TouchableOpacity,
   FlatList,
   ActivityIndicator,
+  ScrollView,
   RefreshControl,
-  TouchableOpacity,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { auth, db } from "../../config/firebaseConfig";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  doc,
-  getDoc,
-} from "firebase/firestore";
+import dayjs from "dayjs";
 
-import CustomToast from "../../components/CustomToast";
+// NATIVE SDK
+import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
 
 const StudentHomework = () => {
   const router = useRouter();
-  const [homeworkList, setHomeworkList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [studentClass, setStudentClass] = useState(null);
+  const [homework, setHomework] = useState([]);
+  const [selectedSubject, setSelectedSubject] = useState("All");
 
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState("success");
-
-  const showToast = (msg, type = "success") => {
-    setToastMessage(msg);
-    setToastType(type);
-    setToastVisible(true);
-  };
-
-  const colors = {
-    bg: "#282C34",
-    card: "#333842",
-    accent: "#f49b33",
-    text: "#FFFFFF",
-    subText: "#BBBBBB",
-    linkColor: "#2196F3",
-    date: "#4CAF50",
+  const theme = {
+    bg: "bg-[#282C34]",
+    card: "bg-[#333842]",
+    accent: "text-[#f49b33]",
+    border: "border-[#4C5361]",
+    text: "text-white",
+    subText: "text-gray-400",
   };
 
   const fetchHomework = async () => {
     try {
-      const user = auth.currentUser;
+      const user = auth().currentUser;
       if (!user) return;
 
-      let currentClass = studentClass;
-      let mySubjects = [];
+      const userDoc = await firestore().collection("users").doc(user.uid).get();
+      const studentClass = userDoc.data()?.standard;
 
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        currentClass = userData.standard;
-        mySubjects = userData.enrolledSubjects || [];
-        setStudentClass(currentClass);
+      if (!studentClass) {
+        setLoading(false);
+        return;
       }
 
-      if (currentClass) {
-        const q = query(
-          collection(db, "homework"),
-          where("classId", "==", currentClass)
-        );
-        const querySnapshot = await getDocs(q);
+      const snapshot = await firestore()
+        .collection("homework")
+        .where("classId", "==", studentClass)
+        .orderBy("createdAt", "desc")
+        .get();
 
-        const list = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+      const data = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-        list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        setHomeworkList(list);
-      }
+      setHomework(data);
     } catch (error) {
-      console.log("Error fetching homework:", error);
+      console.log("Homework Fetch Error:", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -92,146 +71,156 @@ const StudentHomework = () => {
     fetchHomework();
   }, []);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    setStudentClass(null);
-    await fetchHomework();
-    setRefreshing(false);
-  }, []);
+  const filteredData = useMemo(() => {
+    if (selectedSubject === "All") return homework;
+    return homework.filter((h) => h.subject === selectedSubject);
+  }, [selectedSubject, homework]);
 
-  const handleOpenLink = (url, title, attachmentName) => {
-    if (url) {
-      const isPdf =
-        attachmentName?.toLowerCase().endsWith(".pdf") ||
-        url.toLowerCase().includes(".pdf");
-      const type = isPdf ? "pdf" : "image";
+  const uniqueSubjects = useMemo(() => {
+    const subjects = new Set(homework.map((h) => h.subject));
+    return ["All", ...Array.from(subjects)];
+  }, [homework]);
 
-      router.push({
-        pathname: "/(student)/view_attachment",
-        params: {
-          url: url,
-          title: title || "Homework",
-          type: type,
-        },
-      });
-    } else {
-      showToast("No document attached.", "info");
-    }
+  const openAttachment = (url, name, type) => {
+    router.push({
+      pathname: "/(teacher)/view_attachment",
+      params: { url: encodeURIComponent(url), title: name, type },
+    });
   };
 
-  const renderItem = ({ item }) => (
-    <View
-      style={{ backgroundColor: colors.card }}
-      className="p-4 rounded-xl mb-3 border border-[#4C5361]"
-    >
-      <View className="flex-row justify-between items-start">
-        <View className="flex-1 mr-2">
-          <Text style={{ color: colors.text }} className="font-bold text-base">
-            {item.title}
-          </Text>
-          <Text
-            style={{
-              color: colors.accent,
-              fontSize: 12,
-              fontWeight: "bold",
-              marginTop: 2,
-            }}
-          >
-            {item.subject}
-          </Text>
-          {item.description ? (
-            <Text style={{ color: colors.subText, fontSize: 12, marginTop: 4 }}>
-              {item.description}
+  const renderHomeworkItem = ({ item }) => {
+    const displayAttachments =
+      item.attachments ||
+      (item.link
+        ? [{ name: item.attachmentName, url: item.link, type: item.fileType }]
+        : []);
+
+    return (
+      <View
+        className={`${theme.card} p-5 rounded-3xl mb-4 border ${theme.border} shadow-sm`}
+      >
+        <View className="flex-row justify-between items-start mb-2">
+          <View className="flex-1">
+            <Text className="text-white font-bold text-lg mb-1">
+              {item.title}
             </Text>
-          ) : null}
+            <View className="flex-row">
+              <View className="bg-blue-500/20 px-2 py-0.5 rounded mr-2">
+                <Text className="text-blue-400 text-[10px] font-bold uppercase">
+                  {item.subject}
+                </Text>
+              </View>
+              <Text className="text-gray-500 text-[10px] font-bold uppercase">
+                Due: {item.dueDate}
+              </Text>
+            </View>
+          </View>
+          <MaterialCommunityIcons
+            name="bookmark-outline"
+            size={20}
+            color="#f49b33"
+          />
         </View>
 
-        <View className="items-end">
-          <Text
-            style={{ color: colors.subText, fontSize: 10, marginBottom: 6 }}
-          >
-            {item.date}
+        {item.description ? (
+          <Text className="text-gray-400 text-sm mb-4 leading-5">
+            {item.description}
           </Text>
+        ) : null}
 
-          {item.link ? (
-            <TouchableOpacity
-              onPress={() =>
-                handleOpenLink(item.link, item.title, item.attachmentName)
-              }
-              className="mt-1"
-            >
-              <Ionicons
-                name="cloud-download-outline"
-                size={22}
-                color={colors.linkColor}
-              />
-            </TouchableOpacity>
-          ) : (
-            <Ionicons name="ban-outline" size={22} color={colors.subText} />
-          )}
-        </View>
+        {displayAttachments.length > 0 && (
+          <View className="flex-row flex-wrap mt-2">
+            {displayAttachments.map((file, idx) => (
+              <TouchableOpacity
+                key={idx}
+                onPress={() => openAttachment(file.url, file.name, file.type)}
+                className="bg-[#282C34] px-3 py-2 rounded-xl border border-[#4C5361] flex-row items-center mr-2 mb-2"
+              >
+                <Ionicons
+                  name={file.type === "pdf" ? "document-text" : "image"}
+                  size={14}
+                  color="#f49b33"
+                  className="mr-2"
+                />
+                <Text className="text-gray-300 text-[10px]" numberOfLines={1}>
+                  View File
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${colors.bg} justify-center items-center`}
+        className={`flex-1 ${theme.bg} justify-center items-center`}
       >
-        <ActivityIndicator size="large" color={colors.accent} />
+        <ActivityIndicator size="large" color="#f49b33" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      className="pt-8"
-    >
-      <StatusBar backgroundColor={colors.bg} barStyle="light-content" />
-
-      <CustomToast
-        visible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onHide={() => setToastVisible(false)}
-      />
-
-      <View className="px-4 pb-4 py-7 flex-row items-center">
-        <Ionicons
-          name="arrow-back"
-          size={24}
-          color={colors.text}
+    <SafeAreaView className={`flex-1 ${theme.bg} pt-8`}>
+      <StatusBar barStyle="light-content" />
+      <View className="px-5 pt-4 pb-4 flex-row items-center justify-between">
+        <TouchableOpacity
           onPress={() => router.back()}
-        />
-        <Text
-          style={{ color: colors.text }}
-          className="text-2xl font-semibold ml-4"
+          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
         >
-          My Homework
-        </Text>
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        <Text className="text-white text-2xl font-bold">Homework</Text>
+        <View className="w-10" />
+      </View>
+
+      <View className="px-5 mb-4">
+        <FlatList
+          horizontal
+          data={uniqueSubjects}
+          showsHorizontalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              onPress={() => setSelectedSubject(item)}
+              className={`mr-3 px-5 py-2 rounded-full border ${selectedSubject === item ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-[#4C5361]"}`}
+            >
+              <Text
+                className={`font-bold text-xs ${selectedSubject === item ? "text-[#282C34]" : "text-gray-400"}`}
+              >
+                {item}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
       </View>
 
       <FlatList
-        data={homeworkList}
+        data={filteredData}
         keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20 }}
+        renderItem={renderHomeworkItem}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 50 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.accent}
+            onRefresh={() => {
+              setRefreshing(true);
+              fetchHomework();
+            }}
+            tintColor="#f49b33"
           />
         }
         ListEmptyComponent={() => (
-          <View className="items-center justify-center mt-20">
-            <Ionicons name="book-outline" size={50} color={colors.subText} />
-            <Text className="text-gray-500 text-center mt-4">
-              {studentClass
-                ? `No homework found for Class "${studentClass}"`
-                : "No Class assigned to your profile."}
+          <View className="items-center py-20 opacity-30">
+            <MaterialCommunityIcons
+              name="book-open-variant"
+              size={80}
+              color="gray"
+            />
+            <Text className="text-gray-400 mt-4 text-center">
+              No assignments found.
             </Text>
           </View>
         )}

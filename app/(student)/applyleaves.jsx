@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,346 +7,441 @@ import {
   SafeAreaView,
   StatusBar,
   TextInput,
-  Platform,
   FlatList,
   ActivityIndicator,
-  RefreshControl,
+  Platform,
+  KeyboardAvoidingView,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { auth, db } from "../../config/firebaseConfig";
-import {
-  collection,
-  addDoc,
-  query,
-  where,
-  getDocs,
-  doc,
-  getDoc,
-} from "firebase/firestore";
-import CustomToast from "../../components/CustomToast";
 
-const ApplyLeaves = () => {
+// NATIVE SDK
+import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
+
+import CustomToast from "../../components/CustomToast";
+import CustomAlert from "../../components/CustomAlert";
+
+const ApplyLeave = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // User Data
   const [studentProfile, setStudentProfile] = useState(null);
-  const [leaveHistory, setLeaveHistory] = useState([]);
+  const [history, setHistory] = useState([]);
 
-  const [reason, setReason] = useState("");
+  // Form State
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [reason, setReason] = useState("");
 
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState("success");
+  // Date Picker State
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
 
-  const showToast = (msg, type = "success") => {
-    setToastMessage(msg);
-    setToastType(type);
-    setToastVisible(true);
+  // Toast / Alert
+  const [toast, setToast] = useState({
+    visible: false,
+    msg: "",
+    type: "success",
+  });
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    confirmText: "",
+    type: "warning",
+    onConfirm: null,
+  });
+  const showToast = (msg, type = "success") =>
+    setToast({ visible: true, msg, type });
+
+  const theme = {
+    bg: "bg-[#282C34]",
+    card: "bg-[#333842]",
+    accent: "text-[#f49b33]",
+    text: "text-white",
+    subText: "text-gray-400",
+    borderColor: "border-[#4C5361]",
+    info: "#29B6F6",
   };
 
-  const colors = {
-    bg: "#282C34",
-    card: "#333842",
-    accent: "#f49b33",
-    text: "#FFFFFF",
-    subText: "#BBBBBB",
-    inputBorder: "#616A7D",
-    success: "#4CAF50",
-  };
+  // --- 1. FETCH PROFILE & HISTORY ---
+  useEffect(() => {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
 
-  const fetchData = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-
-      if (!studentProfile) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          setStudentProfile(userDoc.data());
-        }
+    const fetchProfile = async () => {
+      try {
+        const docSnap = await firestore().collection("users").doc(uid).get();
+        if (docSnap.exists) setStudentProfile(docSnap.data());
+      } catch (e) {
+        console.log("Profile Error:", e);
       }
+    };
+    fetchProfile();
 
-      const q = query(
-        collection(db, "leaves"),
-        where("studentId", "==", user.uid)
+    const unsubscribe = firestore()
+      .collection("leaves")
+      .where("studentId", "==", uid)
+      .orderBy("createdAt", "desc")
+      .onSnapshot(
+        (snapshot) => {
+          if (!snapshot) return;
+          const list = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+          setHistory(list);
+          setLoading(false);
+        },
+        (err) => {
+          console.log("History Error:", err);
+          setLoading(false);
+        }
       );
 
-      const querySnapshot = await getDocs(q);
-      const list = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+    return () => unsubscribe();
+  }, []);
 
-      list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-      setLeaveHistory(list);
-    } catch (error) {
-      console.log("Error fetching data:", error);
-    } finally {
-      setLoading(false);
+  // --- HANDLERS ---
+  const handleStartDateChange = (event, selectedDate) => {
+    setShowStartPicker(Platform.OS === "ios");
+    if (selectedDate) {
+      setStartDate(selectedDate);
+      if (selectedDate > endDate) setEndDate(selectedDate);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchData();
-    setRefreshing(false);
-  }, []);
-
-  const formatDate = (date) => {
-    if (date instanceof Date && !isNaN(date)) {
-      const day = String(date.getDate()).padStart(2, "0");
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const year = date.getFullYear();
-      return `${day}-${month}-${year}`;
+  const handleEndDateChange = (event, selectedDate) => {
+    setShowEndPicker(Platform.OS === "ios");
+    if (selectedDate) {
+      if (selectedDate < startDate) {
+        showToast("End date cannot be before start date", "error");
+        setEndDate(startDate);
+      } else {
+        setEndDate(selectedDate);
+      }
     }
-    return "Select Date";
   };
 
-  const onChangeStartDate = (event, selectedDate) => {
-    const currentDate = selectedDate || startDate;
-    setShowStartDatePicker(Platform.OS === "ios");
-    setStartDate(currentDate);
-    if (currentDate > endDate) setEndDate(currentDate);
+  const formatDate = (date) => date.toLocaleDateString("en-GB");
+
+  const getDuration = () => {
+    const diffTime = Math.abs(endDate - startDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return diffDays;
   };
 
-  const onChangeEndDate = (event, selectedDate) => {
-    const currentDate = selectedDate || endDate;
-    setShowEndDatePicker(Platform.OS === "ios");
-    setEndDate(currentDate);
-    if (currentDate < startDate) setStartDate(currentDate);
-  };
-
-  const handleSubmitLeave = async () => {
+  const handleSubmit = async () => {
     if (!reason.trim()) {
       showToast("Please provide a reason.", "error");
-      return;
-    }
-    if (!studentProfile?.standard) {
-      showToast("Class info missing. Contact admin.", "error");
       return;
     }
 
     setSubmitting(true);
     try {
-      const leaveRequest = {
-        studentId: auth.currentUser.uid,
-        studentName: studentProfile.name,
-        classId: studentProfile.standard,
-        reason: reason,
-        startDate: formatDate(startDate),
-        endDate: formatDate(endDate),
-        status: "Informed", 
-        createdAt: new Date().toISOString(),
-      };
+      await firestore()
+        .collection("leaves")
+        .add({
+          studentId: auth().currentUser.uid,
+          studentName:
+            studentProfile?.name || auth().currentUser.displayName || "Student",
+          phone: studentProfile?.phone || "",
+          startDate: formatDate(startDate),
+          endDate: formatDate(endDate),
+          reason: reason.trim(),
+          duration: getDuration(),
+          status: "Pending",
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
 
-      await addDoc(collection(db, "leaves"), leaveRequest);
-
-      showToast("Teacher has been informed.", "success");
+      showToast("Application submitted!", "success");
       setReason("");
       setStartDate(new Date());
       setEndDate(new Date());
-
-      fetchData();
     } catch (error) {
-      showToast(error.message, "error");
+      console.error(error);
+      showToast("Failed to submit request.", "error");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const renderLeaveItem = ({ item }) => (
-    <View
-      style={{ backgroundColor: colors.card, borderLeftColor: colors.success }}
-      className="p-4 rounded-xl mb-3 border-l-4"
-    >
-      <View className="flex-row justify-between items-start">
-        <View className="flex-1">
-          <Text
-            style={{ color: colors.text }}
-            className="text-base font-semibold mb-1"
-          >
-            {item.reason}
-          </Text>
-          <Text style={{ color: colors.subText }} className="text-xs">
-            {item.startDate} to {item.endDate}
-          </Text>
+  const handleDelete = (id) => {
+    setAlertConfig({
+      visible: true,
+      title: "Delete Request",
+      message: "Are you sure you want to delete this pending request?",
+      confirmText: "Delete",
+      type: "warning",
+      onConfirm: async () => {
+        setAlertConfig((prev) => ({ ...prev, visible: false }));
+        await firestore().collection("leaves").doc(id).delete();
+        showToast("Request deleted", "success");
+      },
+    });
+  };
+
+  // --- RENDER HISTORY ITEM ---
+  const renderLeaveItem = ({ item }) => {
+    const dateDisplay = item.createdAt?.toDate
+      ? item.createdAt.toDate().toLocaleDateString("en-GB")
+      : "Just Now";
+    return (
+      <View
+        className={`${theme.card} p-4 rounded-2xl mb-4 border ${theme.borderColor} shadow-sm`}
+      >
+        <View className="flex-row justify-between items-start mb-2">
+          <View className="flex-row items-center">
+            <View
+              style={{ backgroundColor: `${theme.info}20` }}
+              className="p-2 rounded-full mr-3"
+            >
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={20}
+                color={theme.info}
+              />
+            </View>
+            <View>
+              <Text className="text-white font-bold text-base">
+                Leave Request
+              </Text>
+              <Text className="text-gray-400 text-xs">
+                Posted: {dateDisplay}
+              </Text>
+            </View>
+          </View>
+          <View className="flex-row items-center">
+            <View className="bg-[#282C34] px-3 py-1 rounded-lg border border-[#4C5361] mr-2">
+              <Text className="text-[#f49b33] font-bold text-xs">
+                {item.duration || 1} Days
+              </Text>
+            </View>
+            {item.status === "Pending" && (
+              <TouchableOpacity
+                onPress={() => handleDelete(item.id)}
+                className="bg-[#282C34] w-10 h-10 rounded-xl items-center justify-center border border-red-500/30"
+              >
+                <Ionicons name="trash-outline" size={20} color="#ef4444" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-        <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+
+        <View className="flex-row items-center my-2 pl-1">
+          <Text className="text-white font-bold">{item.startDate}</Text>
+          <Ionicons
+            name="arrow-forward"
+            size={14}
+            color="#666"
+            style={{ marginHorizontal: 8 }}
+          />
+          <Text className="text-white font-bold">{item.endDate}</Text>
+        </View>
+
+        <Text className="text-gray-400 text-sm italic mt-1 border-l-2 border-[#f49b33] pl-2">
+          &quot;{item.reason}&quot;
+        </Text>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${colors.bg} justify-center items-center`}
+        className={`flex-1 ${theme.bg} justify-center items-center`}
       >
-        <ActivityIndicator size="large" color={colors.accent} />
+        <ActivityIndicator size="large" color="#f49b33" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      className="pt-8"
-    >
-      <StatusBar backgroundColor={colors.bg} barStyle="light-content" />
-
-      <CustomToast 
-        visible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onHide={() => setToastVisible(false)}
+    <SafeAreaView className={`flex-1 ${theme.bg}`}>
+      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+      <CustomToast
+        visible={toast.visible}
+        message={toast.msg}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
+      />
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        confirmText={alertConfig.confirmText}
+        type={alertConfig.type}
+        onConfirm={alertConfig.onConfirm}
+        onCancel={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
       />
 
-      <View className="px-4 pb-4 py-7 flex-row items-center">
-        <Ionicons
-          name="arrow-back"
-          size={24}
-          color={colors.text}
+      {/* --- HEADER --- */}
+      <View className="px-5 pt-10 pb-2 flex-row items-center justify-between">
+        <TouchableOpacity
           onPress={() => router.back()}
-        />
-        <Text
-          style={{ color: colors.text }}
-          className="text-2xl font-semibold ml-4"
+          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
         >
-          Leave Notification
-        </Text>
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        <Text className="text-white text-xl font-bold">Apply Leave</Text>
+        <View className="w-10" />
       </View>
 
-      <ScrollView
-        className="flex-1 px-4"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.accent}
-          />
-        }
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1"
       >
-        <View
-          className="mb-6 p-4 rounded-xl"
-          style={{ backgroundColor: colors.card }}
+        <ScrollView
+          className="flex-1 px-5 pt-4"
+          showsVerticalScrollIndicator={false}
         >
-          <Text
-            style={{ color: colors.accent }}
-            className="text-xl font-semibold mb-4"
+          {/* --- APPLICATION FORM --- */}
+          <View
+            className={`${theme.card} p-5 rounded-3xl border ${theme.borderColor} mb-8 shadow-lg`}
           >
-            Inform Teacher
-          </Text>
+            <Text className="text-[#f49b33] text-xs font-bold uppercase mb-4 tracking-widest">
+              New Request
+            </Text>
 
-          <View className="flex-row justify-between mb-4">
-            <TouchableOpacity
-              onPress={() => setShowStartDatePicker(true)}
-              style={{ borderColor: colors.inputBorder, width: "48%" }}
-              className="p-3 rounded-lg border"
-            >
-              <Text style={{ color: colors.subText, fontSize: 10 }}>From</Text>
-              <Text style={{ color: colors.text, fontWeight: "bold" }}>
-                {formatDate(startDate)}
-              </Text>
-            </TouchableOpacity>
-            {showStartDatePicker && (
-              <DateTimePicker
-                value={startDate}
-                mode="date"
-                display="default"
-                onChange={onChangeStartDate}
-              />
-            )}
+            <View className="flex-row justify-between mb-4">
+              <View className="flex-1 mr-2">
+                <Text className="text-gray-400 text-xs mb-2 ml-1">From</Text>
+                <TouchableOpacity
+                  onPress={() => setShowStartPicker(true)}
+                  className="bg-[#282C34] p-3 rounded-xl border border-[#4C5361] flex-row items-center"
+                >
+                  <Ionicons
+                    name="calendar-outline"
+                    size={18}
+                    color="#f49b33"
+                    className="mr-2"
+                  />
+                  <Text className="text-white font-bold">
+                    {formatDate(startDate)}
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-            <TouchableOpacity
-              onPress={() => setShowEndDatePicker(true)}
-              style={{ borderColor: colors.inputBorder, width: "48%" }}
-              className="p-3 rounded-lg border"
-            >
-              <Text style={{ color: colors.subText, fontSize: 10 }}>To</Text>
-              <Text style={{ color: colors.text, fontWeight: "bold" }}>
-                {formatDate(endDate)}
-              </Text>
-            </TouchableOpacity>
-            {showEndDatePicker && (
-              <DateTimePicker
-                value={endDate}
-                mode="date"
-                display="default"
-                onChange={onChangeEndDate}
-              />
-            )}
+              <View className="flex-1 ml-2">
+                <Text className="text-gray-400 text-xs mb-2 ml-1">To</Text>
+                <TouchableOpacity
+                  onPress={() => setShowEndPicker(true)}
+                  className="bg-[#282C34] p-3 rounded-xl border border-[#4C5361] flex-row items-center"
+                >
+                  <Ionicons
+                    name="calendar-outline"
+                    size={18}
+                    color="#f49b33"
+                    className="mr-2"
+                  />
+                  <Text className="text-white font-bold">
+                    {formatDate(endDate)}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <Text className="text-gray-400 text-xs mb-2 ml-1">
+              Reason for Leave
+            </Text>
+            <TextInput
+              placeholder="E.g. Medical emergency, Urgent work..."
+              placeholderTextColor="#666"
+              value={reason}
+              onChangeText={setReason}
+              multiline
+              numberOfLines={3}
+              style={{ textAlignVertical: "top" }}
+              className="bg-[#282C34] text-white p-4 rounded-xl border border-[#4C5361] mb-6 text-sm"
+            />
+
+            <View className="flex-row items-center justify-between">
+              <View>
+                <Text className="text-gray-500 text-xs">Total Duration</Text>
+                <Text className="text-white font-bold text-lg">
+                  {getDuration()} Days
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={handleSubmit}
+                disabled={submitting}
+                className="bg-[#f49b33] py-3 px-6 rounded-xl flex-row items-center shadow-md"
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#282C34" size="small" />
+                ) : (
+                  <>
+                    <Text className="text-[#282C34] font-bold mr-2">
+                      Notify Admin
+                    </Text>
+                    <Ionicons name="paper-plane" size={16} color="#282C34" />
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
 
-          <Text style={{ color: colors.subText }} className="text-sm mb-2">
-            Reason
-          </Text>
-          <TextInput
-            multiline
-            numberOfLines={3}
-            placeholder="E.g. Sick leave, Family function..."
-            placeholderTextColor={colors.subText}
-            value={reason}
-            onChangeText={setReason}
-            style={{
-              backgroundColor: colors.bg,
-              color: colors.text,
-              borderColor: colors.inputBorder,
-              textAlignVertical: "top",
-            }}
-            className="p-3 rounded-lg border mb-6 text-base"
-          />
-
-          <TouchableOpacity
-            onPress={handleSubmitLeave}
-            disabled={submitting}
-            style={{ backgroundColor: colors.accent }}
-            className="py-3 rounded-xl items-center"
-          >
-            {submitting ? (
-              <ActivityIndicator color={colors.bg} />
-            ) : (
-              <Text style={{ color: colors.bg }} className="text-lg font-bold">
-                Send Notification
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <Text
-          style={{ color: colors.accent }}
-          className="text-xl font-semibold mb-3"
-        >
-          Sent History
-        </Text>
-        <FlatList
-          data={leaveHistory}
-          keyExtractor={(item) => item.id}
-          renderItem={renderLeaveItem}
-          scrollEnabled={false}
-          ListEmptyComponent={() => (
-            <Text
-              style={{ color: colors.subText }}
-              className="text-center mt-4 italic"
-            >
-              No notifications sent.
+          {/* --- HISTORY SECTION --- */}
+          <View className="flex-row items-center mb-4">
+            <MaterialCommunityIcons
+              name="history"
+              size={20}
+              color="#f49b33"
+              className="mr-2"
+            />
+            <Text className="text-white font-bold text-lg">
+              My Applications
             </Text>
-          )}
+          </View>
+
+          <FlatList
+            data={history}
+            keyExtractor={(item) => item.id}
+            renderItem={renderLeaveItem}
+            scrollEnabled={false}
+            contentContainerStyle={{ paddingBottom: 100 }}
+            ListEmptyComponent={() => (
+              <View className="items-center py-10 opacity-30">
+                <MaterialCommunityIcons
+                  name="file-document-outline"
+                  size={60}
+                  color="gray"
+                />
+                <Text className="text-gray-400 mt-2">
+                  No leave applications yet.
+                </Text>
+              </View>
+            )}
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Date Pickers */}
+      {showStartPicker && (
+        <DateTimePicker
+          value={startDate}
+          mode="date"
+          display="default"
+          onChange={handleStartDateChange}
+          minimumDate={new Date()}
         />
-      </ScrollView>
+      )}
+      {showEndPicker && (
+        <DateTimePicker
+          value={endDate}
+          mode="date"
+          display="default"
+          onChange={handleEndDateChange}
+          minimumDate={startDate}
+        />
+      )}
     </SafeAreaView>
   );
 };
 
-export default ApplyLeaves;
+export default ApplyLeave;

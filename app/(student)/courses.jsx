@@ -1,234 +1,215 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
-  FlatList,
-  TouchableOpacity,
   SafeAreaView,
   StatusBar,
+  TouchableOpacity,
+  FlatList,
   ActivityIndicator,
-  Image,
   ScrollView,
+  RefreshControl,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { auth, db } from "../../config/firebaseConfig";
-import {
-  doc,
-  getDoc,
-  collection,
-  query,
-  where,
-  getDocs,
-} from "firebase/firestore";
 
-const StudentCourses = () => {
+// --- NATIVE SDK IMPORTS ---
+import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
+
+const MyCourses = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [myProfile, setMyProfile] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [courses, setCourses] = useState([]);
 
-  const [selectedFilter, setSelectedFilter] = useState("All");
+  const theme = {
+    bg: "bg-[#282C34]",
+    card: "bg-[#333842]",
+    accent: "text-[#f49b33]",
+    accentBg: "bg-[#f49b33]",
+    text: "text-white",
+    subText: "text-gray-400",
+    border: "border-[#4C5361]",
+  };
+
+  // --- 1. FETCH DATA (NATIVE SDK) ---
+  const fetchCourses = async () => {
+    try {
+      const user = auth().currentUser;
+      if (!user) return;
+
+      // First, get student's enrolled standard/class
+      const userDoc = await firestore().collection("users").doc(user.uid).get();
+      const studentClass = userDoc.data()?.standard;
+
+      if (!studentClass) {
+        setLoading(false);
+        return;
+      }
+
+      // Fetch courses mapped to this class
+      const snapshot = await firestore()
+        .collection("courses")
+        .where("classId", "==", studentClass)
+        .get();
+
+      const data = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setCourses(data);
+    } catch (error) {
+      console.log("Error fetching courses:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            setMyProfile(data);
-
-            const { standard, enrolledSubjects } = data;
-            let validTargets = [];
-
-            if (standard) {
-              if (standard === "CS") {
-                validTargets = ["CS"];
-              } else if (
-                enrolledSubjects &&
-                enrolledSubjects.includes("All Subjects")
-              ) {
-                validTargets = [standard];
-              } else if (enrolledSubjects && enrolledSubjects.length > 0) {
-                validTargets = enrolledSubjects.map(
-                  (subj) => `${standard} ${subj}`
-                );
-              }
-
-              if (validTargets.length > 0) {
-                const q = query(
-                  collection(db, "courses"),
-                  where("target", "in", validTargets)
-                );
-                const snapshot = await getDocs(q);
-                const list = snapshot.docs.map((doc) => ({
-                  id: doc.id,
-                  ...doc.data(),
-                }));
-                setCourses(list);
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.log("Error fetching courses:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+    fetchCourses();
   }, []);
 
-  const handleWatch = (item) => {
-    router.push({
-      pathname: "/(student)/videoplayer",
-      params: {
-        courseTitle: item.title,
-        playlist: JSON.stringify(item.playlist),
-        description: item.description,
-      },
-    });
-  };
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchCourses();
+  }, []);
 
-  const getFilteredCourses = () => {
-    if (selectedFilter === "All") return courses;
-    return courses.filter((c) => c.target.includes(selectedFilter));
-  };
+  // --- 2. RENDER COURSE ITEM ---
+  const renderCourseItem = ({ item }) => {
+    const progress = item.progress || 0; // percentage value
 
-  const showSubjectFilters =
-    myProfile?.enrolledSubjects &&
-    !myProfile.enrolledSubjects.includes("All Subjects") &&
-    !myProfile.enrolledSubjects.includes("N/A");
-
-  const renderCourse = ({ item }) => (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={() => handleWatch(item)}
-      className="bg-[#333842] rounded-xl p-4 mb-4 border border-[#4C5361] flex-row items-center"
-    >
-      <View className="mr-4">
-        {item.thumbnail ? (
-          <Image
-            source={{ uri: item.thumbnail }}
-            style={{ width: 60, height: 60, borderRadius: 8 }}
-          />
-        ) : (
-          <View className="w-12 h-12 rounded-full bg-[#f49b33]/20 items-center justify-center">
-            <Ionicons name="play" size={24} color="#f49b33" />
+    return (
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() =>
+          router.push({ pathname: "/coursedetail", params: { id: item.id } })
+        }
+        className={`${theme.card} p-5 rounded-3xl mb-5 border ${theme.border} shadow-lg`}
+      >
+        <View className="flex-row justify-between items-start mb-4">
+          <View className="flex-1">
+            <View className="bg-[#f49b33]/10 px-3 py-1 rounded-full self-start mb-2 border border-[#f49b33]/20">
+              <Text className="text-[#f49b33] text-[10px] font-bold uppercase tracking-widest">
+                {item.category || "Academic"}
+              </Text>
+            </View>
+            <Text className="text-white text-xl font-bold">{item.title}</Text>
+            <Text className="text-gray-400 text-xs mt-1">
+              Instructor: {item.teacherName || "Assigned Faculty"}
+            </Text>
           </View>
-        )}
-      </View>
 
-      <View className="flex-1">
-        <Text className="text-white text-lg font-bold">{item.title}</Text>
-        <Text className="text-gray-400 text-sm" numberOfLines={1}>
-          {item.target} • {item.description}
-        </Text>
-        <Text className="text-[#f49b33] text-xs mt-1">
-          Tap to Start Learning
-        </Text>
-      </View>
-      <Ionicons name="chevron-forward" size={24} color="#666" />
-    </TouchableOpacity>
-  );
+          <View className="bg-[#282C34] p-3 rounded-2xl border border-[#4C5361]">
+            <MaterialCommunityIcons
+              name={item.icon || "book-open-variant"}
+              size={24}
+              color="#f49b33"
+            />
+          </View>
+        </View>
+
+        {/* Syllabus Progress UI */}
+        <View className="mt-2">
+          <View className="flex-row justify-between items-end mb-2">
+            <Text className="text-gray-400 text-[10px] font-bold uppercase tracking-tighter">
+              Syllabus Completion
+            </Text>
+            <Text className="text-[#f49b33] font-bold text-sm">
+              {progress}%
+            </Text>
+          </View>
+          <View className="h-2 bg-[#282C34] rounded-full overflow-hidden w-full border border-[#4C5361]/30">
+            <View
+              style={{ width: `${progress}%` }}
+              className="h-full bg-[#f49b33] rounded-full"
+            />
+          </View>
+        </View>
+
+        <View className="flex-row mt-5 pt-4 border-t border-[#4C5361]/50 justify-between items-center">
+          <View className="flex-row items-center">
+            <Ionicons name="layers-outline" size={14} color="#888" />
+            <Text className="text-gray-500 text-xs ml-1">
+              {item.lessonsCount || 0} Lessons
+            </Text>
+          </View>
+          <View className="flex-row items-center bg-[#f49b33] px-4 py-1.5 rounded-xl">
+            <Text className="text-[#282C34] font-bold text-[10px] uppercase">
+              Continue
+            </Text>
+            <Ionicons
+              name="chevron-forward"
+              size={12}
+              color="#282C34"
+              className="ml-1"
+            />
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-[#282C34] justify-center items-center">
+      <SafeAreaView
+        className={`flex-1 ${theme.bg} justify-center items-center`}
+      >
         <ActivityIndicator size="large" color="#f49b33" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#282C34] pt-8">
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+    <SafeAreaView className={`flex-1 ${theme.bg} pt-8`}>
+      <StatusBar barStyle="light-content" />
 
-      <View className="px-4 pb-4 py-7 flex-row items-center">
-        <Ionicons
-          name="arrow-back"
-          size={24}
-          color="white"
+      {/* Header */}
+      <View className="px-5 pt-4 pb-4 flex-row items-center justify-between">
+        <TouchableOpacity
           onPress={() => router.back()}
-        />
-        <Text className="text-white text-2xl font-semibold ml-4">
-          My Courses
-        </Text>
+          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
+        >
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        <Text className="text-white text-2xl font-bold">My Courses</Text>
+        <View className="w-10" />
       </View>
 
-      {showSubjectFilters ? (
-        <View className="mb-4 pl-4">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <TouchableOpacity
-              onPress={() => setSelectedFilter("All")}
-              className={`mr-2 px-4 py-1.5 rounded-full border ${
-                selectedFilter === "All"
-                  ? "bg-[#f49b33] border-[#f49b33]"
-                  : "border-[#4C5361] bg-[#333842]"
-              }`}
-            >
-              <Text
-                className={`${
-                  selectedFilter === "All" ? "text-[#282C34]" : "text-white"
-                } font-bold`}
-              >
-                All
-              </Text>
-            </TouchableOpacity>
-
-            {myProfile.enrolledSubjects.map((subj, index) => (
-              <TouchableOpacity
-                key={index}
-                onPress={() => setSelectedFilter(subj)}
-                className={`mr-2 px-4 py-1.5 rounded-full border ${
-                  selectedFilter === subj
-                    ? "bg-[#f49b33] border-[#f49b33]"
-                    : "border-[#4C5361] bg-[#333842]"
-                }`}
-              >
-                <Text
-                  className={`${
-                    selectedFilter === subj ? "text-[#282C34]" : "text-white"
-                  } font-bold`}
-                >
-                  {subj}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      ) : (
-        <View className="px-4 mb-4">
-          <Text className="text-gray-400">
-            Class:{" "}
-            <Text className="text-[#f49b33] font-bold">
-              {myProfile?.standard || "N/A"}
-            </Text>
-          </Text>
-        </View>
-      )}
-
       <FlatList
-        data={getFilteredCourses()}
+        data={courses}
         keyExtractor={(item) => item.id}
-        renderItem={renderCourse}
-        contentContainerStyle={{ padding: 16 }}
-        ListEmptyComponent={
-          <View className="mt-10 items-center px-6">
-            <Ionicons name="library-outline" size={50} color="#666" />
-            <Text className="text-gray-500 text-center mt-4 text-lg font-semibold">
-              No courses found.
-            </Text>
-            <Text className="text-gray-600 text-center mt-2 text-sm">
-              Current Filter: {selectedFilter}
+        renderItem={renderCourseItem}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingTop: 10,
+          paddingBottom: 100,
+        }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#f49b33"
+          />
+        }
+        ListEmptyComponent={() => (
+          <View className="items-center py-20 opacity-30">
+            <MaterialCommunityIcons
+              name="book-off-outline"
+              size={80}
+              color="gray"
+            />
+            <Text className="text-gray-400 mt-4 text-center text-lg font-medium">
+              No courses assigned to your class.
             </Text>
           </View>
-        }
+        )}
       />
     </SafeAreaView>
   );
 };
 
-export default StudentCourses;
+export default MyCourses;

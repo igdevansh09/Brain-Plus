@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -13,31 +13,24 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import dayjs from "dayjs";
-import { auth, db } from "../../config/firebaseConfig";
-import {
-  doc,
-  getDoc,
-  collection,
-  query,
-  where,
-  getDocs,
-} from "firebase/firestore";
+
+// --- NATIVE SDK IMPORTS ---
+import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
 
 const AttendanceCalendar = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
 
   const [currentDate, setCurrentDate] = useState(dayjs());
-
   const [attendanceMap, setAttendanceMap] = useState({});
-  const [stats, setStats] = useState({ present: 0, total: 0 });
+  const [fullData, setFullData] = useState([]);
 
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState("All");
-  const [fullData, setFullData] = useState([]);
 
   const screenWidth = Dimensions.get("window").width;
-  const padding = 32; 
+  const padding = 32;
   const colWidth = (screenWidth - padding) / 7;
 
   const colors = {
@@ -52,40 +45,32 @@ const AttendanceCalendar = () => {
     border: "#4C5361",
   };
 
-  useEffect(() => {
-    fetchAttendance();
-  }, []);
-
-  useEffect(() => {
-    processDataForSubject();
-  }, [selectedSubject, fullData]);
-
+  // --- 1. FETCH DATA (NATIVE) ---
   const fetchAttendance = async () => {
     try {
-      const user = auth.currentUser;
+      const user = auth().currentUser;
       if (!user) return;
 
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (!userDoc.exists()) return;
-      const studentClass = userDoc.data().standard;
+      const userDoc = await firestore().collection("users").doc(user.uid).get();
+      if (!userDoc.exists) return;
 
+      const studentClass = userDoc.data().standard;
       if (!studentClass) {
         setLoading(false);
         return;
       }
 
-      const q = query(
-        collection(db, "attendance"),
-        where("classId", "==", studentClass)
-      );
+      const querySnapshot = await firestore()
+        .collection("attendance")
+        .where("classId", "==", studentClass)
+        .get();
 
-      const querySnapshot = await getDocs(q);
       const rawData = [];
       const subjectsSet = new Set(["All"]);
 
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        const myStatus = data.records[user.uid];
+        const myStatus = data.records?.[user.uid]; // Safety check
         if (myStatus) {
           rawData.push({
             date: data.date,
@@ -105,15 +90,24 @@ const AttendanceCalendar = () => {
     }
   };
 
-  const processDataForSubject = () => {
+  useEffect(() => {
+    fetchAttendance();
+  }, []);
+
+  // --- 2. PROCESS DATA (MEMOIZED) ---
+  const { stats, processedMap } = useMemo(() => {
     const newMap = {};
     let p = 0;
     let t = 0;
 
     fullData.forEach((item) => {
       if (selectedSubject === "All" || item.subject === selectedSubject) {
-        const [d, m, y] = item.date.split("-");
-        const formattedDate = `${y}-${m}-${d}`;
+        // Handle date formats (DD-MM-YYYY -> YYYY-MM-DD) safely
+        const parts = item.date.split("-");
+        let formattedDate = item.date;
+        if (parts.length === 3) {
+          formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
 
         if (!newMap[formattedDate]) {
           newMap[formattedDate] = item.status;
@@ -123,16 +117,21 @@ const AttendanceCalendar = () => {
       }
     });
 
-    setAttendanceMap(newMap);
-    setStats({ present: p, total: t });
-  };
+    return { stats: { present: p, total: t }, processedMap: newMap };
+  }, [selectedSubject, fullData]);
 
-  const generateDays = () => {
+  // Update map only when processing changes
+  useEffect(() => {
+    setAttendanceMap(processedMap);
+  }, [processedMap]);
+
+  // --- 3. HELPERS ---
+  const generateDays = useCallback(() => {
     const days = [];
     const startOfMonth = currentDate.startOf("month");
     const daysInMonth = currentDate.daysInMonth();
+    const startDay = startOfMonth.day();
 
-    const startDay = startOfMonth.day(); 
     for (let i = 0; i < startDay; i++) {
       days.push({ key: `empty-${i}`, type: "empty" });
     }
@@ -149,16 +148,81 @@ const AttendanceCalendar = () => {
       });
     }
     return days;
-  };
+  }, [currentDate, attendanceMap]);
 
   const changeMonth = (dir) => {
     setCurrentDate(currentDate.add(dir, "month"));
   };
 
-  const percentage =
-    stats.total > 0
+  const percentage = useMemo(() => {
+    return stats.total > 0
       ? ((stats.present / stats.total) * 100).toFixed(0) + "%"
       : "0%";
+  }, [stats]);
+
+  // --- 4. RENDER ITEM ---
+  const renderCalendarItem = useCallback(
+    ({ item }) => {
+      if (item.type === "empty") {
+        return <View style={{ width: colWidth, height: 48 }} />;
+      }
+
+      let bg = "transparent";
+      let textCol = colors.text;
+      let borderCol = "transparent";
+      let borderWidth = 0;
+
+      if (item.status === "Present") {
+        bg = colors.present;
+        textCol = "#FFF";
+      } else if (item.status === "Absent") {
+        bg = colors.absent;
+        textCol = "#FFF";
+      }
+
+      if (item.fullDate === dayjs().format("YYYY-MM-DD")) {
+        borderCol = colors.today;
+        borderWidth = 2;
+        if (!item.status) textCol = colors.today;
+      }
+
+      return (
+        <View
+          style={{
+            width: colWidth,
+            height: 48,
+            justifyContent: "center",
+            alignItems: "center",
+            marginBottom: 4,
+          }}
+        >
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: bg,
+              borderColor: borderCol,
+              borderWidth: borderWidth,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                color: textCol,
+                fontWeight: item.status ? "bold" : "normal",
+                fontSize: 14,
+              }}
+            >
+              {item.val}
+            </Text>
+          </View>
+        </View>
+      );
+    },
+    [colWidth, colors, attendanceMap]
+  ); // Dependency on attendanceMap for updates
 
   if (loading) {
     return (
@@ -193,6 +257,7 @@ const AttendanceCalendar = () => {
       </View>
 
       <ScrollView className="flex-1 px-4">
+        {/* Subject Filter */}
         <View className="mb-6">
           <FlatList
             horizontal
@@ -223,6 +288,7 @@ const AttendanceCalendar = () => {
           />
         </View>
 
+        {/* Stats Card */}
         <View
           style={{ backgroundColor: colors.card }}
           className="p-5 rounded-2xl mb-6 border border-[#4C5361] shadow-lg"
@@ -297,6 +363,7 @@ const AttendanceCalendar = () => {
               </View>
             </View>
           </View>
+
           <View className="mt-4 bg-[#282C34] h-2 rounded-full overflow-hidden w-full">
             <View
               style={{
@@ -308,6 +375,7 @@ const AttendanceCalendar = () => {
           </View>
         </View>
 
+        {/* Calendar View */}
         <View
           style={{ backgroundColor: colors.card }}
           className="rounded-2xl border border-[#4C5361] overflow-hidden pb-4 shadow-sm"
@@ -354,65 +422,7 @@ const AttendanceCalendar = () => {
             keyExtractor={(item) => item.key}
             scrollEnabled={false}
             contentContainerStyle={{ paddingHorizontal: 4 }}
-            renderItem={({ item }) => {
-              if (item.type === "empty") {
-                return <View style={{ width: colWidth, height: 48 }} />;
-              }
-
-              let bg = "transparent";
-              let textCol = colors.text;
-              let borderCol = "transparent";
-              let borderWidth = 0;
-
-              if (item.status === "Present") {
-                bg = colors.present;
-                textCol = "#FFF";
-              } else if (item.status === "Absent") {
-                bg = colors.absent;
-                textCol = "#FFF";
-              }
-
-              if (item.fullDate === dayjs().format("YYYY-MM-DD")) {
-                borderCol = colors.today;
-                borderWidth = 2;
-                if (!item.status) textCol = colors.today;
-              }
-
-              return (
-                <View
-                  style={{
-                    width: colWidth,
-                    height: 48,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    marginBottom: 4,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      backgroundColor: bg,
-                      borderColor: borderCol,
-                      borderWidth: borderWidth,
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: textCol,
-                        fontWeight: item.status ? "bold" : "normal",
-                        fontSize: 14,
-                      }}
-                    >
-                      {item.val}
-                    </Text>
-                  </View>
-                </View>
-              );
-            }}
+            renderItem={renderCalendarItem}
           />
         </View>
 

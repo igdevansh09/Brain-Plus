@@ -1,18 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { signOut } from "firebase/auth";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-} from "firebase/firestore";
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   RefreshControl,
   SafeAreaView,
@@ -21,10 +9,26 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Image,
+  Animated,
+  PanResponder,
+  Dimensions,
 } from "react-native";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+
+// --- NATIVE SDK IMPORTS ---
+import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
+import storage from "@react-native-firebase/storage";
+import * as ImagePicker from "expo-image-picker";
+
+// --- CUSTOM COMPONENTS ---
 import CustomAlert from "../../components/CustomAlert";
 import CustomAlert2 from "../../components/CustomAlert2";
-import { auth, db } from "../../config/firebaseConfig";
+import CustomToast from "../../components/CustomToast"; // Imported CustomToast
+
+const { height } = Dimensions.get("window");
 
 const StudentDashboard = () => {
   const router = useRouter();
@@ -32,16 +36,61 @@ const StudentDashboard = () => {
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const [totalDue, setTotalDue] = useState(0);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
+
+  // Alert & Toast States
   const [logoutAlertVisible, setLogoutAlertVisible] = useState(false);
+  const [toast, setToast] = useState({
+    visible: false,
+    msg: "",
+    type: "success",
+  });
 
   const [readOnlyVisible, setReadOnlyVisible] = useState(false);
   const [selectedContent, setSelectedContent] = useState({
     title: "",
     message: "",
   });
+
+  // Helper to show toast
+  const showToast = (msg, type = "success") => {
+    setToast({ visible: true, msg, type });
+  };
+
+  // Animation Refs
+  const pan = useRef(new Animated.Value(0)).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return gestureState.dy > 5;
+      },
+      onPanResponderMove: Animated.event([null, { dy: pan }], {
+        useNativeDriver: false,
+      }),
+      onPanResponderRelease: (e, gestureState) => {
+        if (gestureState.dy > 150) {
+          setProfileModalVisible(false);
+        } else {
+          Animated.spring(pan, {
+            toValue: 0,
+            useNativeDriver: false,
+            bounciness: 10,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  // Reset Animation when Modal Opens
+  useEffect(() => {
+    if (profileModalVisible) {
+      pan.setValue(0);
+    }
+  }, [profileModalVisible]);
 
   const theme = {
     bg: "bg-[#282C34]",
@@ -53,20 +102,26 @@ const StudentDashboard = () => {
     borderColor: "border-[#4C5361]",
   };
 
+  // --- DATA FETCHING ---
   const fetchData = async () => {
     try {
-      const user = auth.currentUser;
+      const user = auth().currentUser;
       if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
+        // 1. Fetch User Data
+        const userDoc = await firestore()
+          .collection("users")
+          .doc(user.uid)
+          .get();
         let currentStandard = "";
-        if (userDoc.exists()) {
+
+        if (userDoc.exists) {
           const data = userDoc.data();
           setStudentData(data);
           currentStandard = data.standard;
         }
 
-        const globalQ = query(collection(db, "notices"));
-        const globalSnap = await getDocs(globalQ);
+        // 2. Fetch Notices
+        const globalSnap = await firestore().collection("notices").get();
         const globalList = globalSnap.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
@@ -76,11 +131,11 @@ const StudentDashboard = () => {
 
         let classList = [];
         if (currentStandard) {
-          const classQ = query(
-            collection(db, "class_notices"),
-            where("classId", "==", currentStandard)
-          );
-          const classSnap = await getDocs(classQ);
+          const classSnap = await firestore()
+            .collection("class_notices")
+            .where("classId", "==", currentStandard)
+            .get();
+
           classList = classSnap.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
@@ -90,14 +145,23 @@ const StudentDashboard = () => {
         }
 
         const combined = [...globalList, ...classList];
-        combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        combined.sort((a, b) => {
+          const dateA = a.createdAt?.toDate
+            ? a.createdAt.toDate()
+            : new Date(a.createdAt);
+          const dateB = b.createdAt?.toDate
+            ? b.createdAt.toDate()
+            : new Date(b.createdAt);
+          return dateB - dateA;
+        });
         setNotices(combined);
 
-        const feesQ = query(
-          collection(db, "fees"),
-          where("studentId", "==", user.uid)
-        );
-        const feesSnap = await getDocs(feesQ);
+        // 3. Fetch Fees
+        const feesSnap = await firestore()
+          .collection("fees")
+          .where("studentId", "==", user.uid)
+          .get();
+
         const pending = feesSnap.docs.filter(
           (d) => d.data().status === "Pending"
         );
@@ -126,13 +190,50 @@ const StudentDashboard = () => {
     setRefreshing(false);
   }, []);
 
+  // --- AVATAR UPDATE ---
+  const handleUpdateAvatar = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+      });
+
+      if (!result.canceled) {
+        setUploading(true);
+        const { uri } = result.assets[0];
+        const user = auth().currentUser;
+
+        // Upload to Storage
+        const ref = storage().ref(`profile_pictures/${user.uid}/avatar.jpg`);
+        await ref.putFile(uri);
+        const url = await ref.getDownloadURL();
+
+        // Update Firestore
+        await firestore().collection("users").doc(user.uid).update({
+          profileImage: url,
+        });
+
+        // Update Local State
+        setStudentData((prev) => ({ ...prev, profileImage: url }));
+        setUploading(false);
+        showToast("Profile picture updated!", "success"); // Replaced Alert
+      }
+    } catch (error) {
+      console.error(error);
+      setUploading(false);
+      showToast("Failed to update profile picture.", "error"); // Replaced Alert
+    }
+  };
+
   const confirmLogout = async () => {
     setLogoutAlertVisible(false);
     try {
-      await signOut(auth);
+      await auth().signOut();
       router.replace("/");
     } catch (e) {
-      Alert.alert("Error", e.message);
+      showToast(e.message, "error"); // Replaced Alert
     }
   };
 
@@ -153,12 +254,7 @@ const StudentDashboard = () => {
       route: "/attendancescreen",
     },
     { id: "2", name: "Homework", icon: "book", route: "/homeworkscreen" },
-    {
-      id: "3",
-      name: "My Courses",
-      icon: "library-outline",
-      route: "/courses",
-    },
+    { id: "3", name: "My Courses", icon: "library-outline", route: "/courses" },
     { id: "4", name: "Test Scores", icon: "bar-chart", route: "/testscores" },
     {
       id: "5",
@@ -183,6 +279,14 @@ const StudentDashboard = () => {
     <SafeAreaView className={`flex-1 ${theme.bg} pt-8`}>
       <StatusBar backgroundColor="#282C34" barStyle="light-content" />
 
+      {/* --- ALERTS & TOASTS --- */}
+      <CustomToast
+        visible={toast.visible}
+        message={toast.msg}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
+      />
+
       <CustomAlert
         visible={logoutAlertVisible}
         title="Sign Out"
@@ -201,69 +305,153 @@ const StudentDashboard = () => {
         onClose={() => setReadOnlyVisible(false)}
       />
 
+      {/* --- PREMIUM PROFILE BOTTOM SHEET --- */}
       <Modal
         visible={profileModalVisible}
-        animationType="fade"
+        animationType="slide"
         transparent={true}
         onRequestClose={() => setProfileModalVisible(false)}
       >
-        <View className="flex-1 justify-center items-center bg-black/80 p-4">
-          <View className="bg-[#333842] w-full rounded-xl p-6 border border-[#f49b33]">
-            <Text className="text-white text-2xl font-bold mb-4 border-b border-gray-600 pb-2">
-              {studentData?.name}
-            </Text>
+        <View className="flex-1 justify-end bg-black/60">
+          <TouchableOpacity
+            className="flex-1"
+            onPress={() => setProfileModalVisible(false)}
+          />
 
-            <View className="mb-4">
-              <Text className="text-gray-400 text-xs uppercase mb-1">
-                Contact Info
-              </Text>
-              <Text className="text-white text-base mb-1">
-                <Ionicons name="mail" size={15} color={"#eab308"} />
-                {"  "} {studentData?.email}
-              </Text>
-              <Text className="text-white text-base">
-                <Ionicons name="call" size={15} color={"#eab308"} />
-                {"  "} {studentData?.phone || "N/A"}
-              </Text>
-            </View>
-
-            <View className="mb-4">
-              <Text className="text-gray-400 text-xs uppercase mb-1">
-                Academic Info
-              </Text>
-              <Text className="text-white text-base">
-                Class:{" "}
-                <Text className="font-bold">{studentData?.standard}</Text>
-              </Text>
-              {studentData?.stream !== "N/A" && (
-                <Text className="text-white text-base">
-                  Stream: {studentData?.stream}
-                </Text>
-              )}
-              <Text className="text-white text-sm mt-1 text-gray-300">
-                Subjects: {studentData?.enrolledSubjects?.join(", ")}
-              </Text>
-            </View>
-
-            <View className="mb-6">
-              <Text className="text-gray-400 text-xs uppercase mb-1">
-                Financial Info
-              </Text>
-              <Text className="text-[#4CAF50] text-xl font-bold">
-                Monthly Fee: ₹{studentData?.monthlyFeeAmount || "5000"}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              onPress={() => setProfileModalVisible(false)}
-              className="bg-[#f49b33] p-3 rounded-lg items-center"
+          <Animated.View
+            style={{
+              transform: [
+                {
+                  translateY: pan.interpolate({
+                    inputRange: [0, height],
+                    outputRange: [0, height],
+                    extrapolate: "clamp",
+                  }),
+                },
+              ],
+            }}
+            className="bg-[#282C34] w-full h-[85%] rounded-t-3xl overflow-hidden shadow-2xl relative"
+          >
+            {/* 1. Header Banner & Drag Handle */}
+            <View
+              {...panResponder.panHandlers}
+              className="h-32 bg-[#f49b33]/20 w-full relative"
             >
-              <Text className="text-[#282C34] font-bold">Close</Text>
-            </TouchableOpacity>
-          </View>
+              <View className="absolute top-3 left-0 right-0 items-center z-30">
+                <View className="w-12 h-1.5 bg-white/30 rounded-full" />
+              </View>
+              <View className="absolute top-0 left-0 w-full h-full bg-black/20" />
+            </View>
+
+            {/* 2. Profile Avatar */}
+            <View className="px-6 -mt-16 mb-4 flex-row justify-between items-end">
+              <TouchableOpacity
+                onPress={handleUpdateAvatar}
+                disabled={uploading}
+                className="relative"
+              >
+                <View className="w-32 h-32 rounded-full border-4 border-[#282C34] bg-[#333842] items-center justify-center overflow-hidden">
+                  {studentData?.profileImage ? (
+                    <Image
+                      source={{ uri: studentData.profileImage }}
+                      className="w-full h-full"
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text className="text-[#f49b33] font-bold text-5xl">
+                      {studentData?.name
+                        ? studentData.name.charAt(0).toUpperCase()
+                        : "S"}
+                    </Text>
+                  )}
+                </View>
+                <View className="absolute bottom-1 right-1 bg-[#f49b33] p-2 rounded-full border-2 border-[#282C34]">
+                  {uploading ? (
+                    <ActivityIndicator size="small" color="#282C34" />
+                  ) : (
+                    <Ionicons name="camera" size={16} color="#282C34" />
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              <View className="bg-green-500/20 px-4 py-2 rounded-full border border-green-500/30 mb-4">
+                              <Text className="text-green-400 font-bold text-xs uppercase tracking-wide">
+                                ● Active Student
+                              </Text>
+                            </View>
+            </View>
+
+            {/* 3. Main Info */}
+            <ScrollView className="flex-1 px-6">
+              <View className="mb-6">
+                <Text className="text-white text-3xl font-bold">
+                  {studentData?.name || "Student Name"}
+                </Text>
+                <Text className="text-gray-400 text-base">
+                  {studentData?.email}
+                </Text>
+                <Text className="text-[#f49b33] text-sm mt-1">
+                  {studentData?.phone || "No phone linked"}
+                </Text>
+              </View>
+
+              {/* 4. Stats Grid */}
+              <View className="flex-row justify-between mb-8">
+                <View className="bg-[#333842] p-4 rounded-2xl flex-1 mr-3 border border-[#4C5361] items-center">
+                  <Text className="text-gray-400 text-xs font-bold uppercase mb-1">
+                    Standard
+                  </Text>
+                  <Text className="text-white text-xl font-bold">
+                    {studentData?.standard || "N/A"}
+                  </Text>
+                </View>
+                <View className="bg-[#333842] p-4 rounded-2xl flex-1 ml-3 border border-[#4C5361] items-center">
+                  <Text className="text-gray-400 text-xs font-bold uppercase mb-1">
+                    Stream
+                  </Text>
+                  <Text className="text-[#f49b33] text-xl font-bold">
+                    {studentData?.stream || "N/A"}
+                  </Text>
+                </View>
+              </View>
+
+              {/* 5. Subjects List */}
+              <Text className="text-gray-300 font-bold text-lg mb-4 border-b border-[#4C5361] pb-2">
+                Enrolled Subjects
+              </Text>
+
+              <View className="mb-10">
+                {studentData?.enrolledSubjects &&
+                studentData.enrolledSubjects.length > 0 ? (
+                  studentData.enrolledSubjects.map((subject, index) => (
+                    <View
+                      key={index}
+                      className="flex-row items-center bg-[#333842] p-4 rounded-xl mb-3 border border-[#4C5361]"
+                    >
+                      <View className="bg-[#f49b33]/20 w-12 h-12 rounded-full items-center justify-center mr-4 border border-[#f49b33]/30">
+                        <Ionicons name="book" size={22} color="#f49b33" />
+                      </View>
+                      <View>
+                        <Text className="text-white font-bold text-lg">
+                          {subject}
+                        </Text>
+                      </View>
+                    </View>
+                  ))
+                ) : (
+                  <View className="items-center py-6">
+                    <Text className="text-gray-500 italic">
+                      No subjects enrolled yet.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+          </Animated.View>
         </View>
       </Modal>
 
+      {/* --- DASHBOARD CONTENT --- */}
       <ScrollView
         className="flex-1 px-4 py-7"
         refreshControl={
@@ -277,11 +465,18 @@ const StudentDashboard = () => {
         <View className="flex-row items-center mb-5">
           <TouchableOpacity onPress={() => setProfileModalVisible(true)}>
             <View
-              className={`w-14 h-14 rounded-full mr-3 items-center justify-center border-2 border-[#f49b33] ${theme.card}`}
+              className={`w-14 h-14 rounded-full mr-3 items-center justify-center border-2 border-[#f49b33] ${theme.card} overflow-hidden`}
             >
-              <Text className="text-white text-xl font-bold">
-                {studentData?.name ? studentData.name.charAt(0) : "S"}
-              </Text>
+              {studentData?.profileImage ? (
+                <Image
+                  source={{ uri: studentData.profileImage }}
+                  className="w-full h-full"
+                />
+              ) : (
+                <Text className="text-white text-xl font-bold">
+                  {studentData?.name ? studentData.name.charAt(0) : "S"}
+                </Text>
+              )}
             </View>
           </TouchableOpacity>
           <View className="flex-1">
@@ -303,6 +498,7 @@ const StudentDashboard = () => {
           Welcome Back!
         </Text>
 
+        {/* FEE CARD */}
         <View className="mb-5">
           <Text className={`${theme.accent} text-lg font-semibold mb-2`}>
             Total Pending Fee
@@ -327,6 +523,7 @@ const StudentDashboard = () => {
           </TouchableOpacity>
         </View>
 
+        {/* QUICK ACCESS */}
         <View className="mb-5">
           <Text className={`${theme.accent} text-lg font-semibold mb-2`}>
             Quick Access
@@ -348,6 +545,7 @@ const StudentDashboard = () => {
           </View>
         </View>
 
+        {/* NOTICES */}
         <View className="mb-8">
           <Text className={`${theme.accent} text-lg font-semibold mb-2`}>
             Coaching/Class Updates
