@@ -9,9 +9,10 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 // NATIVE SDK
@@ -20,101 +21,16 @@ import firestore from "@react-native-firebase/firestore";
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
 
-const SalaryItemCard = ({ item, onMarkPaid, colors }) => {
-  const [teacherData, setTeacherData] = useState(null);
-  const [loadingData, setLoadingData] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true; // Prevents updating state if component unmounts
-    const fetchTeacherProfile = async () => {
-      try {
-        if (item.teacherId) {
-          const userDoc = await firestore()
-            .collection("users")
-            .doc(item.teacherId)
-            .get();
-          if (isMounted && userDoc.exists) {
-            setTeacherData(userDoc.data());
-          }
-        }
-      } catch (error) {
-        console.log("Error fetching teacher:", error);
-      } finally {
-        if (isMounted) setLoadingData(false);
-      }
-    };
-    fetchTeacherProfile();
-    return () => {
-      isMounted = false;
-    };
-  }, [item.teacherId]);
-
-  return (
-    <View
-      style={{ backgroundColor: colors.card }}
-      className="p-4 rounded-xl mb-3 border border-[#4C5361]"
-    >
-      <View className="flex-row justify-between items-center mb-2">
-        <Text style={{ color: colors.text }} className="text-lg font-bold">
-          {item.teacherName}
-        </Text>
-        <Text
-          style={{
-            color: item.status === "Paid" ? colors.paid : colors.pending,
-            fontWeight: "bold",
-          }}
-        >
-          {item.status}
-        </Text>
-      </View>
-      <Text style={{ color: "#FFC000" }} className="text-base mb-2">
-        {item.title}
-      </Text>
-
-      {loadingData ? (
-        <ActivityIndicator
-          size="small"
-          color={colors.accent}
-          style={{ alignSelf: "flex-start", marginVertical: 5 }}
-        />
-      ) : teacherData ? (
-        <View className="mb-3">
-          <Text style={{ color: colors.subText, fontSize: 12 }}>
-            <Text style={{ fontWeight: "bold", color: "#FFF" }}>Classes: </Text>
-            {teacherData.classesTaught?.join(", ") || "N/A"}
-          </Text>
-          <Text style={{ color: colors.subText, fontSize: 12 }}>
-            <Text style={{ fontWeight: "bold", color: "#FFF" }}>
-              Subjects:{" "}
-            </Text>
-            {teacherData.subjects?.join(", ") || "N/A"}
-          </Text>
-        </View>
-      ) : null}
-
-      <View className="flex-row justify-between items-end mt-2">
-        <View className="flex-row items-center">
-          <Text
-            style={{ color: colors.accent }}
-            className="text-lg font-bold mr-4"
-          >
-            ₹{item.amount}
-          </Text>
-          {item.status === "Pending" && (
-            <TouchableOpacity
-              onPress={() => onMarkPaid(item.id, item.teacherName)}
-              style={{ backgroundColor: colors.paid }}
-              className="px-3 py-2 rounded-lg"
-            >
-              <Text style={{ color: colors.bg, fontWeight: "bold" }}>
-                Pay Now
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    </View>
-  );
+const theme = {
+  bg: "bg-[#282C34]",
+  card: "bg-[#333842]",
+  accent: "text-[#f49b33]",
+  accentBg: "bg-[#f49b33]",
+  text: "text-white",
+  subText: "text-gray-400",
+  borderColor: "border-[#4C5361]",
+  success: "#4CAF50",
+  warning: "#FFC107",
 };
 
 const TeacherSalaryReports = () => {
@@ -122,114 +38,83 @@ const TeacherSalaryReports = () => {
   const [salaries, setSalaries] = useState([]);
   const [filteredSalaries, setFilteredSalaries] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Manual Entry States
   const [isAdding, setIsAdding] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-
   const [selectedTeacher, setSelectedTeacher] = useState(null);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
-  const [status, setStatus] = useState("Pending");
 
-  const [showTeacherModal, setShowTeacherModal] = useState(false);
+  // Data for Modals
   const [commissionTeachers, setCommissionTeachers] = useState([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
+  const [showTeacherModal, setShowTeacherModal] = useState(false);
 
-  const [alertVisible, setAlertVisible] = useState(false);
-  const [alertTitle, setAlertTitle] = useState("");
-  const [alertMessage, setAlertMessage] = useState("");
-  const [alertType, setAlertType] = useState("default");
-  const [alertConfirmAction, setAlertConfirmAction] = useState(null);
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState("success");
+  // Filter State
+  const [selectedFilter, setSelectedFilter] = useState("All"); // All, Pending, Paid
 
-  const showToast = (msg, type = "success") => {
-    setToastMessage(msg);
-    setToastType(type);
-    setToastVisible(true);
-  };
+  // UI Feedback
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    msg: "",
+    onConfirm: null,
+  });
+  const [toast, setToast] = useState({
+    visible: false,
+    msg: "",
+    type: "success",
+  });
 
-  const colors = {
-    bg: "#282C34",
-    card: "#333842",
-    accent: "#f49b33",
-    text: "#FFFFFF",
-    subText: "#BBBBBB",
-    paid: "#4CAF50",
-    pending: "#F44336",
-  };
+  const showToast = (msg, type = "success") =>
+    setToast({ visible: true, msg, type });
 
-  const getCurrentMonthTitle = () => {
-    const date = new Date();
-    return `Salary - ${date.toLocaleString("default", { month: "long" })} ${date.getFullYear()}`;
-  };
+  const FILTER_OPTIONS = ["All", "Pending", "Paid"];
 
-  // --- NATIVE LISTENERS (SAFE) ---
+  // --- 1. LISTEN TO SALARIES ---
   useEffect(() => {
     const unsubscribe = firestore()
       .collection("salaries")
       .orderBy("createdAt", "desc")
-      .onSnapshot(
-        (snapshot) => {
-          // SAFE GUARD: Check for snapshot.docs
-          if (!snapshot || !snapshot.docs) {
-            console.log("Snapshot not ready");
-            return;
-          }
-
-          const list = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          setSalaries(list);
-          setFilteredSalaries(list);
-          setLoading(false);
-        },
-        (err) => {
-          console.error("Salary Listener Error:", err);
-          setLoading(false);
-        }
-      );
+      .onSnapshot((snapshot) => {
+        if (!snapshot) return;
+        const list = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        // Sort: Pending first
+        list.sort((a, b) => (a.status === "Pending" ? -1 : 1));
+        setSalaries(list);
+        setLoading(false);
+      });
     return () => unsubscribe();
   }, []);
 
+  // --- 2. FILTER LOGIC ---
   useEffect(() => {
-    if (searchQuery.trim() === "") {
+    if (selectedFilter === "All") {
       setFilteredSalaries(salaries);
     } else {
-      const lower = searchQuery.toLowerCase();
-      setFilteredSalaries(
-        salaries.filter(
-          (s) =>
-            s.teacherName?.toLowerCase().includes(lower) ||
-            s.teacherEmail?.toLowerCase().includes(lower)
-        )
-      );
+      setFilteredSalaries(salaries.filter((s) => s.status === selectedFilter));
     }
-  }, [searchQuery, salaries]);
+  }, [selectedFilter, salaries]);
 
-  // --- TEACHER FETCH ---
+  // --- 3. FETCH COMMISSION TEACHERS (For Manual Entry) ---
   useEffect(() => {
-    if (showTeacherModal) {
+    if (isAdding) {
       const fetchTeachers = async () => {
         setLoadingTeachers(true);
         try {
           const snap = await firestore()
             .collection("users")
             .where("role", "==", "teacher")
-            .where("verified", "==", true) // Gatekeeper
-            .where("salaryType", "==", "Commission")
+            .where("verified", "==", true)
+            .where("salaryType", "==", "Commission") // Strict Filter
             .get();
 
-          if (snap && snap.docs) {
-            const list = snap.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            }));
-            setCommissionTeachers(list);
-          }
+          const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+          setCommissionTeachers(list);
         } catch (e) {
           console.log(e);
         } finally {
@@ -238,126 +123,37 @@ const TeacherSalaryReports = () => {
       };
       fetchTeachers();
     }
-  }, [showTeacherModal]);
+  }, [isAdding]);
 
-  // --- AUTO GENERATE CHECK ---
-  useEffect(() => {
-    const checkAndAutoGenerate = async () => {
-      const today = new Date();
-      if (today.getDate() >= 10) {
-        const currentTitle = getCurrentMonthTitle();
-        const snapshot = await firestore()
-          .collection("salaries")
-          .where("title", "==", currentTitle)
-          .get();
-        if (snapshot.empty) await handleAutoGenerate(true);
-      }
-    };
-    const timer = setTimeout(() => {
-      checkAndAutoGenerate();
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
-
+  // --- ACTIONS ---
   const handleMarkPaid = (id, name) => {
-    setAlertTitle("Confirm");
-    setAlertMessage(`Mark ${name} as PAID?`);
-    setAlertType("warning");
-    setAlertConfirmAction(() => () => performMarkPaid(id));
-    setAlertVisible(true);
-  };
-
-  const performMarkPaid = async (id) => {
-    setAlertVisible(false);
-    try {
-      await firestore().collection("salaries").doc(id).update({
-        status: "Paid",
-        paidAt: new Date().toISOString(),
-      });
-      showToast("Salary marked as paid.", "success");
-    } catch (e) {
-      showToast("Update failed.", "error");
-    }
-  };
-
-  const handleAutoGenerate = async (isSilent = false) => {
-    const currentTitle = getCurrentMonthTitle();
-
-    const runGeneration = async () => {
-      setAlertVisible(false);
-      setGenerating(true);
-      try {
-        // 1. Get Teachers
-        const teachersSnap = await firestore()
-          .collection("users")
-          .where("role", "==", "teacher")
-          .where("verified", "==", true)
-          .get();
-
-        // 2. Get existing salaries
-        const salarySnap = await firestore()
-          .collection("salaries")
-          .where("title", "==", currentTitle)
-          .get();
-
-        // SAFE GUARD for get() calls
-        const paidTeacherIds = salarySnap.docs
-          ? salarySnap.docs.map((doc) => doc.data().teacherId)
-          : [];
-
-        // 3. Batch Create
-        const batch = firestore().batch();
-        let count = 0;
-
-        if (teachersSnap.docs) {
-          teachersSnap.forEach((docSnap) => {
-            const teacher = docSnap.data();
-            if (
-              teacher.salaryType === "Fixed" &&
-              !paidTeacherIds.includes(docSnap.id)
-            ) {
-              const newRef = firestore().collection("salaries").doc();
-              batch.set(newRef, {
-                teacherId: docSnap.id,
-                teacherName: teacher.name,
-                teacherEmail: teacher.email,
-                title: currentTitle,
-                amount: teacher.salary || "0",
-                status: "Pending",
-                date: new Date().toLocaleDateString("en-GB"),
-                createdAt: firestore.FieldValue.serverTimestamp(),
-              });
-              count++;
-            }
+    setAlert({
+      visible: true,
+      title: "Confirm Payment",
+      msg: `Mark salary for ${name} as PAID?`,
+      onConfirm: async () => {
+        setAlert({ ...alert, visible: false });
+        try {
+          await firestore().collection("salaries").doc(id).update({
+            status: "Paid",
+            paidAt: new Date().toISOString(),
           });
+          showToast("Salary marked as paid.", "success");
+        } catch (e) {
+          showToast("Update failed.", "error");
         }
+      },
+    });
+  };
 
-        if (count > 0) {
-          await batch.commit();
-          if (!isSilent) showToast(`Generated ${count} Salaries.`, "success");
-        } else if (!isSilent) {
-          showToast("No new salaries to generate.", "info");
-        }
-      } catch (error) {
-        console.log(error);
-      } finally {
-        setGenerating(false);
-      }
-    };
-
-    if (isSilent) await runGeneration();
-    else {
-      setAlertTitle("Generate Salaries?");
-      setAlertMessage("Generate for all Fixed Salary staff?");
-      setAlertType("warning");
-      setAlertConfirmAction(() => runGeneration);
-      setAlertVisible(true);
-    }
+  const handleCallTeacher = (phone) => {
+    if (phone) Linking.openURL(`tel:${phone}`);
+    else showToast("Phone number not available", "error");
   };
 
   const handleRecordManual = async () => {
     if (!selectedTeacher || !title.trim() || !amount.trim()) {
-      showToast("Fill all fields.", "error");
+      showToast("Please fill all fields.", "error");
       return;
     }
     setSubmitting(true);
@@ -368,9 +164,10 @@ const TeacherSalaryReports = () => {
           teacherId: selectedTeacher.id,
           teacherName: selectedTeacher.name,
           teacherEmail: selectedTeacher.email,
+          teacherPhone: selectedTeacher.phone || "",
           title: title,
           amount: amount,
-          status: status,
+          status: "Pending",
           date: new Date().toLocaleDateString("en-GB"),
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
@@ -378,7 +175,7 @@ const TeacherSalaryReports = () => {
       setSelectedTeacher(null);
       setTitle("");
       setAmount("");
-      showToast("Salary Recorded!", "success");
+      showToast("Commission added successfully!", "success");
     } catch (e) {
       showToast("Failed to record.", "error");
     } finally {
@@ -386,153 +183,287 @@ const TeacherSalaryReports = () => {
     }
   };
 
-  const renderItem = ({ item }) => (
-    <SalaryItemCard item={item} onMarkPaid={handleMarkPaid} colors={colors} />
-  );
+  // --- CALCULATE STATS ---
+  const totalPayout = filteredSalaries
+    .filter((s) => s.status === "Paid")
+    .reduce((acc, curr) => acc + Number(curr.amount), 0);
 
-  return (
-    <SafeAreaView className="flex-1 bg-[#282C34] pt-2">
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+  const pendingPayout = filteredSalaries
+    .filter((s) => s.status === "Pending")
+    .reduce((acc, curr) => acc + Number(curr.amount), 0);
 
-      <CustomAlert
-        visible={alertVisible}
-        title={alertTitle}
-        message={alertMessage}
-        type={alertType}
-        onCancel={() => setAlertVisible(false)}
-        onConfirm={alertConfirmAction}
-        confirmText="Confirm"
-      />
-      <CustomToast
-        visible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onHide={() => setToastVisible(false)}
-      />
+  const totalLiability = totalPayout + pendingPayout;
+  const payoutRate =
+    totalLiability > 0 ? (totalPayout / totalLiability) * 100 : 0;
 
-      <View className="px-4 py-4 flex-row items-center justify-between">
-        <View className="flex-row items-center">
-          <TouchableOpacity onPress={() => router.back()} className="mr-3">
-            <Ionicons name="arrow-back" size={24} color="white" />
-          </TouchableOpacity>
-          <Text className="text-white text-xl font-bold">Salary Ledger</Text>
+  // --- RENDER ITEM ---
+  const renderSalaryItem = ({ item }) => (
+    <View
+      className={`${theme.card} p-4 rounded-2xl mb-4 border ${theme.borderColor} shadow-sm`}
+    >
+      <View className="flex-row items-center justify-between mb-3">
+        <View className="flex-row items-center flex-1">
+          {/* Avatar */}
+          <View className="w-10 h-10 rounded-full bg-[#f49b33]/20 items-center justify-center mr-3 border border-[#f49b33]/30">
+            <Text className="text-[#f49b33] font-bold">
+              {item.teacherName.charAt(0)}
+            </Text>
+          </View>
+          <View>
+            <Text className="text-white font-bold text-base" numberOfLines={1}>
+              {item.teacherName}
+            </Text>
+            <Text className="text-gray-400 text-xs">{item.date}</Text>
+          </View>
         </View>
-        <View className="flex-row">
-          <TouchableOpacity
-            onPress={() => handleAutoGenerate(false)}
-            disabled={generating}
-            className="mr-4"
+        {/* Badge */}
+        <View
+          className={`px-3 py-1 rounded-full ${item.status === "Paid" ? "bg-green-500/20" : "bg-red-500/20"}`}
+        >
+          <Text
+            className={`text-[10px] font-bold ${item.status === "Paid" ? "text-green-400" : "text-red-400"}`}
           >
-            {generating ? (
-              <ActivityIndicator size="small" color="#f49b33" />
-            ) : (
-              <Ionicons name="flash" size={28} color="#f49b33" />
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setIsAdding(!isAdding)}>
-            <Ionicons
-              name={isAdding ? "close-circle" : "add-circle"}
-              size={32}
-              color="#f49b33"
-            />
-          </TouchableOpacity>
+            {item.status.toUpperCase()}
+          </Text>
         </View>
       </View>
 
-      <View className="px-4 mb-4">
-        <View className="flex-row items-center bg-[#333842] rounded-lg px-3 border border-[#4C5361]">
-          <Ionicons name="search" size={20} color="#BBBBBB" />
-          <TextInput
-            placeholder="Search Teacher..."
-            placeholderTextColor="#BBBBBB"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            className="flex-1 p-3 text-white"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery("")}>
-              <Ionicons name="close-circle" size={20} color="#BBBBBB" />
-            </TouchableOpacity>
+      <Text className="text-gray-300 text-sm mb-3 italic">{item.title}</Text>
+
+      <View className="flex-row justify-between items-center pt-3 border-t border-[#4C5361]/30">
+        <Text className="text-[#f49b33] text-xl font-bold">₹{item.amount}</Text>
+
+        <View className="flex-row items-center gap-2">
+          {item.status === "Pending" && (
+            <>
+              <TouchableOpacity
+                onPress={() => handleCallTeacher(item.teacherPhone)}
+                className="bg-blue-600 w-10 h-9 rounded-xl items-center justify-center"
+              >
+                <Ionicons name="call" size={18} color="white" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => handleMarkPaid(item.id, item.teacherName)}
+                className="bg-green-600 px-4 py-2 rounded-xl flex-row items-center h-9"
+              >
+                <Ionicons
+                  name="checkmark-circle"
+                  size={16}
+                  color="white"
+                  className="mr-2"
+                />
+                <Text className="text-white font-bold text-xs">Pay</Text>
+              </TouchableOpacity>
+            </>
           )}
         </View>
       </View>
+    </View>
+  );
 
-      {isAdding && (
-        <ScrollView className="mx-4 my-4 p-5 bg-[#333842] rounded-xl border border-[#f49b33] max-h-96">
-          <Text className="text-white mb-5 font-semibold">
-            Manual Entry (Commission/Bonus)
-          </Text>
+  return (
+    <SafeAreaView className={`flex-1 ${theme.bg}`}>
+      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.msg}
+        onCancel={() => setAlert({ ...alert, visible: false })}
+        onConfirm={alert.onConfirm}
+      />
+      <CustomToast
+        visible={toast.visible}
+        message={toast.msg}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
+      />
 
-          <TouchableOpacity
-            onPress={() => setShowTeacherModal(true)}
-            className="bg-[#282C34] p-3 rounded-lg border border-[#4C5361] mb-3 flex-row justify-between items-center"
-          >
-            <Text style={{ color: selectedTeacher ? colors.text : "#888" }}>
-              {selectedTeacher ? selectedTeacher.name : "Select Teacher"}
-            </Text>
-            <Ionicons name="caret-down" size={16} color="#888" />
-          </TouchableOpacity>
+      {/* --- HEADER --- */}
+      <View className="px-5 py-4 flex-row items-center justify-between">
+        <TouchableOpacity
+          onPress={() => router.back()}
+          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
+        >
+          <Ionicons name="arrow-back" size={22} color="white" />
+        </TouchableOpacity>
+        <Text className="text-white text-2xl font-bold">Salary Ledger</Text>
 
-          <TextInput
-            placeholder="Details (e.g. 15 lectures)"
-            value={title}
-            onChangeText={setTitle}
-            multiline={true}
-            numberOfLines={3}
-            placeholderTextColor="#888"
-            style={{ textAlignVertical: "top" }}
-            className="bg-[#282C34] text-white p-3 rounded-lg border border-[#4C5361] mb-3 h-24"
-          />
-          <TextInput
-            placeholder="Amount"
-            value={amount}
-            onChangeText={setAmount}
-            placeholderTextColor="#888"
-            keyboardType="numeric"
-            className="bg-[#282C34] text-white p-3 rounded-lg border border-[#4C5361] mb-3"
-          />
+        {/* ADD COMMISSION BUTTON */}
+        <TouchableOpacity
+          onPress={() => setIsAdding(true)}
+          className="bg-[#333842] p-2 rounded-full border border-[#f49b33]"
+        >
+          <Ionicons name="add" size={24} color="#f49b33" />
+        </TouchableOpacity>
+      </View>
 
-          <TouchableOpacity
-            onPress={handleRecordManual}
-            disabled={submitting}
-            className="bg-[#f49b33] p-3 rounded-lg items-center mt-5"
-          >
-            <Text className="text-[#282C34] font-bold">Save Record</Text>
-          </TouchableOpacity>
+      {/* --- STATS DASHBOARD --- */}
+      <View className="px-5 mb-6">
+        <View
+          className={`${theme.card} p-5 rounded-3xl border ${theme.borderColor} shadow-lg relative overflow-hidden`}
+        >
+          <View className="flex-row justify-between items-end mb-4">
+            <View>
+              <Text className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">
+                Total Paid
+              </Text>
+              <Text className="text-white text-4xl font-black">
+                ₹{totalPayout}
+              </Text>
+            </View>
+            <View className="items-end">
+              <Text className="text-gray-400 text-[10px] mb-1">
+                Pending: ₹{pendingPayout}
+              </Text>
+              <Text className={`${theme.accent} font-bold`}>
+                {Math.round(payoutRate)}% Cleared
+              </Text>
+            </View>
+          </View>
+          {/* Progress Bar */}
+          <View className="h-2 w-full bg-[#282C34] rounded-full overflow-hidden">
+            <View
+              style={{ width: `${payoutRate}%` }}
+              className="h-full bg-[#f49b33]"
+            />
+          </View>
+        </View>
+      </View>
+
+      {/* --- FILTERS --- */}
+      <View className="px-5 mb-4">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {FILTER_OPTIONS.map((opt) => (
+            <TouchableOpacity
+              key={opt}
+              onPress={() => setSelectedFilter(opt)}
+              className={`mr-2 px-5 py-2 rounded-2xl border ${selectedFilter === opt ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-[#4C5361]"}`}
+            >
+              <Text
+                className={`${selectedFilter === opt ? "text-[#282C34] font-bold" : "text-gray-400"}`}
+              >
+                {opt}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
-      )}
+      </View>
 
+      {/* --- LIST --- */}
       {loading ? (
         <ActivityIndicator size="large" color="#f49b33" className="mt-10" />
       ) : (
         <FlatList
           data={filteredSalaries}
           keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          renderItem={renderSalaryItem}
+          contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
           ListEmptyComponent={() => (
-            <Text className="text-gray-500 text-center mt-10">
-              No records found.
-            </Text>
+            <View className="mt-20 items-center opacity-30">
+              <MaterialCommunityIcons
+                name="cash-multiple"
+                size={80}
+                color="gray"
+              />
+              <Text className="text-white text-center mt-4">
+                No salary records found.
+              </Text>
+            </View>
           )}
         />
       )}
 
-      <Modal
-        visible={showTeacherModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowTeacherModal(false)}
-      >
-        <View className="flex-1 bg-black/80 justify-center items-center p-4">
-          <View className="bg-[#333842] w-full max-h-[70%] rounded-xl p-4 border border-[#f49b33]">
-            <Text className="text-[#f49b33] text-xl font-bold mb-4 text-center">
+      {/* --- MANUAL ENTRY MODAL (COMMISSION ONLY) --- */}
+      <Modal visible={isAdding} animationType="slide" transparent>
+        <View className="flex-1 bg-black/80 justify-end">
+          <View className="bg-[#333842] rounded-t-3xl border-t border-[#f49b33] p-6 h-[80%]">
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-white text-xl font-bold">
+                Add Commission
+              </Text>
+              <TouchableOpacity onPress={() => setIsAdding(false)}>
+                <Ionicons name="close" size={24} color="gray" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Teacher Selector */}
+              <Text className="text-gray-400 text-xs font-bold uppercase mb-2">
+                Select Teacher (Commission Based)
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowTeacherModal(true)}
+                className="bg-[#282C34] p-4 rounded-xl border border-[#4C5361] mb-4 flex-row justify-between items-center"
+              >
+                <Text
+                  className={
+                    selectedTeacher ? "text-white font-bold" : "text-gray-500"
+                  }
+                >
+                  {selectedTeacher
+                    ? selectedTeacher.name
+                    : "Tap to select teacher..."}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="gray" />
+              </TouchableOpacity>
+
+              {/* Title */}
+              <Text className="text-gray-400 text-xs font-bold uppercase mb-2">
+                Description
+              </Text>
+              <TextInput
+                placeholder="e.g. 15 Lectures @ ₹500"
+                placeholderTextColor="#555"
+                value={title}
+                onChangeText={setTitle}
+                multiline
+                className="bg-[#282C34] text-white p-4 rounded-xl border border-[#4C5361] mb-4"
+              />
+
+              {/* Amount */}
+              <Text className="text-gray-400 text-xs font-bold uppercase mb-2">
+                Amount (₹)
+              </Text>
+              <TextInput
+                placeholder="0.00"
+                placeholderTextColor="#555"
+                keyboardType="numeric"
+                value={amount}
+                onChangeText={setAmount}
+                className="bg-[#282C34] text-[#f49b33] font-bold text-xl p-4 rounded-xl border border-[#4C5361] mb-8"
+              />
+
+              <TouchableOpacity
+                onPress={handleRecordManual}
+                disabled={submitting}
+                className="bg-[#f49b33] p-4 rounded-xl items-center shadow-lg"
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#282C34" />
+                ) : (
+                  <Text className="text-[#282C34] font-bold text-lg">
+                    Create Payout Slip
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- TEACHER SELECTION MODAL --- */}
+      <Modal visible={showTeacherModal} animationType="fade" transparent>
+        <View className="flex-1 bg-black/80 justify-center items-center p-5">
+          <View className="bg-[#333842] w-full max-h-[70%] rounded-2xl p-5 border border-[#4C5361]">
+            <Text className="text-white text-lg font-bold mb-4">
               Select Teacher
             </Text>
+
             {loadingTeachers ? (
               <ActivityIndicator color="#f49b33" />
             ) : commissionTeachers.length === 0 ? (
-              <Text className="text-gray-400 text-center">
+              <Text className="text-gray-400 text-center py-10">
                 No commission-based teachers found.
               </Text>
             ) : (
@@ -545,26 +476,29 @@ const TeacherSalaryReports = () => {
                       setSelectedTeacher(item);
                       setShowTeacherModal(false);
                     }}
-                    className="p-3 mb-2 rounded border border-[#4C5361] bg-[#282C34]"
+                    className="p-4 mb-2 bg-[#282C34] rounded-xl border border-[#4C5361] flex-row items-center"
                   >
-                    <Text className="text-white font-bold text-lg">
-                      {item.name}
-                    </Text>
-                    <Text className="text-gray-400 text-xs">
-                      {item.classesTaught?.join(", ")} •{" "}
-                      {item.subjects?.join(", ")}
-                    </Text>
+                    <View className="w-8 h-8 rounded-full bg-[#f49b33]/10 items-center justify-center mr-3">
+                      <Text className="text-[#f49b33] font-bold">
+                        {item.name.charAt(0)}
+                      </Text>
+                    </View>
+                    <View>
+                      <Text className="text-white font-bold">{item.name}</Text>
+                      <Text className="text-gray-500 text-xs">
+                        {item.phone}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 )}
               />
             )}
+
             <TouchableOpacity
               onPress={() => setShowTeacherModal(false)}
-              className="bg-[#f49b33] p-3 rounded-lg mt-4"
+              className="mt-4 py-3 items-center"
             >
-              <Text className="text-center font-bold text-[#282C34]">
-                Close
-              </Text>
+              <Text className="text-[#f49b33]">Close</Text>
             </TouchableOpacity>
           </View>
         </View>

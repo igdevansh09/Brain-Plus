@@ -1,16 +1,18 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  FlatList,
-  StatusBar,
-  Text,
-  TextInput,
-  TouchableOpacity,
   View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StatusBar,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 // NATIVE SDK
 import firestore from "@react-native-firebase/firestore";
@@ -18,38 +20,52 @@ import firestore from "@react-native-firebase/firestore";
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
 
+const theme = {
+  bg: "bg-[#282C34]",
+  card: "bg-[#333842]",
+  accent: "text-[#f49b33]",
+  accentBg: "bg-[#f49b33]",
+  text: "text-white",
+  subText: "text-gray-400",
+  borderColor: "border-[#4C5361]",
+};
+
 const ManageNotices = () => {
   const router = useRouter();
   const [notices, setNotices] = useState([]);
+
+  // Modal State
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
 
-  const [alertVisible, setAlertVisible] = useState(false);
-  const [alertTitle, setAlertTitle] = useState("");
-  const [alertMessage, setAlertMessage] = useState("");
-  const [alertType, setAlertType] = useState("default");
-  const [alertConfirmAction, setAlertConfirmAction] = useState(null);
+  // Alerts & Toasts
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: "",
+    msg: "",
+    onConfirm: null,
+  });
+  const [toast, setToast] = useState({
+    visible: false,
+    msg: "",
+    type: "success",
+  });
 
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState("success");
+  const showToast = (msg, type = "success") =>
+    setToast({ visible: true, msg, type });
 
-  const showToast = (msg, type = "success") => {
-    setToastMessage(msg);
-    setToastType(type);
-    setToastVisible(true);
-  };
-
+  // --- FETCH NOTICES ---
   useEffect(() => {
     setLoading(true);
     const unsubscribe = firestore()
       .collection("notices")
-      .orderBy("createdAt", "desc") // Sort by timestamp
+      .orderBy("createdAt", "desc")
       .onSnapshot(
         (snapshot) => {
+          if (!snapshot) return;
           const noticesList = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
@@ -62,10 +78,10 @@ const ManageNotices = () => {
           setLoading(false);
         }
       );
-
     return () => unsubscribe();
   }, []);
 
+  // --- HANDLERS ---
   const handleAddNotice = async () => {
     if (!newTitle.trim() || !newContent.trim()) {
       showToast("Enter title and content", "error");
@@ -80,10 +96,10 @@ const ManageNotices = () => {
           title: newTitle,
           content: newContent,
           date: new Date().toLocaleDateString("en-GB"),
-          createdAt: firestore.FieldValue.serverTimestamp(), // Native Timestamp
+          createdAt: firestore.FieldValue.serverTimestamp(),
         });
 
-      showToast("Notice posted!", "success");
+      showToast("Notice posted successfully!", "success");
       setNewTitle("");
       setNewContent("");
       setIsAdding(false);
@@ -95,112 +111,94 @@ const ManageNotices = () => {
   };
 
   const handleDelete = (id) => {
-    setAlertTitle("Delete Notice?");
-    setAlertMessage("This cannot be undone.");
-    setAlertType("warning");
-    setAlertConfirmAction(() => () => performDelete(id));
-    setAlertVisible(true);
-  };
-
-  const performDelete = async (id) => {
-    setAlertVisible(false);
-    try {
-      await firestore().collection("notices").doc(id).delete();
-      showToast("Notice deleted.", "success");
-    } catch (error) {
-      showToast("Delete failed.", "error");
-    }
+    setAlert({
+      visible: true,
+      title: "Delete Notice?",
+      msg: "This action cannot be undone.",
+      onConfirm: async () => {
+        setAlert({ ...alert, visible: false });
+        try {
+          await firestore().collection("notices").doc(id).delete();
+          showToast("Notice deleted.", "success");
+        } catch (error) {
+          showToast("Delete failed.", "error");
+        }
+      },
+    });
   };
 
   const renderNotice = ({ item }) => (
-    <View className="bg-[#333842] p-4 rounded-xl mb-3 border border-[#4C5361]">
-      <View className="flex-row justify-between items-start">
-        <View className="flex-1 mr-2">
-          <Text className="text-white font-bold text-lg">{item.title}</Text>
-          <Text className="text-gray-400 text-xs mb-2">{item.date}</Text>
-          <Text className="text-white text-sm">{item.content}</Text>
+    <View
+      className={`${theme.card} p-5 rounded-2xl mb-4 border ${theme.borderColor} shadow-sm`}
+    >
+      <View className="flex-row justify-between items-start mb-2">
+        <View className="flex-1 mr-3">
+          <View className="flex-row items-center mb-1">
+            <MaterialCommunityIcons
+              name="bullhorn-variant"
+              size={16}
+              color="#f49b33"
+              className="mr-2"
+            />
+            <Text className="text-white font-bold text-lg">{item.title}</Text>
+          </View>
+          <Text className="text-gray-400 text-xs mb-3 italic">{item.date}</Text>
         </View>
         <TouchableOpacity
           onPress={() => handleDelete(item.id)}
-          className="p-2 bg-red-500/10 rounded-lg"
+          className="p-2 bg-red-500/10 rounded-xl border border-red-500/30"
         >
           <Ionicons name="trash-outline" size={20} color="#ef4444" />
         </TouchableOpacity>
+      </View>
+
+      <View className="bg-[#282C34] p-3 rounded-xl border border-[#4C5361]/50">
+        <Text className="text-gray-300 text-sm leading-5">{item.content}</Text>
       </View>
     </View>
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-[#282C34] pt-2">
+    <SafeAreaView className={`flex-1 ${theme.bg}`}>
       <StatusBar backgroundColor="#282C34" barStyle="light-content" />
 
       <CustomAlert
-        visible={alertVisible}
-        title={alertTitle}
-        message={alertMessage}
-        type={alertType}
-        onCancel={() => setAlertVisible(false)}
-        onConfirm={alertConfirmAction}
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.msg}
+        type="warning"
+        onCancel={() => setAlert({ ...alert, visible: false })}
+        onConfirm={alert.onConfirm}
         confirmText="Delete"
       />
-
       <CustomToast
-        visible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onHide={() => setToastVisible(false)}
+        visible={toast.visible}
+        message={toast.msg}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      <View className="px-4 py-4 flex-row items-center justify-between">
+      {/* --- HEADER --- */}
+      <View className="px-5 py-4 flex-row items-center justify-between">
         <View className="flex-row items-center">
-          <TouchableOpacity onPress={() => router.back()} className="mr-3">
-            <Ionicons name="arrow-back" size={24} color="white" />
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="bg-[#333842] p-2 rounded-full border border-[#4C5361] mr-3"
+          >
+            <Ionicons name="arrow-back" size={22} color="white" />
           </TouchableOpacity>
-          <Text className="text-white text-xl font-bold">Global Notices</Text>
+          <Text className="text-white text-2xl font-bold">Global Notices</Text>
         </View>
-        <TouchableOpacity onPress={() => setIsAdding(!isAdding)}>
-          <Ionicons
-            name={isAdding ? "close-circle" : "add-circle"}
-            size={32}
-            color="#f49b33"
-          />
+
+        <TouchableOpacity
+          onPress={() => setIsAdding(true)}
+          className="bg-[#333842] p-2 rounded-full border border-[#f49b33]"
+        >
+          <Ionicons name="add" size={24} color="#f49b33" />
         </TouchableOpacity>
       </View>
 
-      {isAdding && (
-        <View className="mx-4 mb-4 p-4 bg-[#333842] rounded-xl border border-[#f49b33]">
-          <Text className="text-white mb-3 font-semibold">New Notice</Text>
-          <TextInput
-            value={newTitle}
-            onChangeText={setNewTitle}
-            placeholder="Title"
-            placeholderTextColor="#888"
-            className="bg-[#282C34] text-white p-3 rounded-lg border border-[#4C5361] mb-3"
-          />
-          <TextInput
-            value={newContent}
-            onChangeText={setNewContent}
-            placeholder="Content..."
-            placeholderTextColor="#888"
-            multiline
-            numberOfLines={3}
-            className="bg-[#282C34] text-white p-3 rounded-lg border border-[#4C5361] mb-4 h-24"
-            style={{ textAlignVertical: "top" }}
-          />
-          <TouchableOpacity
-            onPress={handleAddNotice}
-            disabled={posting}
-            className={`p-3 rounded-lg items-center ${posting ? "bg-gray-600" : "bg-[#f49b33]"}`}
-          >
-            {posting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text className="text-[#282C34] font-bold">Post Notice</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
-
+      {/* --- LIST --- */}
       {loading ? (
         <ActivityIndicator size="large" color="#f49b33" className="mt-10" />
       ) : (
@@ -208,14 +206,81 @@ const ManageNotices = () => {
           data={notices}
           keyExtractor={(item) => item.id}
           renderItem={renderNotice}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
           ListEmptyComponent={() => (
-            <Text className="text-gray-500 text-center mt-10">
-              No notices posted.
-            </Text>
+            <View className="mt-20 items-center opacity-30">
+              <MaterialCommunityIcons
+                name="bullhorn-outline"
+                size={80}
+                color="gray"
+              />
+              <Text className="text-white text-center mt-4 text-lg">
+                No notices posted yet.
+              </Text>
+              <Text className="text-gray-500 text-sm">
+                Tap + to create one.
+              </Text>
+            </View>
           )}
         />
       )}
+
+      {/* --- CREATE MODAL --- */}
+      <Modal visible={isAdding} animationType="slide" transparent>
+        <View className="flex-1 bg-black/80 justify-end">
+          <View className="bg-[#333842] rounded-t-3xl border-t border-[#f49b33] p-6 h-[70%]">
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-white text-xl font-bold">
+                New Announcement
+              </Text>
+              <TouchableOpacity onPress={() => setIsAdding(false)}>
+                <Ionicons name="close" size={24} color="gray" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text className="text-gray-400 text-xs font-bold uppercase mb-2">
+                Title
+              </Text>
+              <TextInput
+                value={newTitle}
+                onChangeText={setNewTitle}
+                placeholder="e.g. Holiday Announcement"
+                placeholderTextColor="#555"
+                className="bg-[#282C34] text-white p-4 rounded-xl border border-[#4C5361] mb-5 font-bold"
+              />
+
+              <Text className="text-gray-400 text-xs font-bold uppercase mb-2">
+                Message Content
+              </Text>
+              <TextInput
+                value={newContent}
+                onChangeText={setNewContent}
+                placeholder="Type your message here..."
+                placeholderTextColor="#555"
+                multiline
+                numberOfLines={6}
+                className="bg-[#282C34] text-white p-4 rounded-xl border border-[#4C5361] mb-8 h-40"
+                style={{ textAlignVertical: "top" }}
+              />
+
+              <TouchableOpacity
+                onPress={handleAddNotice}
+                disabled={posting}
+                className="bg-[#f49b33] p-4 rounded-xl items-center shadow-lg"
+              >
+                {posting ? (
+                  <ActivityIndicator color="#282C34" />
+                ) : (
+                  <Text className="text-[#282C34] font-bold text-lg">
+                    Post Notice
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };

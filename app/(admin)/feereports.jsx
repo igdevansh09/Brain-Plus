@@ -7,7 +7,7 @@ import {
   StatusBar,
   ActivityIndicator,
   ScrollView,
-  Image,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -33,7 +33,6 @@ const FeeReports = () => {
   const [fees, setFees] = useState([]);
   const [filteredFees, setFilteredFees] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
   const [selectedClassFilter, setSelectedClassFilter] = useState("All");
 
   const [alert, setAlert] = useState({
@@ -126,59 +125,12 @@ const FeeReports = () => {
     });
   };
 
-  const handleAutoGenerate = () => {
-    const date = new Date();
-    const currentTitle = `Tuition Fee - ${date.toLocaleString("default", { month: "long" })} ${date.getFullYear()}`;
-    setAlert({
-      visible: true,
-      title: "Generate Fees?",
-      msg: `Generate "${currentTitle}" for all verified students?`,
-      onConfirm: async () => {
-        setAlert({ ...alert, visible: false });
-        setGenerating(true);
-        try {
-          const studentsSnap = await firestore()
-            .collection("users")
-            .where("role", "==", "student")
-            .where("verified", "==", true)
-            .get();
-          const feesSnap = await firestore()
-            .collection("fees")
-            .where("title", "==", currentTitle)
-            .get();
-          const billedIds = feesSnap.docs.map((doc) => doc.data().studentId);
-          const batch = firestore().batch();
-          let count = 0;
-
-          studentsSnap.forEach((doc) => {
-            if (!billedIds.includes(doc.id)) {
-              const student = doc.data();
-              const newRef = firestore().collection("fees").doc();
-              batch.set(newRef, {
-                studentId: doc.id,
-                studentName: student.name,
-                studentClass: student.standard || "N/A",
-                title: currentTitle,
-                amount: student.monthlyFeeAmount || "5000",
-                status: "Pending",
-                date: new Date().toLocaleDateString("en-GB"),
-                createdAt: firestore.FieldValue.serverTimestamp(),
-              });
-              count++;
-            }
-          });
-
-          if (count > 0) {
-            await batch.commit();
-            showToast(`Billed ${count} students.`, "success");
-          } else showToast("All students already billed.", "warning");
-        } catch (e) {
-          showToast(e.message, "error");
-        } finally {
-          setGenerating(false);
-        }
-      },
-    });
+  const handleCallStudent = (phone) => {
+    if (!phone) {
+      showToast("Phone number not available", "error");
+      return;
+    }
+    Linking.openURL(`tel:${phone}`);
   };
 
   const renderFeeItem = ({ item }) => (
@@ -216,20 +168,34 @@ const FeeReports = () => {
 
       <View className="flex-row justify-between items-center pt-3 border-t border-[#4C5361]/30">
         <Text className="text-[#f49b33] text-xl font-bold">₹{item.amount}</Text>
-        {item.status === "Pending" && (
-          <TouchableOpacity
-            onPress={() => handleMarkPaid(item.id, item.studentName)}
-            className="bg-green-600 px-4 py-2 rounded-xl flex-row items-center"
-          >
-            <Ionicons
-              name="card-outline"
-              size={16}
-              color="white"
-              className="mr-2"
-            />
-            <Text className="text-white font-bold text-xs ml-1">Receive</Text>
-          </TouchableOpacity>
-        )}
+
+        <View className="flex-row items-center gap-2">
+          {/* Call Button */}
+          {item.status === "Pending" && (
+            <TouchableOpacity
+              onPress={() => handleCallStudent(item.studentPhone)}
+              className="bg-blue-600 w-10 h-9 rounded-xl items-center justify-center"
+            >
+              <Ionicons name="call" size={18} color="white" />
+            </TouchableOpacity>
+          )}
+
+          {/* Receive Button (Kept for manual fallback until SDK integration) */}
+          {item.status === "Pending" && (
+            <TouchableOpacity
+              onPress={() => handleMarkPaid(item.id, item.studentName)}
+              className="bg-green-600 px-4 py-2 rounded-xl flex-row items-center h-9"
+            >
+              <Ionicons
+                name="card-outline"
+                size={16}
+                color="white"
+                className="mr-2"
+              />
+              <Text className="text-white font-bold text-xs ml-1">Receive</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -334,19 +300,6 @@ const FeeReports = () => {
           )}
         />
       )}
-
-      {/* --- FAB AUTO GENERATE --- */}
-      <TouchableOpacity
-        onPress={handleAutoGenerate}
-        disabled={generating}
-        className="absolute bottom-8 right-8 bg-[#f49b33] w-16 h-16 rounded-2xl items-center justify-center shadow-xl"
-      >
-        {generating ? (
-          <ActivityIndicator size="small" color="#282C34" />
-        ) : (
-          <Ionicons name="flash" size={30} color="#282C34" />
-        )}
-      </TouchableOpacity>
     </SafeAreaView>
   );
 };
