@@ -44,4 +44,4 @@ app-example
 
 .expo/
 google-services.json
-functions/
+functions/service-account.json
