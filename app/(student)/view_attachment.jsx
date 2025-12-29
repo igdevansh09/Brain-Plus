@@ -59,21 +59,6 @@ const ViewAttachment = () => {
       ? "pdf"
       : "image";
 
-  if (!rawUrl && !params.docId) {
-    return (
-      <SafeAreaView
-        style={{
-          flex: 1,
-          backgroundColor: "#000",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        <Text style={{ color: "white" }}>Invalid file URL</Text>
-      </SafeAreaView>
-    );
-  }
-
   // If a docId was passed, fetch the real attachment URL from Firestore
   useEffect(() => {
     let cancelled = false;
@@ -129,6 +114,7 @@ const ViewAttachment = () => {
     console.log("ViewAttachment - urlToShow:", urlToShow);
   }, [urlToShow]);
 
+  const isInvalid = !rawUrl && !params.docId;
   return (
     <View style={{ flex: 1, backgroundColor: "#000" }}>
       <StatusBar barStyle="light-content" />
@@ -164,70 +150,49 @@ const ViewAttachment = () => {
       </SafeAreaView>
 
       {/* CONTENT */}
+      {/* CONTENT */}
       <View style={{ flex: 1 }}>
-        {fileType === "image" && urlToShow && (
-          <Image
-            source={{ uri: urlToShow }}
-            style={{ width: "100%", height: "100%" }}
-            resizeMode="contain"
-            onLoadStart={() => setLoading(true)}
-            onLoadEnd={() => setLoading(false)}
-            onError={() => {
-              setLoading(false);
-              setError(true);
-            }}
-          />
-        )}
-
-        {fileType === "pdf" && urlToShow && (
-          <Pdf
-            source={{ uri: urlToShow, cache: true }} // Cache enabled for better performance
-            style={{ flex: 1 }}
-            trustAllCerts={false}
-            onLoadComplete={() => setLoading(false)}
-            onError={(err) => {
-              console.log("PDF Error:", err);
-              setLoading(false);
-              setError(true);
-            }}
-          />
-        )}
-
-        {loading && (
+        {isInvalid ? (
           <View
             style={{
-              position: "absolute",
-              top: 0,
-              bottom: 0,
-              left: 0,
-              right: 0,
+              flex: 1,
               justifyContent: "center",
               alignItems: "center",
               backgroundColor: "#000",
             }}
           >
-            <ActivityIndicator size="large" color="#f49b33" />
+            <Text style={{ color: "white" }}>Invalid file URL</Text>
           </View>
-        )}
+        ) : (
+          <>
+            {fileType === "image" && urlToShow && (
+              <Image
+                source={{ uri: urlToShow }}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="contain"
+                onLoadStart={() => setLoading(true)}
+                onLoadEnd={() => setLoading(false)}
+                onError={() => {
+                  setLoading(false);
+                  setError(true);
+                }}
+              />
+            )}
 
-        {error && (
-          <View
-            style={{
-              position: "absolute",
-              top: 0,
-              bottom: 0,
-              left: 0,
-              right: 0,
-              justifyContent: "center",
-              alignItems: "center",
-              padding: 20,
-            }}
-          >
-            <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
-            <Text style={{ color: "#fff", marginTop: 12, fontWeight: "bold" }}>
-              Preview failed
-            </Text>
-          </View>
+            {fileType === "pdf" && urlToShow && (
+              <Pdf
+                source={{ uri: urlToShow, cache: true }}
+                style={{ flex: 1 }}
+                trustAllCerts={false}
+                onLoadComplete={() => setLoading(false)}
+                onError={(err) => {
+                  console.log("PDF Error:", err);
+                  setLoading(false);
+                  setError(true);
+                }}
+              />
+            )}
+          </>
         )}
       </View>
     </View>
