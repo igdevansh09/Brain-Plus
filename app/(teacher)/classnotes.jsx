@@ -167,48 +167,48 @@ const TeacherNotesUploader = () => {
   };
 
   const pickImage = async () => {
-      try {
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          quality: 0.7,
-        });
-        if (!result.canceled) {
-          const asset = result.assets[0];
-          const name = asset.uri.split("/").pop();
-          setAttachments([
-            ...attachments,
-            { uri: asset.uri, name: name, type: "image" },
-          ]);
-        }
-      } catch (e) {
-        showToast("Error picking image", "error");
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.7,
+      });
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        const name = asset.uri.split("/").pop();
+        setAttachments([
+          ...attachments,
+          { uri: asset.uri, name: name, type: "image" },
+        ]);
       }
-    };
-  
-    const takePhoto = async () => {
-      try {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (permission.granted === false) {
-          showToast("Camera permission required", "warning");
-          return;
-        }
-        const result = await ImagePicker.launchCameraAsync({
-          allowsEditing: true,
-          quality: 0.7,
-        });
-        if (!result.canceled) {
-          const asset = result.assets[0];
-          const name = `camera_${Date.now()}.jpg`;
-          setAttachments([
-            ...attachments,
-            { uri: asset.uri, name: name, type: "image" },
-          ]);
-        }
-      } catch (e) {
-        showToast("Error taking photo", "error");
+    } catch (e) {
+      showToast("Error picking image", "error");
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (permission.granted === false) {
+        showToast("Camera permission required", "warning");
+        return;
       }
-    };
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.7,
+      });
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        const name = `camera_${Date.now()}.jpg`;
+        setAttachments([
+          ...attachments,
+          { uri: asset.uri, name: name, type: "image" },
+        ]);
+      }
+    } catch (e) {
+      showToast("Error taking photo", "error");
+    }
+  };
 
   const pickDocument = async () => {
     try {
@@ -322,14 +322,15 @@ const TeacherNotesUploader = () => {
     });
   };
 
-  const openAttachment = (fileUrl, fileName, fileType) => {
-    if (!fileUrl) return;
+  const openAttachment = (docId, attachmentIndex, fileName, fileType) => {
+    if (!docId) return;
     router.push({
       pathname: "/(teacher)/view_attachment",
       params: {
-        url: encodeURIComponent(fileUrl),
+        docId: docId,
+        idx: String(attachmentIndex),
         title: fileName,
-        type: fileType || (fileUrl.endsWith(".pdf") ? "pdf" : "image"),
+        type: fileType,
       },
     });
   };
@@ -389,7 +390,9 @@ const TeacherNotesUploader = () => {
             {displayAttachments.map((file, idx) => (
               <TouchableOpacity
                 key={idx}
-                onPress={() => openAttachment(file.url, file.name, file.type)}
+                onPress={() =>
+                  openAttachment(item.id, idx, file.name, file.type)
+                }
                 className="bg-[#282C34] px-3 py-2 rounded-lg border border-[#4C5361] flex-row items-center mr-2"
               >
                 <Ionicons

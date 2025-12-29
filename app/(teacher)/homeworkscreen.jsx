@@ -12,7 +12,6 @@ import {
   Image,
   KeyboardAvoidingView,
   FlatList,
-  Alert,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -44,7 +43,7 @@ const TeacherHomework = () => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
 
-  // Attachments Array (Multi-select)
+  // Attachments Array
   const [attachments, setAttachments] = useState([]);
 
   // UI
@@ -104,20 +103,18 @@ const TeacherHomework = () => {
             const classes = data.classesTaught || [];
             const subjects = data.subjects || [];
             setMyClasses(classes);
-
             const artificialProfile = classes.flatMap((c) =>
               subjects.map((s) => ({ class: c, subject: s }))
             );
             setTeachingProfile(artificialProfile);
-
             if (classes.length > 0)
               handleClassChange(classes[0], artificialProfile);
           }
         }
 
-        // B. Real-time History Listener (HOMEWORK COLLECTION)
+        // B. Real-time History Listener
         unsubscribeSnapshot = firestore()
-          .collection("homework") // <--- Changed to homework
+          .collection("homework")
           .where("teacherId", "==", currentUser.uid)
           .orderBy("createdAt", "desc")
           .onSnapshot(
@@ -162,10 +159,7 @@ const TeacherHomework = () => {
 
   const formatDate = (timestamp) => {
     if (!timestamp) return "Just Now";
-    // Check if it's a Firestore Timestamp or a Date object/string
-    if (timestamp.toDate) {
-      return timestamp.toDate().toLocaleDateString("en-GB");
-    }
+    if (timestamp.toDate) return timestamp.toDate().toLocaleDateString("en-GB");
     const date = new Date(timestamp);
     return date.toLocaleDateString("en-GB");
   };
@@ -177,7 +171,7 @@ const TeacherHomework = () => {
       const options = {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.7,
-        allowsEditing: true, // Camera often needs editing enabled to avoid rotation issues
+        allowsEditing: true,
       };
 
       if (useCamera) {
@@ -188,7 +182,6 @@ const TeacherHomework = () => {
         }
         result = await ImagePicker.launchCameraAsync(options);
       } else {
-        // Gallery
         result = await ImagePicker.launchImageLibraryAsync(options);
       }
 
@@ -231,14 +224,32 @@ const TeacherHomework = () => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // --- 4. UPLOAD & SUBMIT ---
+  // --- 4. UPLOAD & SUBMIT (FIXED) ---
   const uploadFile = async (uri, filename) => {
-    // Changed path to 'homework_attachments'
-    const reference = storage().ref(
-      `homework_attachments/${auth().currentUser.uid}/${Date.now()}_${filename}`
-    );
+    const filePath = `homework_attachments/${auth().currentUser.uid}/${Date.now()}_${filename}`;
+    const reference = storage().ref(filePath);
+
     await reference.putFile(uri);
-    return await reference.getDownloadURL();
+    const url = await reference.getDownloadURL();
+
+    // CRITICAL FIX: Ensure the URL path is properly encoded to avoid broken links
+    // If the URL has unencoded slashes in the path portion, we fix it here.
+    try {
+      if (url.includes("/o/")) {
+        const [baseUrl, rest] = url.split("/o/");
+        const questionMarkIndex = rest.indexOf("?");
+        if (questionMarkIndex !== -1) {
+          const path = rest.substring(0, questionMarkIndex);
+          const query = rest.substring(questionMarkIndex);
+          // decode first to remove any partial encoding, then encode properly
+          const encodedPath = encodeURIComponent(decodeURIComponent(path));
+          return `${baseUrl}/o/${encodedPath}${query}`;
+        }
+      }
+    } catch (e) {
+      console.log("URL sanitization error, returning original:", e);
+    }
+    return url;
   };
 
   const handleAssign = async () => {
@@ -249,7 +260,6 @@ const TeacherHomework = () => {
 
     setUploading(true);
     try {
-      // 1. Upload All Files
       const uploadedFiles = [];
       for (const file of attachments) {
         const url = await uploadFile(file.uri, file.name);
@@ -260,23 +270,18 @@ const TeacherHomework = () => {
         });
       }
 
-      // 2. Prepare Data
       const docData = {
         title: title.trim(),
         description: description.trim(),
-
-        // Multi-file support
         attachments: uploadedFiles,
-
-        // Legacy support fields
+        // Legacy support
         link: uploadedFiles.length > 0 ? uploadedFiles[0].url : "",
         attachmentName: uploadedFiles.length > 0 ? uploadedFiles[0].name : "",
         fileType: uploadedFiles.length > 0 ? uploadedFiles[0].type : "none",
-
         classId: selectedClass,
         subject: selectedSubject,
         teacherId: auth().currentUser.uid,
-        dueDate: formatDate(new Date()), // Fixed to Today
+        dueDate: formatDate(new Date()),
         createdAt: firestore.FieldValue.serverTimestamp(),
       };
 
@@ -288,11 +293,7 @@ const TeacherHomework = () => {
       setAttachments([]);
     } catch (error) {
       console.error("Assign Error:", error);
-      if (error.code === "storage/unauthorized") {
-        showToast("Permission denied. Check Storage Rules.", "error");
-      } else {
-        showToast("Assignment Failed. Try again.", "error");
-      }
+      showToast("Assignment Failed. Try again.", "error");
     } finally {
       setUploading(false);
     }
@@ -317,19 +318,20 @@ const TeacherHomework = () => {
     });
   };
 
-  const openAttachment = (fileUrl, fileName, fileType) => {
-    if (!fileUrl) return;
+  const openAttachment = (docId, attachmentIndex, fileName, fileType) => {
+    if (!docId) return showToast("Invalid file reference", "error");
+
     router.push({
       pathname: "/(teacher)/view_attachment",
       params: {
-        url: encodeURIComponent(fileUrl),
+        docId: docId,
+        idx: String(attachmentIndex),
         title: fileName,
-        type: fileType || (fileUrl.endsWith(".pdf") ? "pdf" : "image"),
+        type: fileType,
       },
     });
   };
 
-  // --- RENDER HISTORY ITEM ---
   const renderItem = ({ item }) => {
     const displayAttachments =
       item.attachments ||
@@ -373,7 +375,6 @@ const TeacherHomework = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Attachments List */}
         {displayAttachments.length > 0 && (
           <ScrollView
             horizontal
@@ -383,7 +384,9 @@ const TeacherHomework = () => {
             {displayAttachments.map((file, idx) => (
               <TouchableOpacity
                 key={idx}
-                onPress={() => openAttachment(file.url, file.name, file.type)}
+                onPress={() =>
+                  openAttachment(item.id, idx, file.name, file.type)
+                }
                 className="bg-[#282C34] px-3 py-2 rounded-lg border border-[#4C5361] flex-row items-center mr-2"
               >
                 <Ionicons
@@ -439,7 +442,6 @@ const TeacherHomework = () => {
         onCancel={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
       />
 
-      {/* --- HEADER --- */}
       <View className="px-5 pt-10 pb-2 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => router.back()}
@@ -459,7 +461,6 @@ const TeacherHomework = () => {
           className="flex-1 px-5 pt-4"
           showsVerticalScrollIndicator={false}
         >
-          {/* --- SELECTORS --- */}
           <View className="mb-4">
             <Text className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1">
               Select Class
@@ -518,7 +519,6 @@ const TeacherHomework = () => {
             )}
           </View>
 
-          {/* --- COMPOSER CARD --- */}
           <View
             className={`${theme.card} p-4 rounded-3xl border ${theme.borderColor} mb-6`}
           >
@@ -547,7 +547,6 @@ const TeacherHomework = () => {
               className="bg-[#282C34] text-white p-3 rounded-xl border border-[#4C5361] mb-4 text-sm"
             />
 
-            {/* ATTACHMENT BUTTONS */}
             <View className="flex-row justify-between mb-4 mt-2">
               <TouchableOpacity
                 onPress={() => pickImage(true)}
@@ -576,7 +575,6 @@ const TeacherHomework = () => {
               </TouchableOpacity>
             </View>
 
-            {/* SELECTED FILES PREVIEW */}
             {attachments.length > 0 && (
               <View className="mb-4">
                 <Text className="text-gray-400 text-[10px] uppercase mb-2 ml-1">
@@ -606,8 +604,6 @@ const TeacherHomework = () => {
                           {file.name}
                         </Text>
                       </View>
-
-                      {/* Close Button */}
                       <TouchableOpacity
                         onPress={() => removeAttachment(idx)}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -643,14 +639,13 @@ const TeacherHomework = () => {
                     className="mr-2"
                   />
                   <Text className="text-[#282C34] font-bold text-lg">
-                    Upload Home work
+                    Upload Homework
                   </Text>
                 </>
               )}
             </TouchableOpacity>
           </View>
 
-          {/* --- HISTORY --- */}
           <View className="flex-row items-center mb-4">
             <MaterialCommunityIcons
               name="history"

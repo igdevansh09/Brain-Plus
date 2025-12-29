@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,20 +8,58 @@ import {
   ActivityIndicator,
   Image,
   Linking,
-  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import firestore from "@react-native-firebase/firestore";
 import Pdf from "react-native-pdf";
 
 const ViewAttachment = () => {
   const router = useRouter();
-  const { url, title = "Attachment", type } = useLocalSearchParams();
+  const params = useLocalSearchParams();
+
+  // Robustly decode the URL passed from params (handle single/double-encoding)
+  const decodeSafe = (u) => {
+    if (!u) return null;
+    let decoded = u;
+    try {
+      // Try decoding up to 3 times (handles double-encoded values)
+      for (let i = 0; i < 3; i++) {
+        const next = decodeURIComponent(decoded);
+        if (next === decoded) break;
+        decoded = next;
+      }
+    } catch (e) {
+      // If decoding fails, fall back to original
+    }
+    return decoded;
+  };
+
+  const rawUrl = params.url ? decodeSafe(params.url) : null;
+  const titleParam = params.title || "Attachment";
+  const typeParam = params.type;
+
+  // Debug logs (only in dev) to help diagnose routing/encoding issues
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.log("ViewAttachment - received params:", params);
+    console.log("ViewAttachment - decoded rawUrl:", rawUrl);
+  }
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  if (!url) {
+  const [urlToShow, setUrlToShow] = useState(rawUrl);
+  const [fileTitle, setFileTitle] = useState(titleParam);
+  const [fileTypeState, setFileTypeState] = useState(typeParam);
+
+  // Fallback type detection if 'type' param isn't reliable
+  const fileType =
+    fileTypeState === "pdf" ||
+    (urlToShow && urlToShow.toLowerCase().includes(".pdf"))
+      ? "pdf"
+      : "image";
+
+  if (!rawUrl && !params.docId) {
     return (
       <SafeAreaView
         style={{
@@ -31,14 +69,65 @@ const ViewAttachment = () => {
           alignItems: "center",
         }}
       >
-        <Text style={{ color: "white" }}>Invalid file</Text>
+        <Text style={{ color: "white" }}>Invalid file URL</Text>
       </SafeAreaView>
     );
   }
 
-  const fileType = type === "pdf" ? "pdf" : "image";
+  // If a docId was passed, fetch the real attachment URL from Firestore
+  useEffect(() => {
+    let cancelled = false;
+    const fetchUrl = async () => {
+      if (!params.docId) return;
+      try {
+        const collectionsToTry = ["homework", "materials"];
+        for (const col of collectionsToTry) {
+          const doc = await firestore().collection(col).doc(params.docId).get();
+          if (!doc.exists) continue;
+          const data = doc.data() || {};
 
-  const openExternal = () => Linking.openURL(url);
+          const idx = params.idx != null ? parseInt(params.idx, 10) : null;
+          if (
+            Array.isArray(data.attachments) &&
+            idx != null &&
+            data.attachments[idx]
+          ) {
+            const attachment = data.attachments[idx];
+            if (!cancelled) {
+              setUrlToShow(attachment.url || attachment.link || rawUrl);
+              setFileTitle(attachment.name || titleParam);
+              setFileTypeState(attachment.type || typeParam);
+            }
+            return;
+          }
+
+          if (data.link) {
+            if (!cancelled) {
+              setUrlToShow(data.link);
+              setFileTitle(data.attachmentName || titleParam);
+              setFileTypeState(data.fileType || typeParam);
+            }
+            return;
+          }
+        }
+        console.warn(
+          "Document not found in homework or materials:",
+          params.docId
+        );
+      } catch (err) {
+        console.error("Error fetching document for attachment:", err);
+      }
+    };
+
+    fetchUrl();
+    return () => {
+      cancelled = true;
+    };
+  }, [params.docId, params.idx, rawUrl, titleParam, typeParam]);
+
+  useEffect(() => {
+    console.log("ViewAttachment - urlToShow:", urlToShow);
+  }, [urlToShow]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#000" }}>
@@ -53,6 +142,7 @@ const ViewAttachment = () => {
             padding: 12,
             justifyContent: "space-between",
             backgroundColor: "#111",
+            marginTop: StatusBar.currentHeight || 0,
           }}
         >
           <TouchableOpacity onPress={() => router.back()}>
@@ -68,20 +158,16 @@ const ViewAttachment = () => {
             }}
             numberOfLines={1}
           >
-            {title}
+            {fileTitle}
           </Text>
-
-          <TouchableOpacity onPress={openExternal}>
-            <Ionicons name="open-outline" size={22} color="#f49b33" />
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
 
       {/* CONTENT */}
       <View style={{ flex: 1 }}>
-        {fileType === "image" && (
+        {fileType === "image" && urlToShow && (
           <Image
-            source={{ uri: url }}
+            source={{ uri: urlToShow }}
             style={{ width: "100%", height: "100%" }}
             resizeMode="contain"
             onLoadStart={() => setLoading(true)}
@@ -93,9 +179,9 @@ const ViewAttachment = () => {
           />
         )}
 
-        {fileType === "pdf" && (
+        {fileType === "pdf" && urlToShow && (
           <Pdf
-            source={{ uri: url }}
+            source={{ uri: urlToShow, cache: true }} // Cache enabled for better performance
             style={{ flex: 1 }}
             trustAllCerts={false}
             onLoadComplete={() => setLoading(false)}
@@ -141,20 +227,7 @@ const ViewAttachment = () => {
             <Text style={{ color: "#fff", marginTop: 12, fontWeight: "bold" }}>
               Preview failed
             </Text>
-            <TouchableOpacity
-              onPress={openExternal}
-              style={{
-                marginTop: 20,
-                backgroundColor: "#f49b33",
-                paddingHorizontal: 24,
-                paddingVertical: 12,
-                borderRadius: 30,
-              }}
-            >
-              <Text style={{ color: "#000", fontWeight: "bold" }}>
-                Open in Browser
-              </Text>
-            </TouchableOpacity>
+
           </View>
         )}
       </View>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,135 +7,231 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
-  Dimensions,
-  StyleSheet,
   Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import firestore from "@react-native-firebase/firestore";
 import Pdf from "react-native-pdf";
 
 const ViewAttachment = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
 
-  const rawUrl = params.url ? decodeURIComponent(params.url) : "";
-  const title = params.title || "Attachment";
-  const type = params.type || "file";
+  // Robustly decode the URL passed from params (handle single/double-encoding)
+  const decodeSafe = (u) => {
+    if (!u) return null;
+    let decoded = u;
+    try {
+      // Try decoding up to 3 times (handles double-encoded values)
+      for (let i = 0; i < 3; i++) {
+        const next = decodeURIComponent(decoded);
+        if (next === decoded) break;
+        decoded = next;
+      }
+    } catch (e) {
+      // If decoding fails, fall back to original
+    }
+    return decoded;
+  };
+
+  const rawUrl = params.url ? decodeSafe(params.url) : null;
+  const titleParam = params.title || "Attachment";
+  const typeParam = params.type;
+
+  // Debug logs (only in dev) to help diagnose routing/encoding issues
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.log("ViewAttachment - received params:", params);
+    console.log("ViewAttachment - decoded rawUrl:", rawUrl);
+  }
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  const colors = {
-    BG: "#282C34",
-    HEADER: "#333842",
-    TEXT: "#FFFFFF",
-    ACCENT: "#f49b33",
-  };
+  const [urlToShow, setUrlToShow] = useState(rawUrl);
+  const [fileTitle, setFileTitle] = useState(titleParam);
+  const [fileTypeState, setFileTypeState] = useState(typeParam);
 
-  const isImage =
-    type === "image" ||
-    (rawUrl && rawUrl.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null);
+  // Fallback type detection if 'type' param isn't reliable
+  const fileType =
+    fileTypeState === "pdf" ||
+    (urlToShow && urlToShow.toLowerCase().includes(".pdf"))
+      ? "pdf"
+      : "image";
 
-  const handleOpenExternal = async () => {
-    try {
-      if (!rawUrl) return;
-      const supported = await Linking.canOpenURL(rawUrl);
-      if (supported) {
-        await Linking.openURL(rawUrl);
-      } else {
-        alert("Cannot open this URL: " + rawUrl);
+  if (!rawUrl && !params.docId) {
+    return (
+      <SafeAreaView
+        style={{
+          flex: 1,
+          backgroundColor: "#000",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ color: "white" }}>Invalid file URL</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // If a docId was passed, fetch the real attachment URL from Firestore
+  useEffect(() => {
+    let cancelled = false;
+    const fetchUrl = async () => {
+      if (!params.docId) return;
+      try {
+        const collectionsToTry = ["homework", "materials"];
+        for (const col of collectionsToTry) {
+          const doc = await firestore().collection(col).doc(params.docId).get();
+          if (!doc.exists) continue;
+          const data = doc.data() || {};
+
+          const idx = params.idx != null ? parseInt(params.idx, 10) : null;
+          if (
+            Array.isArray(data.attachments) &&
+            idx != null &&
+            data.attachments[idx]
+          ) {
+            const attachment = data.attachments[idx];
+            if (!cancelled) {
+              setUrlToShow(attachment.url || attachment.link || rawUrl);
+              setFileTitle(attachment.name || titleParam);
+              setFileTypeState(attachment.type || typeParam);
+            }
+            return;
+          }
+
+          if (data.link) {
+            if (!cancelled) {
+              setUrlToShow(data.link);
+              setFileTitle(data.attachmentName || titleParam);
+              setFileTypeState(data.fileType || typeParam);
+            }
+            return;
+          }
+        }
+        console.warn(
+          "Document not found in homework or materials:",
+          params.docId
+        );
+      } catch (err) {
+        console.error("Error fetching document for attachment:", err);
       }
-    } catch (error) {
-      console.log("Linking Error:", error);
-    }
-  };
+    };
+
+    fetchUrl();
+    return () => {
+      cancelled = true;
+    };
+  }, [params.docId, params.idx, rawUrl, titleParam, typeParam]);
+
+  useEffect(() => {
+    console.log("ViewAttachment - urlToShow:", urlToShow);
+  }, [urlToShow]);
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.BG }}
-      className="pt-8"
-    >
-      <StatusBar backgroundColor={colors.BG} barStyle="light-content" />
+    <View style={{ flex: 1, backgroundColor: "#000" }}>
+      <StatusBar barStyle="light-content" />
 
-      <View
-        style={{
-          backgroundColor: colors.HEADER,
-          borderBottomColor: "#4C5361",
-          borderBottomWidth: 1,
-        }}
-        className="px-4 py-4 flex-row items-center justify-between"
-      >
-        <View className="flex-row items-center flex-1 mr-2">
-          <TouchableOpacity onPress={() => router.back()} className="mr-3">
-            <Ionicons name="arrow-back" size={24} color={colors.TEXT} />
+      {/* HEADER */}
+      <SafeAreaView>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            padding: 12,
+            justifyContent: "space-between",
+            backgroundColor: "#111",
+            marginTop: StatusBar.currentHeight || 0,
+          }}
+        >
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
+
           <Text
-            style={{ color: colors.TEXT }}
-            className="text-lg font-semibold"
+            style={{
+              color: "#fff",
+              fontWeight: "bold",
+              flex: 1,
+              marginLeft: 12,
+            }}
             numberOfLines={1}
           >
-            {title}
+            {fileTitle}
           </Text>
         </View>
+      </SafeAreaView>
 
-        <TouchableOpacity onPress={handleOpenExternal}>
-          <Ionicons name="open-outline" size={24} color={colors.ACCENT} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={{ flex: 1, backgroundColor: "#000" }}>
-        {isImage ? (
+      {/* CONTENT */}
+      <View style={{ flex: 1 }}>
+        {fileType === "image" && urlToShow && (
           <Image
-            source={{ uri: rawUrl }}
+            source={{ uri: urlToShow }}
             style={{ width: "100%", height: "100%" }}
             resizeMode="contain"
             onLoadStart={() => setLoading(true)}
             onLoadEnd={() => setLoading(false)}
+            onError={() => {
+              setLoading(false);
+              setError(true);
+            }}
           />
-        ) : (
+        )}
+
+        {fileType === "pdf" && urlToShow && (
           <Pdf
-            source={{ uri: rawUrl, cache: true }}
-            onLoadComplete={(numberOfPages, filePath) => {
-              console.log(`Number of pages: ${numberOfPages}`);
-              setLoading(false);
-            }}
-            onPageChanged={(page, numberOfPages) => {
-              console.log(`Current page: ${page}`);
-            }}
-            onError={(error) => {
-              console.log("PDF Error:", error);
-              setLoading(false);
-              alert("Could not load PDF. Try opening externally.");
-            }}
-            onPressLink={(uri) => {
-              console.log(`Link pressed: ${uri}`);
-              Linking.openURL(uri);
-            }}
-            style={styles.pdf}
+            source={{ uri: urlToShow, cache: true }} // Cache enabled for better performance
+            style={{ flex: 1 }}
             trustAllCerts={false}
+            onLoadComplete={() => setLoading(false)}
+            onError={(err) => {
+              console.log("PDF Error:", err);
+              setLoading(false);
+              setError(true);
+            }}
           />
         )}
 
         {loading && (
-          <View className="absolute inset-0 justify-center items-center bg-[#282C34]">
-            <ActivityIndicator size="large" color={colors.ACCENT} />
-            <Text style={{ color: colors.TEXT, marginTop: 10 }}>
-              Loading...
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: "#000",
+            }}
+          >
+            <ActivityIndicator size="large" color="#f49b33" />
+          </View>
+        )}
+
+        {error && (
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
+              justifyContent: "center",
+              alignItems: "center",
+              padding: 20,
+            }}
+          >
+            <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
+            <Text style={{ color: "#fff", marginTop: 12, fontWeight: "bold" }}>
+              Preview failed
             </Text>
           </View>
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
-
-const styles = StyleSheet.create({
-  pdf: {
-    flex: 1,
-    width: Dimensions.get("window").width,
-    height: Dimensions.get("window").height,
-    backgroundColor: "#282C34",
-  },
-});
 
 export default ViewAttachment;
