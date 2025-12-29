@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   TextInput,
   ActivityIndicator,
@@ -12,12 +11,12 @@ import {
   Image,
   KeyboardAvoidingView,
   FlatList,
-  Alert,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 // NATIVE SDK
 import auth from "@react-native-firebase/auth";

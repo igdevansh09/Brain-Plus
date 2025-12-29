@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   ActivityIndicator,
   RefreshControl,
@@ -19,8 +18,8 @@ import {
   getDocs,
   doc,
   getDoc,
-  updateDoc,
 } from "firebase/firestore";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import CustomToast from "../../components/CustomToast";
 import CustomAlert from "../../components/CustomAlert";

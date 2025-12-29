@@ -2,16 +2,15 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
-  SafeAreaView,
   StatusBar,
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
   ScrollView,
-  Dimensions,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 // --- NATIVE SDK IMPORTS ---
 import auth from "@react-native-firebase/auth";

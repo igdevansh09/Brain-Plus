@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   ActivityIndicator,
   FlatList,
@@ -13,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import dayjs from "dayjs";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 // --- NATIVE SDK IMPORTS ---
 import auth from "@react-native-firebase/auth";

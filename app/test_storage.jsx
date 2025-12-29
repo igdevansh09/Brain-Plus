@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { View, Button, Image, Alert, Text } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import storage from "@react-native-firebase/storage";

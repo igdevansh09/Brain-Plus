@@ -2,18 +2,16 @@ import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
-  SafeAreaView,
   StatusBar,
   TouchableOpacity,
-  FlatList,
   ActivityIndicator,
   ScrollView,
   Dimensions,
-  Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 // --- NATIVE SDK ---
 import firestore from "@react-native-firebase/firestore";

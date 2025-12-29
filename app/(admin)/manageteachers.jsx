@@ -9,8 +9,6 @@ import {
   ActivityIndicator,
   Modal,
   Linking,
-  ScrollView,
-  Image,
   RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";

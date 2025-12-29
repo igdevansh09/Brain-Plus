@@ -2,17 +2,15 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  SafeAreaView,
   StatusBar,
   TouchableOpacity,
-  ActivityIndicator,
   Image,
-  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import firestore from "@react-native-firebase/firestore";
 import Pdf from "react-native-pdf";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const ViewAttachment = () => {
   const router = useRouter();

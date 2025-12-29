@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   ActivityIndicator,
   RefreshControl,
@@ -12,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { auth, db } from "../../config/firebaseConfig";
 import { collection, query, where, getDocs } from "firebase/firestore";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const TeacherSalary = () => {
   const router = useRouter();

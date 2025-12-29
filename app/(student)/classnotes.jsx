@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
-  SafeAreaView,
   StatusBar,
   TouchableOpacity,
   FlatList,
@@ -12,6 +11,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import dayjs from "dayjs";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 // NATIVE SDK
 import auth from "@react-native-firebase/auth";
