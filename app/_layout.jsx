@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { View, ActivityIndicator, LogBox } from "react-native";
 import { AuthProvider, useAuth } from "../context/AuthContext";
@@ -27,6 +27,7 @@ const InitialLayout = () => {
   const { user, userRole, loading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+  const [ready, setReady] = useState(false);
 
   // --- Notifications Setup ---
   useEffect(() => {
@@ -46,7 +47,7 @@ const InitialLayout = () => {
   // --- Routing Logic ---
   useEffect(() => {
     if (loading) return;
-
+    // Run routing logic, then mark layout as ready to render screens
     const inAuthGroup = segments[0] === "(auth)";
     const inAdminGroup = segments[0] === "(admin)";
     const inTeacherGroup = segments[0] === "(teacher)";
@@ -70,9 +71,10 @@ const InitialLayout = () => {
         router.replace("/");
       }
     }
+    setReady(true);
   }, [user, userRole, loading, segments]);
 
-  if (loading) {
+  if (loading || !ready) {
     return (
       <View className="flex-1 bg-[#282C34] justify-center items-center">
         <ActivityIndicator size="large" color="#f49b33" />

@@ -26,7 +26,7 @@ import * as ImagePicker from "expo-image-picker";
 // --- CUSTOM COMPONENTS ---
 import CustomAlert from "../../components/CustomAlert";
 import CustomAlert2 from "../../components/CustomAlert2";
-import CustomToast from "../../components/CustomToast"; // Imported CustomToast
+import CustomToast from "../../components/CustomToast";
 
 const { height } = Dimensions.get("window");
 
@@ -85,7 +85,6 @@ const StudentDashboard = () => {
     })
   ).current;
 
-  // Reset Animation when Modal Opens
   useEffect(() => {
     if (profileModalVisible) {
       pan.setValue(0);
@@ -102,7 +101,7 @@ const StudentDashboard = () => {
     borderColor: "border-[#4C5361]",
   };
 
-  // --- DATA FETCHING ---
+  // --- DATA FETCHING (FIXED) ---
   const fetchData = async () => {
     try {
       const user = auth().currentUser;
@@ -146,11 +145,32 @@ const StudentDashboard = () => {
 
         let combined = [...globalList, ...classList];
 
-        // Enrich notices with author images when possible (teacherId or authorId)
+        // *** FIX: Enrich ALL notices with author images ***
         if (combined.length > 0) {
           const enriched = await Promise.all(
             combined.map(async (item) => {
               try {
+                // Check if it's an admin notice (tag === 'Global' and no teacherId)
+                if (item.tag === "Global" && !item.teacherId) {
+                  // Fetch admin data - get first admin user
+                  const adminSnap = await firestore()
+                    .collection("users")
+                    .where("role", "==", "admin")
+                    .limit(1)
+                    .get();
+
+                  if (!adminSnap.empty) {
+                    const adminData = adminSnap.docs[0].data();
+                    return {
+                      ...item,
+                      author: adminData.name || "Admin",
+                      authorImage: adminData.profileImage || null,
+                    };
+                  }
+                  return { ...item, authorImage: null };
+                }
+
+                // For teacher notices, fetch teacher data
                 const authorId = item.teacherId || item.authorId || null;
                 if (authorId) {
                   const userDoc = await firestore()
@@ -179,10 +199,10 @@ const StudentDashboard = () => {
         combined.sort((a, b) => {
           const dateA = a.createdAt?.toDate
             ? a.createdAt.toDate()
-            : new Date(a.createdAt);
+            : new Date(a.createdAt || 0);
           const dateB = b.createdAt?.toDate
             ? b.createdAt.toDate()
-            : new Date(b.createdAt);
+            : new Date(b.createdAt || 0);
           return dateB - dateA;
         });
         setNotices(combined);
@@ -236,25 +256,22 @@ const StudentDashboard = () => {
         const { uri } = result.assets[0];
         const user = auth().currentUser;
 
-        // Upload to Storage
         const ref = storage().ref(`profile_pictures/${user.uid}/avatar.jpg`);
         await ref.putFile(uri);
         const url = await ref.getDownloadURL();
 
-        // Update Firestore
         await firestore().collection("users").doc(user.uid).update({
           profileImage: url,
         });
 
-        // Update Local State
         setStudentData((prev) => ({ ...prev, profileImage: url }));
         setUploading(false);
-        showToast("Profile picture updated!", "success"); // Replaced Alert
+        showToast("Profile picture updated!", "success");
       }
     } catch (error) {
       console.error(error);
       setUploading(false);
-      showToast("Failed to update profile picture.", "error"); // Replaced Alert
+      showToast("Failed to update profile picture.", "error");
     }
   };
 
@@ -264,7 +281,7 @@ const StudentDashboard = () => {
       await auth().signOut();
       router.replace("/");
     } catch (e) {
-      showToast(e.message, "error"); // Replaced Alert
+      showToast(e.message, "error");
     }
   };
 
@@ -310,7 +327,6 @@ const StudentDashboard = () => {
     <SafeAreaView className={`flex-1 ${theme.bg} pt-8`}>
       <StatusBar backgroundColor="#282C34" barStyle="light-content" />
 
-      {/* --- ALERTS & TOASTS --- */}
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
@@ -336,19 +352,19 @@ const StudentDashboard = () => {
         onClose={() => setReadOnlyVisible(false)}
       />
 
-      {/* --- PREMIUM PROFILE BOTTOM SHEET --- */}
+      {/* Profile Modal - Keep existing implementation */}
       <Modal
         visible={profileModalVisible}
         animationType="slide"
         transparent={true}
         onRequestClose={() => setProfileModalVisible(false)}
       >
+        {/* Keep your existing profile modal code */}
         <View className="flex-1 justify-end bg-black/60">
           <TouchableOpacity
             className="flex-1"
             onPress={() => setProfileModalVisible(false)}
           />
-
           <Animated.View
             style={{
               transform: [
@@ -363,7 +379,6 @@ const StudentDashboard = () => {
             }}
             className="bg-[#282C34] w-full h-[85%] rounded-t-3xl overflow-hidden shadow-2xl relative"
           >
-            {/* 1. Header Banner & Drag Handle */}
             <View
               {...panResponder.panHandlers}
               className="h-32 bg-[#f49b33]/20 w-full relative"
@@ -374,7 +389,6 @@ const StudentDashboard = () => {
               <View className="absolute top-0 left-0 w-full h-full bg-black/20" />
             </View>
 
-            {/* 2. Profile Avatar */}
             <View className="px-6 -mt-16 mb-4 flex-row justify-between items-end">
               <TouchableOpacity
                 onPress={handleUpdateAvatar}
@@ -412,7 +426,6 @@ const StudentDashboard = () => {
               </View>
             </View>
 
-            {/* 3. Main Info */}
             <ScrollView className="flex-1 px-6">
               <View className="mb-6">
                 <Text className="text-white text-3xl font-bold">
@@ -426,7 +439,6 @@ const StudentDashboard = () => {
                 </Text>
               </View>
 
-              {/* 4. Stats Grid */}
               <View className="flex-row justify-between mb-8">
                 <View className="bg-[#333842] p-4 rounded-2xl flex-1 mr-3 border border-[#4C5361] items-center">
                   <Text className="text-gray-400 text-xs font-bold uppercase mb-1">
@@ -446,7 +458,6 @@ const StudentDashboard = () => {
                 </View>
               </View>
 
-              {/* 5. Subjects List */}
               <Text className="text-gray-300 font-bold text-lg mb-4 border-b border-[#4C5361] pb-2">
                 Enrolled Subjects
               </Text>
@@ -482,7 +493,7 @@ const StudentDashboard = () => {
         </View>
       </Modal>
 
-      {/* --- DASHBOARD CONTENT --- */}
+      {/* Dashboard Content */}
       <ScrollView
         className="flex-1 px-4 py-7"
         refreshControl={
@@ -529,7 +540,7 @@ const StudentDashboard = () => {
           Welcome Back!
         </Text>
 
-        {/* FEE CARD */}
+        {/* Fee Card */}
         <View className="mb-5">
           <Text className={`${theme.accent} text-lg font-semibold mb-2`}>
             Total Pending Fee
@@ -554,7 +565,7 @@ const StudentDashboard = () => {
           </TouchableOpacity>
         </View>
 
-        {/* QUICK ACCESS */}
+        {/* Quick Access */}
         <View className="mb-5">
           <Text className={`${theme.accent} text-lg font-semibold mb-2`}>
             Quick Access
@@ -576,7 +587,7 @@ const StudentDashboard = () => {
           </View>
         </View>
 
-        {/* NOTICES */}
+        {/* Notices */}
         <View className="mb-8">
           <Text className={`${theme.accent} text-lg font-semibold mb-2`}>
             Coaching/Class Updates
