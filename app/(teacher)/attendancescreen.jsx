@@ -255,7 +255,7 @@ const TeacherAttendance = () => {
       visible: true,
       title: "Submit Attendance?",
       message: `Class: ${selectedClass}\nSubject: ${selectedSubject}\nDate: ${formatDate(currentDate)}`,
-      confirmText: "Confirm Submit",
+      confirmText: "Submit",
       cancelText: "Cancel",
       type: "default",
       onConfirm: async () => {

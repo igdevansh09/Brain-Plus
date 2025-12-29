@@ -449,7 +449,7 @@ const TeacherHomework = () => {
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text className="text-white text-xl font-bold">Assign Homework</Text>
+        <Text className="text-white text-xl font-bold">Homework</Text>
         <View className="w-10" />
       </View>
 

@@ -43,6 +43,7 @@ const StudentNotes = () => {
         setLoading(false);
         return;
       }
+
       const snapshot = await firestore()
         .collection("materials")
         .where("classId", "==", studentClass)
@@ -73,10 +74,16 @@ const StudentNotes = () => {
     return ["All", ...Array.from(subjects)];
   }, [notes]);
 
-  const openAttachment = (url, name, type) => {
+  const openAttachment = (docId, attachmentIndex, name, type) => {
+    if (!docId) return;
     router.push({
-      pathname: "/(teacher)/view_attachment",
-      params: { url: encodeURIComponent(url), title: name, type },
+      pathname: "/(student)/view_attachment",
+      params: {
+        docId,
+        idx: String(attachmentIndex),
+        title: name,
+        type,
+      },
     });
   };
 
@@ -89,78 +96,84 @@ const StudentNotes = () => {
 
     return (
       <View
-        className={`${theme.card} p-5 rounded-3xl mb-4 border ${theme.border} shadow-sm`}
+        className={`${theme.card} w-[92%] self-center rounded-2xl mb-4 border ${theme.border} shadow-sm overflow-hidden flex-row`}
       >
-        <View className="flex-row justify-between items-start mb-2">
-          <View className="flex-1">
-            <Text className="text-white font-bold text-lg mb-1">
-              {item.title}
-            </Text>
-            <View className="flex-row">
-              <View className="bg-blue-500/20 px-2 py-0.5 rounded mr-2">
-                <Text className="text-blue-400 text-[10px] font-bold uppercase">
+        {/* Left color strip */}
+        <View
+          className={`w-1.5 h-full ${
+            item.subject === "Maths"
+              ? "bg-blue-500"
+              : item.subject === "Science"
+                ? "bg-green-500"
+                : "bg-[#f49b33]"
+          }`}
+        />
+
+        <View className="flex-1 p-4 flex-row items-center justify-between">
+          <View className="flex-1 mr-3">
+            <View className="flex-row items-center mb-1">
+              <View
+                className={`${theme.card} px-2 py-0.5 rounded mr-2 border border-[#4C5361]`}
+              >
+                <Text className="text-gray-300 text-[9px] font-bold uppercase tracking-wider">
                   {item.subject}
                 </Text>
               </View>
-              <Text className="text-gray-500 text-[10px] font-bold uppercase">
+              <Text className="text-gray-500 text-[10px] font-medium">
                 {item.createdAt?.toDate
-                  ? dayjs(item.createdAt.toDate()).format("DD MMM")
-                  : "Recent"}
+                  ? dayjs(item.createdAt.toDate()).fromNow()
+                  : "Recently"}
               </Text>
             </View>
-          </View>
-          <MaterialCommunityIcons
-            name="book-open-variant"
-            size={20}
-            color="#f49b33"
-          />
-        </View>
 
-        {item.description ? (
-          <Text className="text-gray-400 text-sm mb-4 leading-5">
-            {item.description}
-          </Text>
-        ) : null}
+            <Text className="text-white font-bold text-base mb-1 leading-tight">
+              {item.title}
+            </Text>
 
-        {displayAttachments.length > 0 && (
-          <View className="flex-row flex-wrap mt-2">
-            {displayAttachments.map((file, idx) => (
-              <TouchableOpacity
-                key={idx}
-                onPress={() => openAttachment(file.url, file.name, file.type)}
-                className="bg-[#282C34] px-3 py-2 rounded-xl border border-[#4C5361] flex-row items-center mr-2 mb-2"
+            {item.description ? (
+              <Text
+                className="text-gray-400 text-xs leading-relaxed mb-2"
+                numberOfLines={2}
               >
-                <Ionicons
-                  name={file.type === "pdf" ? "document-text" : "image"}
-                  size={14}
-                  color="#f49b33"
-                  className="mr-2"
-                />
-                <Text className="text-gray-300 text-[10px]" numberOfLines={1}>
-                  View File
-                </Text>
-              </TouchableOpacity>
-            ))}
+                {item.description}
+              </Text>
+            ) : null}
           </View>
-        )}
+
+          {displayAttachments.length > 0 && (
+            <TouchableOpacity
+              onPress={() =>
+                openAttachment(
+                  item.id,
+                  0,
+                  displayAttachments[0].name,
+                  displayAttachments[0].type
+                )
+              }
+              className="bg-[#282C34] h-11 w-11 rounded-xl border border-[#f49b33]/50 items-center justify-center shadow-lg active:bg-[#f49b33]/20"
+            >
+              <Ionicons name="open-outline" size={20} color="#f49b33" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     );
   };
 
   if (loading) {
     return (
-      <SafeAreaView
-        className={`flex-1 ${theme.bg} justify-center items-center`}
-      >
+      <SafeAreaView className="flex-1 items-center justify-center bg-[#282C34]">
         <ActivityIndicator size="large" color="#f49b33" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg} pt-8`}>
+    <SafeAreaView className="flex-1 bg-[#282C34]">
       <StatusBar barStyle="light-content" />
-      <View className="px-5 pt-4 pb-4 flex-row items-center justify-between">
+
+      {/* Header */}
+      <View className="flex-row items-center justify-between px-5 py-4 pt-10">
         <TouchableOpacity
           onPress={() => router.back()}
           className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
@@ -171,18 +184,26 @@ const StudentNotes = () => {
         <View className="w-10" />
       </View>
 
+      {/* Subject filter */}
       <View className="px-5 mb-4">
         <FlatList
           horizontal
           data={uniqueSubjects}
           showsHorizontalScrollIndicator={false}
+          keyExtractor={(item) => item}
           renderItem={({ item }) => (
             <TouchableOpacity
               onPress={() => setSelectedSubject(item)}
-              className={`mr-3 px-5 py-2 rounded-full border ${selectedSubject === item ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-[#4C5361]"}`}
+              className={`mr-3 px-5 py-2 rounded-full border ${
+                selectedSubject === item
+                  ? "bg-[#f49b33] border-[#f49b33]"
+                  : "bg-[#333842] border-[#4C5361]"
+              }`}
             >
               <Text
-                className={`font-bold text-xs ${selectedSubject === item ? "text-[#282C34]" : "text-gray-400"}`}
+                className={`font-bold text-xs ${
+                  selectedSubject === item ? "text-[#282C34]" : "text-gray-400"
+                }`}
               >
                 {item}
               </Text>
@@ -191,11 +212,12 @@ const StudentNotes = () => {
         />
       </View>
 
+      {/* Notes list */}
       <FlatList
         data={filteredData}
         keyExtractor={(item) => item.id}
         renderItem={renderNoteItem}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 50 }}
+        contentContainerStyle={{ paddingBottom: 50 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
