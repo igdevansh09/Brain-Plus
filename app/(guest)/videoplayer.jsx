@@ -234,7 +234,7 @@ const GuestVideoPlayer = () => {
               {currentVideo?.title || courseInfo.title}
             </Text>
 
-            <View className="flex-row items-center justify-between mb-4">
+            <View className="flex-row items-center justify-between">
               <View className="flex-row items-center">
                 <View className="bg-[#f49b33]/20 px-2 py-1 rounded mr-2">
                   <Text className="text-[#f49b33] text-[10px] font-bold uppercase">
@@ -264,10 +264,6 @@ const GuestVideoPlayer = () => {
                 </TouchableOpacity>
               </View>
             </View>
-
-            <Text className="text-gray-400 text-sm leading-5">
-              {courseInfo.description}
-            </Text>
 
             {/* UPSELL BUTTON (Guest Specific) */}
             <TouchableOpacity
