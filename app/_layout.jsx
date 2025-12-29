@@ -9,6 +9,7 @@ import {
   NotificationListener,
   requestUserPermission,
 } from "../utils/notificationService";
+import NotificationManager from "../components/NotificationManager";
 
 // --- SILENCE FIREBASE WARNINGS ---
 LogBox.ignoreLogs([
@@ -81,6 +82,7 @@ const InitialLayout = () => {
 
   return (
     <ToastProvider>
+      <NotificationManager />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="login_options" />
