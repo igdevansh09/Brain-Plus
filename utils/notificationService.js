@@ -45,3 +45,16 @@ export const getFCMToken = async () => {
     return null;
   }
 };
+
+
+
+// 3. Notification Listener (returns unsubscribe cleanup)
+// Minimal-safe implementation: returns a cleanup function so imports expecting
+// `NotificationListener` won't be undefined. Notification UI/listeners
+// are handled by `NotificationManager` component to avoid duplicate handlers.
+export const NotificationListener = () => {
+  // If you later want a centralized listener here, implement messaging handlers
+  // similar to those in `components/NotificationManager` and return the
+  // unsubscriber(s). For now, return a no-op cleanup function.
+  return () => {};
+};

@@ -126,7 +126,7 @@ const StudentDashboard = () => {
           id: doc.id,
           ...doc.data(),
           tag: "Global",
-          author: doc.data().author || "Raja",
+          author: doc.data().author || "Admin",
         }));
 
         let classList = [];
@@ -144,7 +144,38 @@ const StudentDashboard = () => {
           }));
         }
 
-        const combined = [...globalList, ...classList];
+        let combined = [...globalList, ...classList];
+
+        // Enrich notices with author images when possible (teacherId or authorId)
+        if (combined.length > 0) {
+          const enriched = await Promise.all(
+            combined.map(async (item) => {
+              try {
+                const authorId = item.teacherId || item.authorId || null;
+                if (authorId) {
+                  const userDoc = await firestore()
+                    .collection("users")
+                    .doc(authorId)
+                    .get();
+                  if (userDoc.exists) {
+                    const u = userDoc.data();
+                    return {
+                      ...item,
+                      author: u.name || item.author,
+                      authorImage: u.profileImage || null,
+                    };
+                  }
+                }
+              } catch (e) {
+                console.log("Failed to fetch author image", e);
+              }
+              return { ...item, authorImage: null };
+            })
+          );
+
+          combined = enriched;
+        }
+
         combined.sort((a, b) => {
           const dateA = a.createdAt?.toDate
             ? a.createdAt.toDate()
@@ -375,10 +406,10 @@ const StudentDashboard = () => {
               </TouchableOpacity>
 
               <View className="bg-green-500/20 px-4 py-2 rounded-full border border-green-500/30 mb-4">
-                              <Text className="text-green-400 font-bold text-xs uppercase tracking-wide">
-                                ● Active Student
-                              </Text>
-                            </View>
+                <Text className="text-green-400 font-bold text-xs uppercase tracking-wide">
+                  ● Active Student
+                </Text>
+              </View>
             </View>
 
             {/* 3. Main Info */}
@@ -567,28 +598,49 @@ const StudentDashboard = () => {
                   className={`${theme.card} rounded-lg p-4 mb-3 border border-[#4C5361]`}
                 >
                   <View className="flex-row justify-between items-start mb-1">
-                    <View className="flex-1 mr-2">
-                      <Text className={`${theme.text} text-base font-semibold`}>
-                        {item.title || "Notice"}
-                      </Text>
-                      <View className="flex-row mt-1 flex-wrap">
-                        <Text
-                          className="text-xs font-bold mr-2"
-                          style={{ color: isGlobal ? "#4CAF50" : "#29B6F6" }}
-                        >
-                          {isGlobal ? "Global Notice" : "Class Notice"}
-                        </Text>
-                        <Text className="text-xs text-gray-400 mr-2">
-                          By: {item.author} Sir
-                        </Text>
+                    <View className="flex-row items-start flex-1 mr-2">
+                      <View className="w-10 h-10 rounded-full overflow-hidden mr-3 items-center justify-center bg-[#444]">
+                        {item.authorImage ? (
+                          <Image
+                            source={{ uri: item.authorImage }}
+                            className="w-full h-full"
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <Text className="text-white font-bold">
+                            {item.author
+                              ? item.author.charAt(0).toUpperCase()
+                              : "A"}
+                          </Text>
+                        )}
                       </View>
 
-                      {!isGlobal && (
-                        <Text className="text-xs text-[#f49b33] font-bold mt-1">
-                          {targetText}
+                      <View className="flex-1">
+                        <Text
+                          className={`${theme.text} text-base font-semibold`}
+                        >
+                          {item.title || "Notice"}
                         </Text>
-                      )}
+                        <View className="flex-row mt-1 flex-wrap items-center">
+                          <Text
+                            className="text-xs font-bold mr-2"
+                            style={{ color: isGlobal ? "#4CAF50" : "#29B6F6" }}
+                          >
+                            {isGlobal ? "Global Notice" : "Class Notice"}
+                          </Text>
+                          <Text className="text-xs text-gray-400 mr-2">
+                            By: {item.author}
+                          </Text>
+                        </View>
+
+                        {!isGlobal && (
+                          <Text className="text-xs text-[#f49b33] font-bold mt-1">
+                            {targetText}
+                          </Text>
+                        )}
+                      </View>
                     </View>
+
                     <Text className={`${theme.subText} text-xs`}>
                       {item.date}
                     </Text>
