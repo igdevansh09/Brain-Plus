@@ -8,25 +8,35 @@ import {
   StatusBar,
   Image,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import { db } from "../../config/firebaseConfig";
+
+// --- NATIVE SDK IMPORTS ---
+import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
 
 const GuestDashboard = () => {
   const router = useRouter();
-  const [courses, setCourses] = useState([]); 
+  const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchContent = async () => {
+    const initializeGuest = async () => {
       try {
-        const q = query(
-          collection(db, "courses"),
-          where("target", "==", "Guest")
-        );
-        const snapshot = await getDocs(q);
+        // 1. Silent Anonymous Login
+        // Note: You MUST enable "Anonymous" in Firebase Console -> Authentication -> Sign-in method
+        if (!auth().currentUser) {
+          await auth().signInAnonymously();
+        }
+
+        // 2. Fetch Guest Content (Native SDK)
+        const snapshot = await firestore()
+          .collection("courses")
+          .where("target", "==", "Guest")
+          .get();
+
         const list = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
@@ -34,18 +44,28 @@ const GuestDashboard = () => {
         setCourses(list);
       } catch (error) {
         console.log("Error fetching guest content:", error);
+        if (
+          error.code === "auth/admin-restricted-operation" ||
+          error.code === "auth/operation-not-allowed"
+        ) {
+          Alert.alert(
+            "Configuration Error",
+            "Please enable Anonymous Authentication in your Firebase Console."
+          );
+        }
       } finally {
         setLoading(false);
       }
     };
 
-    fetchContent();
+    initializeGuest();
   }, []);
 
   const handleWatch = (item) => {
     router.push({
       pathname: "/(guest)/videoplayer",
       params: {
+        id: item.id,
         courseTitle: item.title,
         playlist: JSON.stringify(item.playlist),
         description: item.description,
@@ -65,6 +85,7 @@ const GuestDashboard = () => {
     <SafeAreaView className="flex-1 bg-[#282C34] pt-8">
       <StatusBar backgroundColor="#282C34" barStyle="light-content" />
 
+      {/* Header */}
       <View className="px-4 py-4 flex-row justify-between items-center">
         <View>
           <Text className="text-white text-2xl font-bold">Guest Access</Text>
@@ -78,7 +99,11 @@ const GuestDashboard = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1 px-4 mt-2">
+      <ScrollView
+        className="flex-1 px-4 mt-2"
+        showsVerticalScrollIndicator={false}
+      >
+
         <Text className="text-[#f49b33] text-xl font-bold mb-4">
           Free Demo Classes
         </Text>
@@ -97,7 +122,11 @@ const GuestDashboard = () => {
             >
               <View>
                 <Image
-                  source={{ uri: course.thumbnail }}
+                  source={{
+                    uri:
+                      course.thumbnail ||
+                      "https://via.placeholder.com/300x150.png?text=Course+Thumbnail",
+                  }}
                   style={{ width: "100%", height: 180 }}
                   resizeMode="cover"
                 />
