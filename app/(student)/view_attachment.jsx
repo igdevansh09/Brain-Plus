@@ -126,7 +126,7 @@ const ViewAttachment = () => {
             padding: 12,
             justifyContent: "space-between",
             backgroundColor: "#111",
-            marginTop: StatusBar.currentHeight || 0,
+            // marginTop: StatusBar.currentHeight || 0,
           }}
         >
           <TouchableOpacity onPress={() => router.back()}>

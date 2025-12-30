@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
+import BannerCarousel from "../../components/BannerCarousel";
 
 // Native SDKs
 import auth from "@react-native-firebase/auth";
@@ -297,7 +298,7 @@ const TeacherDashboard = () => {
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg} pt-8`}>
+    <SafeAreaView className={`flex-1 ${theme.bg}`}>
       <StatusBar backgroundColor="#282C34" barStyle="light-content" />
 
       <CustomToast
@@ -410,9 +411,6 @@ const TeacherDashboard = () => {
               <View className="mb-6">
                 <Text className="text-white text-3xl font-bold">
                   {teacherData?.name}
-                </Text>
-                <Text className="text-gray-400 text-base">
-                  {getDisplaySubjects()}
                 </Text>
                 <Text className="text-[#f49b33] text-sm mt-1">
                   {teacherData?.phone || "No phone linked"}
@@ -541,7 +539,7 @@ const TeacherDashboard = () => {
               {teacherData?.name || "Teacher"}
             </Text>
             <Text className={`${theme.subText} text-sm`} numberOfLines={1}>
-              {getDisplaySubjects()}
+              {teacherData?.classesTaught?.join(", ") || "No Classes Assigned"}
             </Text>
           </View>
 
@@ -553,6 +551,8 @@ const TeacherDashboard = () => {
         <Text className={`${theme.accent} text-2xl font-bold mb-5`}>
           Welcome Back!
         </Text>
+
+        <BannerCarousel />
 
         {/* PAYMENT CARD */}
         <View className="mb-6">

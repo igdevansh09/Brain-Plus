@@ -153,11 +153,11 @@ const MyCourses = () => {
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg} pt-8`}>
+    <SafeAreaView className={`flex-1 ${theme.bg}`}>
       <StatusBar barStyle="light-content" backgroundColor="#282C34" />
 
       {/* --- HEADER --- */}
-      <View className="px-5 pt-4 pb-4 flex-row items-center justify-between">
+      <View className="px-5 pt-3 pb-4 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => router.back()}
           className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"

@@ -173,7 +173,7 @@ const StudentNotes = () => {
       <StatusBar barStyle="light-content" />
 
       {/* Header */}
-      <View className="flex-row items-center justify-between px-5 py-4 pt-10">
+      <View className="flex-row items-center justify-between px-5 py-4 pt-3">
         <TouchableOpacity
           onPress={() => router.back()}
           className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"

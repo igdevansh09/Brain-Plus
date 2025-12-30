@@ -199,7 +199,7 @@ const GuestVideoPlayer = () => {
       <StatusBar barStyle="light-content" backgroundColor="black" />
 
       {/* --- VIDEO PLAYER --- */}
-      <View className="bg-black w-full aspect-video relative z-10 shadow-lg mt-10">
+      <View className="bg-black w-full aspect-video relative z-10 shadow-lg">
         {currentVideo ? (
           <YoutubePlayer
             ref={playerRef}

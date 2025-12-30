@@ -237,7 +237,6 @@ const AttendanceCalendar = () => {
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.bg }}
-      className="pt-8"
     >
       <StatusBar backgroundColor={colors.bg} barStyle="light-content" />
 

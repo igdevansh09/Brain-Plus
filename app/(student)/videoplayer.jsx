@@ -195,7 +195,7 @@ const StudentVideoPlayer = () => {
       <StatusBar barStyle="light-content" backgroundColor="black" />
 
       {/* --- VIDEO SECTION (FIXED TOP) --- */}
-      <View className="bg-black w-full aspect-video relative z-10 shadow-lg mt-10">
+      <View className="bg-black w-full aspect-video relative z-10 shadow-lg">
         {currentVideo ? (
           <YoutubePlayer
             ref={playerRef}

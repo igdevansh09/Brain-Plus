@@ -16,6 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import BannerCarousel from "../../components/BannerCarousel";
 
 // --- NATIVE SDK IMPORTS ---
 import auth from "@react-native-firebase/auth";
@@ -324,7 +325,7 @@ const StudentDashboard = () => {
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg} pt-8`}>
+    <SafeAreaView className={`flex-1 ${theme.bg}`}>
       <StatusBar backgroundColor="#282C34" barStyle="light-content" />
 
       <CustomToast
@@ -539,6 +540,8 @@ const StudentDashboard = () => {
         <Text className={`${theme.accent} text-2xl font-bold mb-5`}>
           Welcome Back!
         </Text>
+
+        <BannerCarousel />
 
         {/* Fee Card */}
         <View className="mb-5">

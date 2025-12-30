@@ -12,11 +12,6 @@ import {
 import NotificationManager from "../components/NotificationManager";
 
 // --- SILENCE FIREBASE WARNINGS ---
-LogBox.ignoreLogs([
-  "SafeAreaView has been deprecated",
-  "This method is deprecated",
-  "Fetching token claims for", // Optional: silence your own logs if needed
-]);
 
 // Background Handler
 messaging().setBackgroundMessageHandler(async (remoteMessage) => {

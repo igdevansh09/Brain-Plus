@@ -82,7 +82,7 @@ const GuestDashboard = () => {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#282C34] pt-8">
+    <SafeAreaView className="flex-1 bg-[#282C34]">
       <StatusBar backgroundColor="#282C34" barStyle="light-content" />
 
       {/* Header */}

@@ -450,7 +450,7 @@ const TeacherNotesUploader = () => {
       />
 
       {/* --- HEADER --- */}
-      <View className="px-5 pt-10 pb-2 flex-row items-center justify-between">
+      <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => router.back()}
           className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"

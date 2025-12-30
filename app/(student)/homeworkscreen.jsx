@@ -192,13 +192,13 @@ const StudentHomework = () => {
       <StatusBar barStyle="light-content" backgroundColor="#282C34" />
 
       {/* Header */}
-      <View className="px-5 pt-10 pb-2">
+      <View className="px-5 pt-3 pb-2">
         <View className="flex-row items-center justify-between mb-5">
           <TouchableOpacity
             onPress={() => router.back()}
             className="w-9 h-9 rounded-full bg-[#333842] border border-[#4C5361] items-center justify-center"
           >
-            <Ionicons name="arrow-back" size={18} color="white" />
+            <Ionicons name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
           <Text className="text-white text-xl font-bold">Homework</Text>
           <View className="w-9" />

@@ -229,7 +229,7 @@ const TeacherMyStudents = () => {
       />
 
       {/* --- HEADER --- */}
-      <View className="px-5 py-4 pt-10 flex-row items-center justify-between">
+      <View className="px-5 py-4 pt-3 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => router.back()}
           className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
