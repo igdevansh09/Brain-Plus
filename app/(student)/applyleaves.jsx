@@ -377,7 +377,7 @@ const ApplyLeave = () => {
                 ) : (
                   <>
                     <Text className="text-[#282C34] font-bold mr-2">
-                      Notify Admin
+                      Notify Teacher
                     </Text>
                     <Ionicons name="paper-plane" size={16} color="#282C34" />
                   </>
