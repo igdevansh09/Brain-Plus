@@ -11,6 +11,8 @@ import {
   Linking,
   ScrollView,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -440,6 +442,10 @@ const ManageStudents = () => {
         transparent
         onRequestClose={() => setEditModalVisible(false)}
       >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
         <View className="flex-1 bg-black/80 justify-end">
           <View
             className={`${theme.card} rounded-t-3xl p-6 h-[85%] border-t ${theme.borderColor}`}
@@ -557,7 +563,8 @@ const ManageStudents = () => {
             </ScrollView>
           </View>
         </View>
-      </Modal>
+      </KeyboardAvoidingView>
+        </Modal>
 
       {/* --- SELECTION MODAL --- */}
       <Modal

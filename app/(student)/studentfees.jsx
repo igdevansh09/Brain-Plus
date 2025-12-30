@@ -3,26 +3,22 @@ import {
   View,
   Text,
   ScrollView,
+  SafeAreaView,
   StatusBar,
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
+  Modal,
+  Image, // <--- ADDED IMPORT
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { auth, db } from "../../config/firebaseConfig";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  doc,
-  getDoc,
-} from "firebase/firestore";
-import { SafeAreaView } from "react-native-safe-area-context";
+
+// --- NATIVE SDK IMPORTS ---
+import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
 
 import CustomToast from "../../components/CustomToast";
-import CustomAlert from "../../components/CustomAlert";
 
 const StudentFees = () => {
   const router = useRouter();
@@ -31,16 +27,18 @@ const StudentFees = () => {
 
   const [pendingFees, setPendingFees] = useState([]);
   const [historyFees, setHistoryFees] = useState([]);
-  const [studentData, setStudentData] = useState(null);
+
+  // --- PAYMENT MODAL STATE ---
+  const [payModalVisible, setPayModalVisible] = useState(false);
+  const [selectedFee, setSelectedFee] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // --- UI STATE ---
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState("success");
-
-  const [alertVisible, setAlertVisible] = useState(false);
-  const [alertData, setAlertData] = useState({ title: "", message: "" });
-  const [pendingPaymentItem, setPendingPaymentItem] = useState(null);
+  const [toast, setToast] = useState({
+    visible: false,
+    msg: "",
+    type: "success",
+  });
 
   const colors = {
     bg: "#282C34",
@@ -50,39 +48,44 @@ const StudentFees = () => {
     subText: "#BBBBBB",
     dueRed: "#F44336",
     paidGreen: "#4CAF50",
+    verifyBlue: "#29B6F6",
   };
 
   const showToast = (msg, type = "success") => {
-    setToastMessage(msg);
-    setToastType(type);
-    setToastVisible(true);
+    setToast({ visible: true, msg, type });
   };
 
   const fetchFees = async () => {
     try {
-      const user = auth.currentUser;
+      const user = auth().currentUser;
       if (!user) return;
 
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (userDoc.exists()) {
-        setStudentData(userDoc.data());
-      }
+      const querySnapshot = await firestore()
+        .collection("fees")
+        .where("studentId", "==", user.uid)
+        .get();
 
-      const q = query(
-        collection(db, "fees"),
-        where("studentId", "==", user.uid)
-      );
-      const querySnapshot = await getDocs(q);
       const allFees = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
 
-      const pending = allFees.filter((f) => f.status === "Pending");
+      const pending = allFees.filter(
+        (f) => f.status === "Pending" || f.status === "Verifying"
+      );
       const history = allFees.filter((f) => f.status === "Paid");
 
-      pending.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-      history.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      // Sort
+      pending.sort((a, b) => {
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+        return dateA - dateB;
+      });
+      history.sort((a, b) => {
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+        return dateB - dateA;
+      });
 
       setPendingFees(pending);
       setHistoryFees(history);
@@ -103,98 +106,97 @@ const StudentFees = () => {
     setRefreshing(false);
   }, []);
 
-  const initiatePayment = (fee) => {
-    setPendingPaymentItem(fee);
-    setAlertData({
-      title: "Pay Fee",
-      message: `Proceed to pay ₹${fee.amount} for ${fee.title}?`,
-    });
-    setAlertVisible(true);
+  const openPaymentModal = (fee) => {
+    if (fee.status === "Verifying") {
+      showToast("Already under verification.", "info");
+      return;
+    }
+    setSelectedFee(fee);
+    setPayModalVisible(true);
   };
 
-  const processPayment = () => {
-    setAlertVisible(false);
-    if (!pendingPaymentItem) return;
+  const handleSubmitProof = async () => {
+    setSubmitting(true);
+    try {
+      await firestore().collection("fees").doc(selectedFee.id).update({
+        status: "Verifying",
+        submittedAt: new Date().toISOString(),
+      });
 
-    showToast("Payment integration removed.", "info");
+      showToast("Submitted for verification!", "success");
+      setPayModalVisible(false);
+      fetchFees();
+    } catch (e) {
+      showToast("Submission failed.", "error");
+      console.error(e);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const renderDueFee = ({ item }) => (
-    <TouchableOpacity
-      key={item.id}
-      onPress={() => initiatePayment(item)}
-      activeOpacity={0.8}
-      style={{ backgroundColor: colors.card, borderColor: colors.dueRed }}
-      className="p-4 rounded-xl mb-3 border border-1"
-    >
-      <View className="flex-row justify-between items-center">
-        <View className="flex-1 pr-3">
-          <Text
-            style={{ color: colors.text }}
-            className="text-lg font-semibold"
-          >
-            {item.title}
-          </Text>
-          <Text style={{ color: colors.subText, fontSize: 12 }}>
-            Due since: {item.date}
-          </Text>
-        </View>
-        <View className="items-end">
-          <Text style={{ color: colors.dueRed }} className="text-2xl font-bold">
-            ₹{item.amount}
-          </Text>
-          <View className="bg-red-500/20 px-2 py-1 rounded mt-1">
+  const renderDueFee = ({ item }) => {
+    const isVerifying = item.status === "Verifying";
+    return (
+      <TouchableOpacity
+        key={item.id}
+        onPress={() => openPaymentModal(item)}
+        activeOpacity={0.9}
+        style={{
+          backgroundColor: colors.card,
+          borderColor: isVerifying ? colors.verifyBlue : colors.dueRed,
+        }}
+        className="p-4 rounded-xl mb-3 border"
+      >
+        <View className="flex-row justify-between items-center">
+          <View className="flex-1 pr-3">
             <Text
-              style={{ color: colors.dueRed, fontSize: 10, fontWeight: "bold" }}
+              style={{ color: colors.text }}
+              className="text-lg font-semibold"
             >
-              TAP TO PAY
+              {item.title}
+            </Text>
+            <Text style={{ color: colors.subText, fontSize: 12 }}>
+              Due Date: {item.date}
             </Text>
           </View>
-        </View>
-      </View>
-      <View className="mt-2 pt-2 border-t border-[#4C5361] flex-row justify-between items-center">
-        <Text
-          style={{ color: colors.dueRed, fontStyle: "italic", fontSize: 12 }}
-        >
-          Status: Pending
-        </Text>
-        <Text style={{ color: colors.subText, fontSize: 10 }}>
-          Online Payment
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+          <View className="items-end">
+            <Text
+              style={{ color: isVerifying ? colors.verifyBlue : colors.dueRed }}
+              className="text-2xl font-bold"
+            >
+              ₹{item.amount}
+            </Text>
 
-  const renderHistoryFee = ({ item }) => (
-    <View
-      key={item.id}
-      style={{ backgroundColor: colors.card }}
-      className="p-4 rounded-xl mb-3 flex-row justify-between items-center border border-[#4C5361]"
-    >
-      <View>
-        <Text
-          style={{ color: colors.text }}
-          className="text-base font-semibold"
-        >
-          {item.title}
-        </Text>
-        <Text style={{ color: colors.subText }} className="text-sm">
-          Paid on:{" "}
-          {item.paidAt ? new Date(item.paidAt).toLocaleDateString() : item.date}
-        </Text>
-      </View>
-      <View className="items-end">
-        <Text style={{ color: colors.paidGreen }} className="text-lg font-bold">
-          ₹{item.amount}
-        </Text>
-        <Text
-          style={{ color: colors.paidGreen, fontSize: 10, fontWeight: "bold" }}
-        >
-          PAID
-        </Text>
-      </View>
-    </View>
-  );
+            {isVerifying ? (
+              <View className="bg-blue-500/20 px-2 py-1 rounded mt-1">
+                <Text
+                  style={{
+                    color: colors.verifyBlue,
+                    fontSize: 10,
+                    fontWeight: "bold",
+                  }}
+                >
+                  WAITING APPROVAL
+                </Text>
+              </View>
+            ) : (
+              <View className="bg-red-500/20 px-2 py-1 rounded mt-1">
+                <Text
+                  style={{
+                    color: colors.dueRed,
+                    fontSize: 10,
+                    fontWeight: "bold",
+                  }}
+                >
+                  TAP TO PAY
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -212,23 +214,11 @@ const StudentFees = () => {
       className="pt-8"
     >
       <StatusBar backgroundColor={colors.bg} barStyle="light-content" />
-
       <CustomToast
-        visible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onHide={() => setToastVisible(false)}
-      />
-
-      <CustomAlert
-        visible={alertVisible}
-        title={alertData.title}
-        message={alertData.message}
-        confirmText="Pay Now"
-        cancelText="Cancel"
-        type="warning"
-        onCancel={() => setAlertVisible(false)}
-        onConfirm={processPayment}
+        visible={toast.visible}
+        message={toast.msg}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
       />
 
       <View className="px-4 pb-4 py-7 flex-row items-center">
@@ -260,14 +250,10 @@ const StudentFees = () => {
           >
             Pending Dues
           </Text>
-
           {pendingFees.length > 0 ? (
             pendingFees.map((item) => renderDueFee({ item }))
           ) : (
-            <View
-              className="p-5 items-center justify-center"
-              style={{ backgroundColor: colors.card, borderRadius: 12 }}
-            >
+            <View className="p-5 items-center justify-center bg-[#333842] rounded-xl">
               <Ionicons
                 name="checkmark-circle-outline"
                 size={40}
@@ -291,7 +277,45 @@ const StudentFees = () => {
             Payment History
           </Text>
           {historyFees.length > 0 ? (
-            historyFees.map((item) => renderHistoryFee({ item }))
+            historyFees.map((item) => (
+              <View
+                key={item.id}
+                style={{ backgroundColor: colors.card }}
+                className="p-4 rounded-xl mb-3 flex-row justify-between items-center border border-[#4C5361]"
+              >
+                <View>
+                  <Text
+                    style={{ color: colors.text }}
+                    className="text-base font-semibold"
+                  >
+                    {item.title}
+                  </Text>
+                  <Text style={{ color: colors.subText }} className="text-sm">
+                    Paid on:{" "}
+                    {item.paidAt
+                      ? new Date(item.paidAt).toLocaleDateString()
+                      : item.date}
+                  </Text>
+                </View>
+                <View className="items-end">
+                  <Text
+                    style={{ color: colors.paidGreen }}
+                    className="text-lg font-bold"
+                  >
+                    ₹{item.amount}
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.paidGreen,
+                      fontSize: 10,
+                      fontWeight: "bold",
+                    }}
+                  >
+                    PAID
+                  </Text>
+                </View>
+              </View>
+            ))
           ) : (
             <Text
               style={{ color: colors.subText }}
@@ -302,6 +326,52 @@ const StudentFees = () => {
           )}
         </View>
       </ScrollView>
+
+      {/* --- OFFLINE PAYMENT MODAL --- */}
+      <Modal visible={payModalVisible} animationType="slide" transparent>
+        <View className="flex-1 bg-black/80 justify-center p-5">
+          <View className="bg-[#333842] p-6 rounded-2xl border border-[#f49b33]">
+            <View className="flex-row justify-between items-center mb-4">
+              <Text className="text-white text-xl font-bold">
+                Scan to Pay: ₹{selectedFee?.amount}
+              </Text>
+              <TouchableOpacity onPress={() => setPayModalVisible(false)}>
+                <Ionicons name="close" size={24} color="gray" />
+              </TouchableOpacity>
+            </View>
+
+            <Text className="text-gray-400 text-sm mb-4">
+              1. Take the screenshot of the QR Code below with any UPI App.{"\n"}
+              2. Complete the payment.{"\n"}
+              3. Click &quot;Submit&quot; below.
+            </Text>
+
+            {/* --- QR CODE DISPLAY --- */}
+            <View className="bg-white p-4 rounded-xl mb-4 items-center justify-center self-center overflow-hidden">
+              {/* MAKE SURE TO ADD 'qr_code.png' TO ASSETS/IMAGES */}
+              <Image
+                source={require("../../assets/images/qr_code.png")}
+                style={{ width: 200, height: 200 }}
+                resizeMode="contain"
+              />
+            </View>
+
+            <TouchableOpacity
+              onPress={handleSubmitProof}
+              disabled={submitting}
+              className="w-full bg-[#f49b33] p-4 rounded-xl items-center"
+            >
+              {submitting ? (
+                <ActivityIndicator color="#282C34" />
+              ) : (
+                <Text className="text-[#282C34] font-bold text-lg">
+                  Submit
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };

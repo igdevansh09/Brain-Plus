@@ -51,8 +51,8 @@ const BannerCarousel = () => {
     const singleSetWidth = originalBanners.length * CARD_WIDTH;
 
     // --- MOVIE SCROLL SETTINGS ---
-    const speed = 3; // Pixels to move per tick (Lower = Slower/Smoother)
-    const intervalTime = 30; // Milliseconds per tick (Lower = Smoother FPS)
+    const speed = 2; // Pixels to move per tick (Lower = Slower/Smoother)
+    const intervalTime = 20; // Milliseconds per tick (Lower = Smoother FPS)
 
     const timer = setInterval(() => {
       // 1. Move the offset forward

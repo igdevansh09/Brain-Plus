@@ -8,12 +8,13 @@ import {
   ActivityIndicator,
   ScrollView,
   Linking,
+  Alert,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import firestore from "@react-native-firebase/firestore";
-import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
 
 const theme = {
@@ -28,6 +29,131 @@ const theme = {
   warning: "#FFC107",
 };
 
+// --- FEE CARD COMPONENT (Handles Avatar Fetching) ---
+const FeeCard = ({ item, onUpdateStatus }) => {
+  const [studentImg, setStudentImg] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchAvatar = async () => {
+      if (item.studentId) {
+        try {
+          const docSnap = await firestore()
+            .collection("users")
+            .doc(item.studentId)
+            .get();
+          if (docSnap.exists && isMounted) {
+            setStudentImg(docSnap.data().profileImage);
+          }
+        } catch (e) {
+          // ignore error
+        }
+      }
+    };
+    fetchAvatar();
+    return () => {
+      isMounted = false;
+    };
+  }, [item.studentId]);
+
+  const handleCallStudent = () => {
+    if (!item.studentPhone) return;
+    Linking.openURL(`tel:${item.studentPhone}`);
+  };
+
+  const isVerifying = item.status === "Verifying";
+
+  return (
+    <View
+      className={`${theme.card} p-4 rounded-2xl mb-4 border ${isVerifying ? "border-blue-500" : theme.borderColor} shadow-sm`}
+    >
+      <View className="flex-row items-center justify-between mb-3">
+        <View className="flex-row items-center flex-1">
+          {/* AVATAR SECTION */}
+          <View className="w-10 h-10 rounded-full bg-[#f49b33]/20 items-center justify-center mr-3 border border-[#f49b33]/30 overflow-hidden">
+            {studentImg ? (
+              <Image
+                source={{ uri: studentImg }}
+                className="w-full h-full"
+                resizeMode="cover"
+              />
+            ) : (
+              <Text className="text-[#f49b33] font-bold">
+                {item.studentName ? item.studentName.charAt(0) : "S"}
+              </Text>
+            )}
+          </View>
+
+          <View>
+            <Text className="text-white font-bold text-base" numberOfLines={1}>
+              {item.studentName}
+            </Text>
+            <Text className="text-gray-400 text-xs">
+              Class {item.studentClass} • {item.date}
+            </Text>
+          </View>
+        </View>
+        <View
+          className={`px-3 py-1 rounded-full ${item.status === "Paid" ? "bg-green-500/20" : isVerifying ? "bg-blue-500/20" : "bg-yellow-500/20"}`}
+        >
+          <Text
+            className={`text-[10px] font-bold ${item.status === "Paid" ? "text-green-400" : isVerifying ? "text-blue-400" : "text-yellow-400"}`}
+          >
+            {item.status.toUpperCase()}
+          </Text>
+        </View>
+      </View>
+
+      <Text className="text-gray-300 text-sm mb-2 italic">{item.title}</Text>
+
+      <View className="flex-row justify-between items-center pt-3 border-t border-[#4C5361]/30">
+        <Text className="text-[#f49b33] text-xl font-bold">₹{item.amount}</Text>
+
+        <View className="flex-row items-center gap-2">
+          {item.status !== "Paid" && (
+            <TouchableOpacity
+              onPress={handleCallStudent}
+              className="bg-blue-600 w-10 h-9 rounded-xl items-center justify-center"
+            >
+              <Ionicons name="call" size={18} color="white" />
+            </TouchableOpacity>
+          )}
+
+          {item.status === "Verifying" ? (
+            <>
+              <TouchableOpacity
+                onPress={() => onUpdateStatus(item.id, "Paid")}
+                className="bg-green-600 w-10 h-9 rounded-xl items-center justify-center"
+              >
+                <Ionicons name="checkmark" size={18} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => onUpdateStatus(item.id, "Pending")}
+                className="bg-red-600 w-10 h-9 rounded-xl items-center justify-center"
+              >
+                <Ionicons name="close" size={18} color="white" />
+              </TouchableOpacity>
+            </>
+          ) : item.status === "Pending" ? (
+            <TouchableOpacity
+              onPress={() => onUpdateStatus(item.id, "Paid")}
+              className="bg-green-600 px-4 py-2 rounded-xl flex-row items-center h-9"
+            >
+              <Ionicons
+                name="card-outline"
+                size={16}
+                color="white"
+                className="mr-2"
+              />
+              <Text className="text-white font-bold text-xs ml-1">Receive</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+    </View>
+  );
+};
+
 const FeeReports = () => {
   const router = useRouter();
   const [fees, setFees] = useState([]);
@@ -35,18 +161,11 @@ const FeeReports = () => {
   const [loading, setLoading] = useState(true);
   const [selectedClassFilter, setSelectedClassFilter] = useState("All");
 
-  const [alert, setAlert] = useState({
-    visible: false,
-    title: "",
-    msg: "",
-    onConfirm: null,
-  });
   const [toast, setToast] = useState({
     visible: false,
     msg: "",
     type: "success",
   });
-
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
@@ -68,7 +187,6 @@ const FeeReports = () => {
     "CS",
   ];
 
-  // --- NATIVE LISTENER ---
   useEffect(() => {
     const unsubscribe = firestore()
       .collection("fees")
@@ -79,7 +197,12 @@ const FeeReports = () => {
           id: doc.id,
           ...doc.data(),
         }));
-        list.sort((a, b) => (a.status === "Pending" ? -1 : 1));
+        list.sort((a, b) => {
+          if (a.status === "Verifying") return -1;
+          if (b.status === "Verifying") return 1;
+          if (a.status === "Pending") return -1;
+          return 1;
+        });
         setFees(list);
         setLoading(false);
       });
@@ -94,7 +217,6 @@ const FeeReports = () => {
       );
   }, [selectedClassFilter, fees]);
 
-  // --- CALCULATE STATS ---
   const totalExpected = filteredFees.reduce(
     (acc, curr) => acc + Number(curr.amount),
     0
@@ -105,111 +227,31 @@ const FeeReports = () => {
   const collectionRate =
     totalExpected > 0 ? (totalCollected / totalExpected) * 100 : 0;
 
-  const handleMarkPaid = (feeId, studentName) => {
-    setAlert({
-      visible: true,
-      title: "Confirm Payment",
-      msg: `Mark fee for ${studentName} as PAID?`,
-      onConfirm: async () => {
-        setAlert({ ...alert, visible: false });
-        try {
-          await firestore()
-            .collection("fees")
-            .doc(feeId)
-            .update({ status: "Paid", paidAt: new Date().toISOString() });
-          showToast("Status updated to Paid.", "success");
-        } catch (e) {
-          showToast("Error updating fee", "error");
-        }
+  const handleUpdateStatus = (id, newStatus) => {
+    Alert.alert("Confirm Action", `Mark fee as ${newStatus}?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Confirm",
+        onPress: async () => {
+          try {
+            const updateData = { status: newStatus };
+            if (newStatus === "Paid")
+              updateData.paidAt = new Date().toISOString();
+            if (newStatus === "Pending") updateData.transactionRef = null;
+
+            await firestore().collection("fees").doc(id).update(updateData);
+            showToast(`Fee marked as ${newStatus}`, "success");
+          } catch (e) {
+            showToast("Error updating fee", "error");
+          }
+        },
       },
-    });
+    ]);
   };
-
-  const handleCallStudent = (phone) => {
-    if (!phone) {
-      showToast("Phone number not available", "error");
-      return;
-    }
-    Linking.openURL(`tel:${phone}`);
-  };
-
-  const renderFeeItem = ({ item }) => (
-    <View
-      className={`${theme.card} p-4 rounded-2xl mb-4 border ${theme.borderColor} shadow-sm`}
-    >
-      <View className="flex-row items-center justify-between mb-3">
-        <View className="flex-row items-center flex-1">
-          <View className="w-10 h-10 rounded-full bg-[#f49b33]/20 items-center justify-center mr-3 border border-[#f49b33]/30">
-            <Text className="text-[#f49b33] font-bold">
-              {item.studentName.charAt(0)}
-            </Text>
-          </View>
-          <View>
-            <Text className="text-white font-bold text-base" numberOfLines={1}>
-              {item.studentName}
-            </Text>
-            <Text className="text-gray-400 text-xs">
-              Class {item.studentClass} • {item.date}
-            </Text>
-          </View>
-        </View>
-        <View
-          className={`px-3 py-1 rounded-full ${item.status === "Paid" ? "bg-green-500/20" : "bg-yellow-500/20"}`}
-        >
-          <Text
-            className={`text-[10px] font-bold ${item.status === "Paid" ? "text-green-400" : "text-yellow-400"}`}
-          >
-            {item.status.toUpperCase()}
-          </Text>
-        </View>
-      </View>
-
-      <Text className="text-gray-300 text-sm mb-3 italic">{item.title}</Text>
-
-      <View className="flex-row justify-between items-center pt-3 border-t border-[#4C5361]/30">
-        <Text className="text-[#f49b33] text-xl font-bold">₹{item.amount}</Text>
-
-        <View className="flex-row items-center gap-2">
-          {/* Call Button */}
-          {item.status === "Pending" && (
-            <TouchableOpacity
-              onPress={() => handleCallStudent(item.studentPhone)}
-              className="bg-blue-600 w-10 h-9 rounded-xl items-center justify-center"
-            >
-              <Ionicons name="call" size={18} color="white" />
-            </TouchableOpacity>
-          )}
-
-          {/* Receive Button (Kept for manual fallback until SDK integration) */}
-          {item.status === "Pending" && (
-            <TouchableOpacity
-              onPress={() => handleMarkPaid(item.id, item.studentName)}
-              className="bg-green-600 px-4 py-2 rounded-xl flex-row items-center h-9"
-            >
-              <Ionicons
-                name="card-outline"
-                size={16}
-                color="white"
-                className="mr-2"
-              />
-              <Text className="text-white font-bold text-xs ml-1">Receive</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    </View>
-  );
 
   return (
     <SafeAreaView className={`flex-1 ${theme.bg}`}>
       <StatusBar backgroundColor="#282C34" barStyle="light-content" />
-      <CustomAlert
-        visible={alert.visible}
-        title={alert.title}
-        message={alert.msg}
-        onCancel={() => setAlert({ ...alert, visible: false })}
-        onConfirm={alert.onConfirm}
-      />
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
@@ -217,7 +259,6 @@ const FeeReports = () => {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      {/* --- HEADER --- */}
       <View className="px-5 py-4 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => router.back()}
@@ -229,7 +270,6 @@ const FeeReports = () => {
         <View className="w-10" />
       </View>
 
-      {/* --- REVENUE DASHBOARD --- */}
       <View className="px-5 mb-6">
         <View
           className={`${theme.card} p-5 rounded-3xl border ${theme.borderColor} shadow-lg relative overflow-hidden`}
@@ -252,7 +292,6 @@ const FeeReports = () => {
               </Text>
             </View>
           </View>
-          {/* Progress Bar */}
           <View className="h-2 w-full bg-[#282C34] rounded-full overflow-hidden">
             <View
               style={{ width: `${collectionRate}%` }}
@@ -262,7 +301,6 @@ const FeeReports = () => {
         </View>
       </View>
 
-      {/* --- FILTERS --- */}
       <View className="px-5 mb-4">
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {FILTER_OPTIONS.map((cls) => (
@@ -281,23 +319,24 @@ const FeeReports = () => {
         </ScrollView>
       </View>
 
-      {/* --- LIST --- */}
       {loading ? (
         <ActivityIndicator size="large" color="#f49b33" className="mt-10" />
       ) : (
         <FlatList
           data={filteredFees}
           keyExtractor={(item) => item.id}
-          renderItem={renderFeeItem}
+          renderItem={({ item }) => (
+            <FeeCard item={item} onUpdateStatus={handleUpdateStatus} />
+          )}
           contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-          ListEmptyComponent={() => (
+          ListEmptyComponent={
             <View className="mt-20 items-center opacity-30">
               <MaterialCommunityIcons name="receipt" size={80} color="gray" />
               <Text className="text-white text-center mt-4">
-                No records found for this class.
+                No records found.
               </Text>
             </View>
-          )}
+          }
         />
       )}
     </SafeAreaView>
