@@ -1,51 +1,66 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
-  StatusBar,
   FlatList,
-  ActivityIndicator,
-  RefreshControl,
   TouchableOpacity,
-  ScrollView,
+  StatusBar,
+  ActivityIndicator,
   Linking,
+  Alert,
   Image,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-
-// NATIVE SDK
-import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 
-import CustomToast from "../../components/CustomToast";
+const theme = {
+  bg: "bg-[#282C34]",
+  card: "bg-[#333842]",
+  accent: "text-[#f49b33]",
+  borderColor: "border-[#4C5361]",
+};
 
-const LeaveCard = ({ item, theme }) => {
+// Helper: Calculate Days
+const getDaysCount = (start, end) => {
+  try {
+    const d1 = new Date(start);
+    const d2 = new Date(end);
+    if (isNaN(d1) || isNaN(d2)) return 1;
+    const diffTime = Math.abs(d2 - d1);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays + 1;
+  } catch (e) {
+    return 1;
+  }
+};
+
+const StudentLeaveCard = ({ item }) => {
   const [studentData, setStudentData] = useState(null);
-  const [loadingStudent, setLoadingStudent] = useState(true);
+  const [loadingData, setLoadingData] = useState(true);
 
-  // Fetch student details (Avatar & Phone)
+  // Fetch Student Avatar
   useEffect(() => {
     let isMounted = true;
-    const fetchStudent = async () => {
+    const fetchStudentProfile = async () => {
       try {
         if (item.studentId) {
-          const docSnap = await firestore()
+          const userDoc = await firestore()
             .collection("users")
             .doc(item.studentId)
             .get();
-          if (isMounted && docSnap.exists) {
-            setStudentData(docSnap.data());
+          if (isMounted && userDoc.exists) {
+            setStudentData(userDoc.data());
           }
         }
-      } catch (e) {
-        console.log(e);
+      } catch (error) {
+        console.log("Error fetching student:", error);
       } finally {
-        if (isMounted) setLoadingStudent(false);
+        if (isMounted) setLoadingData(false);
       }
     };
-    fetchStudent();
+    fetchStudentProfile();
     return () => {
       isMounted = false;
     };
@@ -54,283 +69,154 @@ const LeaveCard = ({ item, theme }) => {
   const handleCall = () => {
     const phone = studentData?.phone || item.phone;
     if (phone) Linking.openURL(`tel:${phone}`);
-    else alert("No phone number available for this student.");
+    else Alert.alert("Unavailable", "No phone number found.");
   };
 
-  const getDuration = () => {
-    // Simple duration calc based on dates
-    // Assuming format DD-MM-YYYY or similar string, better if Timestamp
-    // For now, just displaying the range cleanly
-    return "Absence Note";
-  };
+  const daysCount = getDaysCount(item.startDate, item.endDate);
 
   return (
     <View
       className={`${theme.card} p-4 rounded-2xl mb-4 border ${theme.borderColor} shadow-sm`}
     >
-      {/* HEADER: Profile & Call */}
-      <View className="flex-row justify-between items-start mb-3">
-        <View className="flex-row items-center flex-1">
-          {/* Avatar */}
-          <View
-            className={`w-12 h-12 rounded-full items-center justify-center mr-3 overflow-hidden border ${theme.borderColor} bg-[#282C34]`}
-          >
-            {studentData?.profileImage ? (
-              <Image
-                source={{ uri: studentData.profileImage }}
-                className="w-full h-full"
-              />
-            ) : (
-              <Text className="text-[#f49b33] font-bold text-lg">
+      {/* Header: Avatar, Info & Call */}
+      <View className="flex-row items-center mb-4">
+        {/* Avatar Section */}
+        <View className="mr-4">
+          {studentData?.profileImage ? (
+            <Image
+              source={{ uri: studentData.profileImage }}
+              className="w-14 h-14 rounded-full border border-[#f49b33]"
+            />
+          ) : (
+            <View className="w-14 h-14 rounded-full bg-[#f49b33]/20 items-center justify-center border border-[#f49b33]/30">
+              <Text className="text-[#f49b33] font-bold text-xl">
                 {item.studentName?.charAt(0) || "S"}
               </Text>
-            )}
-          </View>
+            </View>
+          )}
+        </View>
 
-          <View>
-            <Text className="text-white font-bold text-lg">
-              {item.studentName}
-            </Text>
+        {/* Name & Days Info */}
+        <View className="flex-1">
+          <Text className="text-white font-bold text-lg leading-tight">
+            {item.studentName}
+          </Text>
+          <View className="flex-row items-center mt-1">
+            <View className="bg-[#f49b33] px-2 py-0.5 rounded mr-2">
+              <Text className="text-[#282C34] text-[10px] font-bold">
+                {daysCount} {daysCount > 1 ? "Days" : "Day"} Leave
+              </Text>
+            </View>
             <Text className="text-gray-400 text-xs">
-              {studentData?.rollNo ? `Roll: ${studentData.rollNo}` : "Student"}
+              {studentData?.standard || "Student"}
             </Text>
           </View>
         </View>
 
+        {/* Call Button */}
         <TouchableOpacity
           onPress={handleCall}
-          className="bg-blue-600 w-10 h-10 rounded-xl items-center justify-center"
+          className="bg-[#282C34] w-10 h-10 rounded-full items-center justify-center border border-[#4C5361]"
         >
-          <Ionicons name="call" size={20} color="white" />
+          <Ionicons name="call" size={18} color="#f49b33" />
         </TouchableOpacity>
       </View>
 
-      {/* BODY: Dates & Reason */}
-      <View className="bg-[#282C34] p-3 rounded-xl border border-[#4C5361]/50">
-        <View className="flex-row items-center mb-2">
+      {/* Date Range Strip */}
+      <View className="bg-[#282C34] rounded-xl flex-row items-center justify-between p-3 mb-3 border border-[#4C5361]/50">
+        <View className="flex-row items-center">
           <MaterialCommunityIcons
-            name="calendar-clock"
-            size={16}
-            color="#f49b33"
-            className="mr-2"
+            name="calendar-arrow-right"
+            size={20}
+            color="#9CA3AF"
           />
-          <Text className="text-gray-400 text-xs font-bold uppercase tracking-widest">
-            Requested Period
-          </Text>
-        </View>
-
-        <View className="flex-row items-center mb-4">
-          <Text className="text-white font-bold text-base">
+          <Text className="text-gray-300 font-bold ml-3 text-sm">
             {item.startDate}
           </Text>
-          <View className="h-[1px] bg-[#4C5361] flex-1 mx-3" />
-          <Ionicons
-            name="arrow-forward"
-            size={16}
-            color="#f49b33"
-            className="mx-1"
-          />
-          <View className="h-[1px] bg-[#4C5361] flex-1 mx-3" />
-          <Text className="text-white font-bold text-base">{item.endDate}</Text>
         </View>
-
-        <Text className="text-gray-300 text-sm italic border-l-2 border-[#f49b33] pl-3 py-1">
-          &quot;{item.reason}&quot;
-        </Text>
+        <Ionicons name="arrow-forward" size={16} color="#4C5361" />
+        <Text className="text-gray-300 font-bold text-sm">{item.endDate}</Text>
       </View>
 
-      {/* FOOTER: Date Sent */}
-      <View className="flex-row justify-end mt-2">
-        <Text className="text-gray-500 text-[10px]">
-          Applied on:{" "}
-          {item.createdAt
-            ? new Date(item.createdAt).toLocaleDateString()
-            : "N/A"}
+      {/* Reason */}
+      <View className="pl-2 border-l-2 border-[#f49b33]/50">
+        <Text className="text-gray-400 text-sm italic">
+          &quot;{item.reason || "No reason provided."}&quot;
         </Text>
       </View>
     </View>
   );
 };
 
-const TeacherLeaveViewer = () => {
+const TeacherStudentLeaves = () => {
   const router = useRouter();
+  const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
-  // Data
-  const [myClasses, setMyClasses] = useState([]);
-  const [selectedClass, setSelectedClass] = useState(null);
-  const [leaveRequests, setLeaveRequests] = useState([]);
-
-  // Toast
-  const [toast, setToast] = useState({
-    visible: false,
-    msg: "",
-    type: "success",
-  });
-  const showToast = (msg, type = "success") =>
-    setToast({ visible: true, msg, type });
-
-  const theme = {
-    bg: "bg-[#282C34]",
-    card: "bg-[#333842]",
-    accent: "text-[#f49b33]",
-    text: "text-white",
-    borderColor: "border-[#4C5361]",
-  };
-
-  // --- 1. FETCH PROFILE ---
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const uid = auth().currentUser?.uid;
-        if (!uid) return;
+    // FIX: Removed .orderBy to avoid index issues, handling sort manually
+    const unsubscribe = firestore()
+      .collection("leaves") // Fetching Student Leaves
+      .onSnapshot((snapshot) => {
+        if (!snapshot) return;
+        const list = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
 
-        const docSnap = await firestore().collection("users").doc(uid).get();
-        if (docSnap.exists) {
-          const data = docSnap.data();
+        // Manual Sort (Newest First)
+        list.sort((a, b) => {
+          const tA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+          const tB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+          return tB - tA;
+        });
 
-          // Get Classes (Support both new profile & legacy array)
-          let classes = [];
-          if (data.teachingProfile) {
-            classes = [...new Set(data.teachingProfile.map((i) => i.class))];
-          } else {
-            classes = data.classesTaught || [];
-          }
-
-          setMyClasses(classes);
-          if (classes.length > 0) setSelectedClass(classes[0]);
-        }
-      } catch (error) {
-        console.log("Profile Error:", error);
-      } finally {
+        setLeaves(list);
         setLoading(false);
-      }
-    };
-    fetchProfile();
+      });
+    return () => unsubscribe();
   }, []);
-
-  // --- 2. FETCH LEAVES ---
-  useEffect(() => {
-    if (!selectedClass) return;
-    fetchLeaves();
-  }, [selectedClass]);
-
-  const fetchLeaves = async () => {
-    setLoading(true);
-    try {
-      const q = firestore()
-        .collection("leaves")
-        .where("classId", "==", selectedClass)
-        .orderBy("createdAt", "desc");
-
-      const snapshot = await q.get();
-      const list = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        // Convert timestamp to string if needed for rendering
-        createdAt: doc.data().createdAt?.toDate
-          ? doc.data().createdAt.toDate()
-          : doc.data().createdAt,
-      }));
-      setLeaveRequests(list);
-    } catch (error) {
-      console.log("Fetch Error:", error);
-      // Optional: handle permission errors gracefully
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchLeaves();
-    setRefreshing(false);
-  };
-
-  if (loading && !refreshing && leaveRequests.length === 0) {
-    return (
-      <SafeAreaView
-        className={`flex-1 ${theme.bg} justify-center items-center`}
-      >
-        <ActivityIndicator size="large" color="#f49b33" />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView className={`flex-1 ${theme.bg}`}>
       <StatusBar backgroundColor="#282C34" barStyle="light-content" />
-      <CustomToast
-        visible={toast.visible}
-        message={toast.msg}
-        type={toast.type}
-        onHide={() => setToast({ ...toast, visible: false })}
-      />
 
       {/* --- HEADER --- */}
-      <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
+      <View className="px-5 py-4 flex-row items-center">
         <TouchableOpacity
           onPress={() => router.back()}
-          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
+          className="bg-[#333842] p-2 rounded-full border border-[#4C5361] mr-4"
         >
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <Ionicons name="arrow-back" size={22} color="white" />
         </TouchableOpacity>
-        <Text className="text-white text-xl font-bold">Student Leaves</Text>
-        <View className="w-10" />
-      </View>
-
-      {/* --- CLASS SELECTOR --- */}
-      <View className="px-5 mb-4 mt-2">
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {myClasses.length > 0 ? (
-            myClasses.map((cls) => (
-              <TouchableOpacity
-                key={cls}
-                onPress={() => setSelectedClass(cls)}
-                className={`mr-3 px-5 py-2 rounded-xl border ${selectedClass === cls ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-[#4C5361]"}`}
-              >
-                <Text
-                  className={`font-bold ${selectedClass === cls ? "text-[#282C34]" : "text-gray-400"}`}
-                >
-                  {cls}
-                </Text>
-              </TouchableOpacity>
-            ))
-          ) : (
-            <Text className="text-gray-500 italic">No classes assigned.</Text>
-          )}
-        </ScrollView>
+        <Text className="text-white text-2xl font-bold">Student Leaves</Text>
       </View>
 
       {/* --- LIST --- */}
-      <FlatList
-        data={leaveRequests}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <LeaveCard item={item} theme={theme} />}
-        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#f49b33"
-          />
-        }
-        ListEmptyComponent={() => (
-          <View className="mt-20 items-center opacity-30">
-            <MaterialCommunityIcons
-              name="email-open-outline"
-              size={80}
-              color="gray"
-            />
-            <Text className="text-gray-400 mt-4 text-center">
-              No leave requests for {selectedClass}.
-            </Text>
-          </View>
-        )}
-      />
+      {loading ? (
+        <ActivityIndicator size="large" color="#f49b33" className="mt-10" />
+      ) : (
+        <FlatList
+          data={leaves}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <StudentLeaveCard item={item} />}
+          contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+          ListEmptyComponent={
+            <View className="mt-20 items-center opacity-30">
+              <MaterialCommunityIcons
+                name="calendar-check"
+                size={80}
+                color="gray"
+              />
+              <Text className="text-white text-center mt-4">
+                No leave applications found.
+              </Text>
+            </View>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 };
 
-export default TeacherLeaveViewer;
+export default TeacherStudentLeaves;

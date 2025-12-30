@@ -36,27 +36,75 @@ const TestScores = () => {
     danger: "#FF5252",
   };
 
-  // --- 1. DATA FETCHING ---
+  // --- 1. DATA FETCHING (CORRECTED) ---
   const fetchScores = async () => {
     try {
       const user = auth().currentUser;
       if (!user) return;
 
-      // Assuming 'test_results' collection has fields: studentId, subject, testName, marksObtained, totalMarks, date
+      console.log("Fetching profile for:", user.uid);
+
+      // A. Get Student's Class (Standard) first
+      const userDoc = await firestore().collection("users").doc(user.uid).get();
+      const studentClass = userDoc.data()?.standard;
+
+      if (!studentClass) {
+        console.log("Student has no class assigned.");
+        setLoading(false);
+        return;
+      }
+
+      console.log("Fetching exams for class:", studentClass);
+
+      // B. Fetch Exams for this Class from 'exam_results'
       const snapshot = await firestore()
-        .collection("test_results")
-        .where("studentId", "==", user.uid)
-        .orderBy("date", "desc")
+        .collection("exam_results") // Correct Collection Name
+        .where("classId", "==", studentClass)
         .get();
 
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      if (snapshot.empty) {
+        console.log("No exams found for class:", studentClass);
+      }
 
+      // C. Filter and Extract THIS student's score
+      const data = snapshot.docs
+        .map((doc) => {
+          const exam = doc.data();
+          // The teacher saves scores in a map: { "uid123": 85, "uid456": 90 }
+          const myScore = exam.results ? exam.results[user.uid] : null;
+
+          // Only show exams where this student has a score
+          if (myScore !== null && myScore !== undefined && myScore !== "") {
+            return {
+              id: doc.id,
+              testName: exam.examTitle || "Untitled Test",
+              subject: exam.subject || "General",
+              totalMarks: exam.maxScore || 100,
+              marksObtained: myScore,
+              date: exam.date, // Stored as "DD/MM/YYYY" string
+            };
+          }
+          return null;
+        })
+        .filter((item) => item !== null); // Remove nulls
+
+      // D. Sort by Date (Handling DD/MM/YYYY string)
+      data.sort((a, b) => {
+        const parseDate = (str) => {
+          if (!str) return new Date(0);
+          if (str.toDate) return str.toDate(); // Handle Firestore Timestamp if present
+          const parts = str.split("/");
+          if (parts.length === 3)
+            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+          return new Date(0);
+        };
+        return parseDate(b.date) - parseDate(a.date);
+      });
+
+      console.log("Scores found:", data.length);
       setScores(data);
     } catch (error) {
-      console.log("Error fetching scores:", error);
+      console.error("Error fetching scores:", error);
     } finally {
       setLoading(false);
     }
@@ -66,7 +114,7 @@ const TestScores = () => {
     fetchScores();
   }, []);
 
-  // --- 2. COMPUTED DATA (MEMOIZED) ---
+  // --- 2. COMPUTED DATA ---
   const filteredScores = useMemo(() => {
     if (selectedSubject === "All") return scores;
     return scores.filter((s) => s.subject === selectedSubject);
@@ -81,13 +129,17 @@ const TestScores = () => {
     if (filteredScores.length === 0) return { average: 0, bestSubject: "N/A" };
 
     const totalPercentage = filteredScores.reduce((sum, item) => {
-      return sum + (item.marksObtained / item.totalMarks) * 100;
+      const obt = parseFloat(item.marksObtained) || 0;
+      const tot = parseFloat(item.totalMarks) || 100;
+      return sum + (obt / tot) * 100;
     }, 0);
 
-    // Calculate Best Subject based on average percentage per subject
+    // Best Subject Logic
     const subjectPerformance = {};
     scores.forEach((s) => {
-      const pct = (s.marksObtained / s.totalMarks) * 100;
+      const obt = parseFloat(s.marksObtained) || 0;
+      const tot = parseFloat(s.totalMarks) || 100;
+      const pct = (obt / tot) * 100;
       if (!subjectPerformance[s.subject]) subjectPerformance[s.subject] = [];
       subjectPerformance[s.subject].push(pct);
     });
@@ -119,7 +171,9 @@ const TestScores = () => {
   };
 
   const renderItem = useCallback(({ item }) => {
-    const percentage = (item.marksObtained / item.totalMarks) * 100;
+    const obt = parseFloat(item.marksObtained) || 0;
+    const tot = parseFloat(item.totalMarks) || 100;
+    const percentage = (obt / tot) * 100;
     const color = getGradeColor(percentage);
 
     return (
@@ -132,16 +186,13 @@ const TestScores = () => {
               {item.testName}
             </Text>
             <Text className={`${theme.subText} text-xs mt-1`}>
-              {item.subject} •{" "}
-              {new Date(
-                item.date?.toDate ? item.date.toDate() : item.date
-              ).toLocaleDateString()}
+              {item.subject} • {item.date}
             </Text>
           </View>
           <View className="items-end">
             <Text className="text-white font-bold text-xl">
-              {item.marksObtained}
-              <Text className="text-gray-500 text-sm">/{item.totalMarks}</Text>
+              {obt}
+              <Text className="text-gray-500 text-sm">/{tot}</Text>
             </Text>
             <Text style={{ color: color }} className="text-xs font-bold">
               {percentage.toFixed(0)}%
@@ -152,7 +203,10 @@ const TestScores = () => {
         {/* Progress Bar */}
         <View className="h-2 bg-[#282C34] rounded-full overflow-hidden mt-2">
           <View
-            style={{ width: `${percentage}%`, backgroundColor: color }}
+            style={{
+              width: `${Math.min(percentage, 100)}%`,
+              backgroundColor: color,
+            }}
             className="h-full rounded-full"
           />
         </View>
@@ -171,11 +225,11 @@ const TestScores = () => {
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg} pt-8`}>
+    <SafeAreaView className={`flex-1 ${theme.bg}`}>
       <StatusBar backgroundColor="#282C34" barStyle="light-content" />
 
       {/* Header */}
-      <View className="px-5 pt-4 pb-4 flex-row items-center">
+      <View className="px-5 pt-3 pb-4 flex-row items-center">
         <TouchableOpacity
           onPress={() => router.back()}
           className="bg-[#333842] p-2 rounded-full border border-[#4C5361] mr-4"
@@ -186,7 +240,7 @@ const TestScores = () => {
       </View>
 
       <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
-        {/* Performance Summary Card */}
+        {/* Performance Summary */}
         <View
           className={`${theme.card} p-5 rounded-2xl border ${theme.border} mb-6 shadow-lg`}
         >

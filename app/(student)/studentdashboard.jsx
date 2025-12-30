@@ -432,9 +432,6 @@ const StudentDashboard = () => {
                 <Text className="text-white text-3xl font-bold">
                   {studentData?.name || "Student Name"}
                 </Text>
-                <Text className="text-gray-400 text-base">
-                  {studentData?.email}
-                </Text>
                 <Text className="text-[#f49b33] text-sm mt-1">
                   {studentData?.phone || "No phone linked"}
                 </Text>
