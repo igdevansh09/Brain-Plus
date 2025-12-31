@@ -280,7 +280,8 @@ const StudentDashboard = () => {
     setLogoutAlertVisible(false);
     try {
       await auth().signOut();
-      router.replace("/");
+      // Let the central routing in app/_layout.jsx handle navigation after sign-out.
+      showToast("Signed out", "success");
     } catch (e) {
       showToast(e.message, "error");
     }

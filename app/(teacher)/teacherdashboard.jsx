@@ -153,13 +153,18 @@ const TeacherDashboard = () => {
   };
 
   useEffect(() => {
+    // Try to fetch on mount if there's a currently signed-in user.
+    const current = auth().currentUser;
+    if (current) fetchData(current.uid);
+
+    // Keep a listener to refresh data when auth state changes,
+    // but avoid performing navigation here — the root layout handles redirects.
     const unsubscribe = auth().onAuthStateChanged((user) => {
       if (user) {
         fetchData(user.uid);
-      } else {
-        router.replace("/");
       }
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -536,7 +541,7 @@ const TeacherDashboard = () => {
 
           <View className="flex-1">
             <Text className={`${theme.text} text-2xl font-bold`}>
-              {teacherData?.name || "Teacher"} 
+              {teacherData?.name || "Teacher"}
             </Text>
           </View>
 

@@ -118,12 +118,16 @@ const AdminDashboard = () => {
 
   // --- LISTENERS ---
   useEffect(() => {
+    // Fetch existing user data on mount and keep listening for auth changes.
+    const current = auth().currentUser;
+    if (current) fetchUserData(current.uid);
+
     const unsubscribeAuth = auth().onAuthStateChanged(async (user) => {
       if (user) {
         await fetchUserData(user.uid);
-      } else {
-        router.replace("/");
       }
+      // NOTE: Do not redirect here. Root layout centralizes auth-based routing
+      // to avoid multiple components issuing simultaneous navigation.
     });
 
     // 1. Students Listener
