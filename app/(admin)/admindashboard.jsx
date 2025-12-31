@@ -46,6 +46,10 @@ const AdminDashboard = () => {
   const [activeTeacherCount, setActiveTeacherCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
 
+  // NEW: Granular Pending States
+  const [pendingStudentCount, setPendingStudentCount] = useState(0);
+  const [pendingTeacherCount, setPendingTeacherCount] = useState(0);
+
   // UI States
   const [logoutAlertVisible, setLogoutAlertVisible] = useState(false);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
@@ -140,12 +144,26 @@ const AdminDashboard = () => {
         if (snapshot) setActiveTeacherCount(snapshot.size);
       });
 
-    // 3. Pending Listener
+    // 3. Pending Listener (UPDATED to split counts)
     const unsubPending = firestore()
       .collection("users")
       .where("verified", "==", false)
       .onSnapshot((snapshot) => {
-        if (snapshot) setPendingCount(snapshot.size);
+        if (snapshot) {
+          setPendingCount(snapshot.size);
+
+          let sCount = 0;
+          let tCount = 0;
+
+          snapshot.docs.forEach((doc) => {
+            const data = doc.data();
+            if (data.role === "student") sCount++;
+            if (data.role === "teacher") tCount++;
+          });
+
+          setPendingStudentCount(sCount);
+          setPendingTeacherCount(tCount);
+        }
       });
 
     return () => {
@@ -237,8 +255,6 @@ const AdminDashboard = () => {
   const renderAvatar = (size = "small") => {
     const sizeClasses = size === "large" ? "w-24 h-24" : "w-12 h-12";
     const textClasses = size === "large" ? "text-4xl" : "text-xl";
-
-    // Using a consistent border style for the avatar container
     const containerClasses = `${sizeClasses} rounded-full border-2 border-[#f49b33] overflow-hidden items-center justify-center bg-[#f49b33]`;
 
     if (adminData?.profileImage) {
@@ -249,7 +265,7 @@ const AdminDashboard = () => {
           style={{
             width: size === "large" ? 96 : 48,
             height: size === "large" ? 96 : 48,
-          }} // Force size for image
+          }}
         />
       );
     }
@@ -342,7 +358,9 @@ const AdminDashboard = () => {
                 >
                   Password
                 </Text>
-                <Text className={`${theme.text} text-base`}>AdminPassword123!</Text>
+                <Text className={`${theme.text} text-base`}>
+                  AdminPassword123!
+                </Text>
               </View>
             </View>
           </View>
@@ -383,7 +401,6 @@ const AdminDashboard = () => {
 
         {/* --- 2. HERO STATS --- */}
         <View className="flex-row gap-4 mb-8">
-          {/* Active Students Card */}
           <View
             className={`flex-1 ${theme.card} p-5 rounded-2xl border ${theme.borderColor} items-center shadow-lg`}
           >
@@ -400,7 +417,6 @@ const AdminDashboard = () => {
             </Text>
           </View>
 
-          {/* Active Teachers Card */}
           <View
             className={`flex-1 ${theme.card} p-5 rounded-2xl border ${theme.borderColor} items-center shadow-lg`}
           >
@@ -418,55 +434,45 @@ const AdminDashboard = () => {
           </View>
         </View>
 
-        {/* --- 3. ALERT BANNER (Conditional) --- */}
-        {pendingCount > 0 && (
-          <TouchableOpacity
-            onPress={() =>
-              router.push("/(admin)/managestudents?filter=pending")
-            } // Or a dedicated approval screen
-            className="bg-orange-500/10 border border-orange-500/50 rounded-xl p-4 mb-8 flex-row items-center justify-between"
-          >
-            <View className="flex-row items-center flex-1">
-              <View className="bg-orange-500 rounded-full w-8 h-8 items-center justify-center mr-3">
-                <Text className="text-white font-bold">{pendingCount}</Text>
-              </View>
-              <View>
-                <Text className="text-white font-bold text-base">
-                  Pending Approvals
-                </Text>
-                <Text className="text-orange-200/70 text-xs">
-                  New registration requests
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#f97316" />
-          </TouchableOpacity>
-        )}
-
         {/* --- 4. ACTION GRID --- */}
         <Text className={`${theme.accent} text-lg font-bold mb-4 ml-1`}>
           Administration
         </Text>
 
         <View className="flex-row flex-wrap justify-between">
-          {adminActions.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              onPress={() => item.route && router.push(item.route)}
-              activeOpacity={0.7}
-              className={`w-[48%] ${theme.card} rounded-2xl p-6 items-center mb-4 border ${theme.borderColor} shadow-sm`}
-            >
-              <Ionicons name={item.icon} size={32} color="#f49b33" />
-              <Text
-                className={`${theme.text} mt-3 text-sm font-semibold text-center`}
+          {adminActions.map((item) => {
+            // Determine badge count based on Item ID
+            let badgeCount = 0;
+            if (item.id === "1") badgeCount = pendingStudentCount; // Manage Students
+            if (item.id === "2") badgeCount = pendingTeacherCount; // Manage Teachers
+
+            return (
+              <TouchableOpacity
+                key={item.id}
+                onPress={() => item.route && router.push(item.route)}
+                activeOpacity={0.7}
+                className={`w-[48%] ${theme.card} rounded-2xl p-6 items-center mb-4 border ${theme.borderColor} shadow-sm relative`}
               >
-                {item.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Ionicons name={item.icon} size={32} color="#f49b33" />
+                <Text
+                  className={`${theme.text} mt-3 text-sm font-semibold text-center`}
+                >
+                  {item.name}
+                </Text>
+
+                {/* --- NOTIFICATION BADGE --- */}
+                {badgeCount > 0 && (
+                  <View className="absolute top-3 right-3 bg-red-600 rounded-full min-w-[22px] h-[22px] items-center justify-center border border-[#333842] px-1">
+                    <Text className="text-white text-[10px] font-bold">
+                      {badgeCount > 99 ? "99+" : badgeCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        {/* Bottom Padding */}
         <View className="h-10" />
       </ScrollView>
     </SafeAreaView>

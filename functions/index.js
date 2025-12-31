@@ -13,8 +13,17 @@ const {
 const admin = require("firebase-admin");
 const { setGlobalOptions } = require("firebase-functions/v2");
 
-admin.initializeApp();
-setGlobalOptions({ maxInstances: 10 });
+// --- ADD THIS CONFIGURATION ---
+setGlobalOptions({
+  region: "us-central1",
+  maxInstances: 10,      // Limits the number of concurrent instances to save resources
+  concurrency: 80,       // Allows one instance to handle multiple requests
+  cpu: "0.5",            // REDUCE CPU: Uses only 0.5 vCPU per function instead of 1
+});
+
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
 
 // ==================================================================
 // 🛠️ HELPER FUNCTIONS (Notification Logic)

@@ -1,0 +1,76 @@
+export default {
+  expo: {
+    name: "Brain Plus Academy",
+    slug: "brain-plus-academy",
+    version: "1.0.0",
+    orientation: "portrait",
+    icon: "./assets/images/icon.png",
+    scheme: "brainplusacademy",
+    userInterfaceStyle: "automatic",
+    newArchEnabled: true,
+    ios: {
+      supportsTablet: true,
+      bundleIdentifier: "com.brainplus.academy",
+      infoPlist: {
+        UIBackgroundModes: ["remote-notification"],
+        ITSAppUsesNonExemptEncryption: false,
+      },
+      entitlements: {
+        "aps-environment": "development",
+      },
+    },
+    android: {
+      googleServicesFile:
+        process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
+      adaptiveIcon: {
+        backgroundColor: "#282C34",
+        foregroundImage: "./assets/images/android-icon-foreground.png",
+        backgroundImage: "./assets/images/android-icon-background.png",
+        monochromeImage: "./assets/images/android-icon-monochrome.png",
+      },
+      edgeToEdgeEnabled: true,
+      predictiveBackGestureEnabled: false,
+      package: "com.brainplus.academy",
+    },
+    web: {
+      output: "static",
+      favicon: "./assets/images/favicon.png",
+    },
+    plugins: [
+      "expo-router",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-build-properties",
+        {
+          android: {
+            extraMavenRepos: [
+              "https://phonepe.mycloudrepo.io/public/repositories/phonepe-intentsdk-android",
+            ],
+          },
+          ios: {
+            useFrameworks: "static",
+          },
+        },
+      ],
+      [
+        "expo-splash-screen",
+        {
+          image: "./assets/images/splash-icon.png",
+          imageWidth: 200,
+          resizeMode: "contain",
+          backgroundColor: "#282C34",
+        },
+      ],
+    ],
+    experiments: {
+      typedRoutes: true,
+      reactCompiler: true,
+    },
+    extra: {
+      router: {},
+      eas: {
+        projectId: "0f31f7c4-2531-4f23-abcb-1ad7d8a72d64",
+      },
+    },
+  },
+};
