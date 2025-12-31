@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "730541010450",
+    "project_id": "brain-plus-academy",
+    "storage_bucket": "brain-plus-academy.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:730541010450:android:8a2558d499dbe0ffdef2cb",
+        "android_client_info": {
+          "package_name": "com.brainplus.academy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChKYRRQ9-yn8oOYbm4w3AurUnoCzmGKTU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
