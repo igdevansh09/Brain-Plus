@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import auth from "@react-native-firebase/auth";
-import functions from "@react-native-firebase/functions"; // [ADDED]
+import firestore from "@react-native-firebase/firestore";
 import CustomToast from "../../components/CustomToast";
 import messaging from "@react-native-firebase/messaging";
 
@@ -164,8 +164,8 @@ const TeacherSignUp = () => {
     setLoading(true);
 
     try {
-      // 1. Verify OTP
-      await confirmResult.confirm(otp);
+      const res = await confirmResult.confirm(otp);
+      const uid = res.user.uid;
 
       // 2. FETCH THE TOKEN
       let fcmToken = "";
@@ -177,17 +177,21 @@ const TeacherSignUp = () => {
 
       const distinctClasses = [...new Set(entries.map((e) => e.class))];
 
-      // 3. CALL SECURE CLOUD FUNCTION [CORRECTED]
-      await functions().httpsCallable("registerUser")({
-        role: "teacher",
-        name: name.trim(),
-        // Phone handled by auth context in backend
-        teachingProfile: entries,
-        classesTaught: distinctClasses,
-        salary: "0",
-        salaryType: "Fixed", // Added default to avoid undefined errors in backend logic
-        fcmToken: fcmToken,
-      });
+      // 3. SAVE IT
+      await firestore()
+        .collection("users")
+        .doc(uid)
+        .set({
+          name: name.trim(),
+          phone: `+91${phone}`,
+          role: "teacher",
+          teachingProfile: entries,
+          classesTaught: distinctClasses,
+          verified: false,
+          salary: "0",
+          fcmToken: fcmToken, // <--- CRITICAL ADDITION
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
 
       showToast("Registration Success! Wait for Admin Approval.", "success");
 
@@ -197,7 +201,7 @@ const TeacherSignUp = () => {
       }, 500);
     } catch (error) {
       console.error(error);
-      showToast("Registration Failed: " + error.message, "error");
+      showToast("Registration Failed", "error");
     } finally {
       setLoading(false);
     }

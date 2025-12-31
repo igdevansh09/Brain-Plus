@@ -14,8 +14,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import * as ImagePicker from "expo-image-picker"; // <--- NEW IMPORT
-import storage from "@react-native-firebase/storage"; // <--- NEW IMPORT
+import * as ImagePicker from "expo-image-picker";
+import storage from "@react-native-firebase/storage";
 
 // NATIVE SDK
 import firestore from "@react-native-firebase/firestore";
@@ -62,16 +62,16 @@ const SUB_HIGHER_ALL = [
 
 const ManageContent = () => {
   const router = useRouter();
-  const scrollRef = useRef(); // To scroll to top on Edit
+  const scrollRef = useRef();
 
-  const [activeTab, setActiveTab] = useState("banners"); // <--- NEW STATE (Default Banners)
+  const [activeTab, setActiveTab] = useState("banners");
 
   // --- BANNER STATE ---
   const [banners, setBanners] = useState([]);
   const [bannerImage, setBannerImage] = useState(null);
   const [uploadingBanner, setUploadingBanner] = useState(false);
 
-  // --- COURSE STATE (EXISTING) ---
+  // --- COURSE STATE ---
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [contentList, setContentList] = useState([]);
@@ -88,7 +88,7 @@ const ManageContent = () => {
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [availableSubjects, setAvailableSubjects] = useState([]);
-  const [modalType, setModalType] = useState(null); // 'class' | 'subject'
+  const [modalType, setModalType] = useState(null);
 
   const [currentVideoLink, setCurrentVideoLink] = useState("");
   const [playlist, setPlaylist] = useState([]);
@@ -123,18 +123,27 @@ const ManageContent = () => {
   useEffect(() => {
     fetchBanners();
 
-    // Existing Course Listener
+    // Existing Course Listener with SAFETY CHECK
     const unsubscribe = firestore()
       .collection("courses")
       .orderBy("createdAt", "desc")
-      .onSnapshot((snapshot) => {
-        const list = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setContentList(list);
-        setLoading(false);
-      });
+      .onSnapshot(
+        (snapshot) => {
+          // --- FIX: CHECK IF SNAPSHOT EXISTS ---
+          if (snapshot && snapshot.docs) {
+            const list = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }));
+            setContentList(list);
+          }
+          setLoading(false);
+        },
+        (error) => {
+          console.log("Firestore Error:", error);
+          setLoading(false);
+        }
+      );
     return () => unsubscribe();
   }, []);
 
@@ -145,8 +154,12 @@ const ManageContent = () => {
         .collection("banners")
         .orderBy("createdAt", "desc")
         .get();
-      const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setBanners(list);
+
+      // --- FIX: CHECK IF SNAP EXISTS ---
+      if (snap && snap.docs) {
+        const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        setBanners(list);
+      }
     } catch (e) {
       console.error("Fetch banners error", e);
     }
@@ -189,24 +202,18 @@ const ManageContent = () => {
     }
   };
 
-  // --- NEW: Logic to actually delete the banner and image
   const performBannerDelete = async (id, imageUrl) => {
-    setAlertVisible(false); // Close the popup
+    setAlertVisible(false);
     try {
-      // 1. Delete image from Storage (if exists)
       if (imageUrl) {
         try {
           await storage().refFromURL(imageUrl).delete();
           console.log("Image deleted from storage");
         } catch (storageErr) {
-          console.warn(
-            "Storage delete failed (file might be missing):",
-            storageErr
-          );
+          console.warn("Storage delete failed:", storageErr);
         }
       }
 
-      // 2. Delete document from Firestore
       await firestore().collection("banners").doc(id).delete();
 
       showToast("Banner deleted");
@@ -217,17 +224,15 @@ const ManageContent = () => {
     }
   };
 
-  // --- UPDATED: Triggers the CustomAlert instead of Alert.alert
   const handleDeleteBanner = (id, imageUrl) => {
     setAlertTitle("Delete Banner");
     setAlertMessage("This cannot be undone.");
     setAlertType("warning");
-    // Pass the function that triggers the delete
     setAlertConfirmAction(() => () => performBannerDelete(id, imageUrl));
     setAlertVisible(true);
   };
 
-  // --- 2. SUBJECT LOGIC (Existing) ---
+  // --- 2. SUBJECT LOGIC ---
   useEffect(() => {
     if (!selectedClass) {
       setAvailableSubjects([]);
@@ -253,7 +258,7 @@ const ManageContent = () => {
     }
   }, [selectedClass]);
 
-  // --- 3. VIDEO HANDLERS (Existing) ---
+  // --- 3. VIDEO HANDLERS ---
   const getYoutubeId = (url) => {
     const regExp =
       /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -321,7 +326,7 @@ const ManageContent = () => {
     setPlaylist(playlist.filter((_, i) => i !== index));
   };
 
-  // --- 4. CRUD OPERATIONS (Existing) ---
+  // --- 4. CRUD OPERATIONS ---
   const handleSaveOrUpdate = async () => {
     if (!title.trim() || playlist.length === 0)
       return showToast("Title & Videos required", "error");
@@ -567,7 +572,7 @@ const ManageContent = () => {
                     : "Just now"}
                 </Text>
                 <TouchableOpacity
-                  onPress={() => handleDeleteBanner(item.id, item.imageUrl)} // <--- NEW LINE
+                  onPress={() => handleDeleteBanner(item.id, item.imageUrl)}
                   className="bg-red-500/10 p-2 rounded-lg"
                 >
                   <Ionicons name="trash-outline" size={20} color="#ef4444" />
@@ -578,7 +583,7 @@ const ManageContent = () => {
           <View className="h-20" />
         </ScrollView>
       ) : (
-        /* === COURSES TAB (YOUR EXISTING LOGIC) === */
+        /* === COURSES TAB === */
         <ScrollView className="flex-1 px-4" ref={scrollRef}>
           {/* --- FORM CARD --- */}
           <View
@@ -592,7 +597,7 @@ const ManageContent = () => {
               {isEditing ? `Editing: ${title}` : "Create New Course"}
             </Text>
 
-            {/* TARGET SELECTION (ROW) */}
+            {/* TARGET SELECTION */}
             <View className="flex-row justify-between mb-4">
               {/* CLASS SELECTOR */}
               <TouchableOpacity
@@ -848,6 +853,6 @@ const ManageContent = () => {
       </Modal>
     </SafeAreaView>
   );
-};;
+};
 
 export default ManageContent;
