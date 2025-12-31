@@ -499,101 +499,119 @@ exports.onMaterials = onDocumentCreated("materials/{id}", async (event) => {
 // ==================================================================
 
 exports.generateMonthlyFees = onSchedule("0 10 5 * *", async (event) => {
+  const db = admin.firestore();
   const date = new Date();
-  const currentTitle = `Tuition Fee - ${date.toLocaleString("default", { month: "long" })} ${date.getFullYear()}`;
+  const month = date.toLocaleString("default", { month: "long" });
+  const year = date.getFullYear();
+  const currentTitle = `Tuition Fee - ${month} ${year}`;
+  const feeDate = date.toLocaleDateString("en-GB");
+
   console.log(`Starting fee generation: ${currentTitle}`);
 
+  // 1. Use BulkWriter for automatic batching and flow control
+  const writer = db.bulkWriter();
+
+  // 2. Handle duplicates gracefully (Idempotency)
+  // If a fee with the deterministic ID already exists, ignore the error (don't retry)
+  writer.onWriteError((error) => {
+    if (error.code === 6) {
+      // 6 = ALREADY_EXISTS
+      return false;
+    }
+    return true; // Retry other network errors
+  });
+
   try {
-    const studentsSnap = await admin
-      .firestore()
+    // 3. Use .stream() to process users one by one without overloading RAM
+    const studentsStream = db
       .collection("users")
       .where("role", "==", "student")
       .where("verified", "==", true)
-      .get();
+      .stream();
 
-    const feesSnap = await admin
-      .firestore()
-      .collection("fees")
-      .where("title", "==", currentTitle)
-      .get();
-
-    const billedIds = feesSnap.docs.map((doc) => doc.data().studentId);
-    const batch = admin.firestore().batch();
     let count = 0;
 
-    for (const doc of studentsSnap.docs) {
-      if (!billedIds.includes(doc.id)) {
-        const student = doc.data();
-        const newRef = admin.firestore().collection("fees").doc();
+    for await (const doc of studentsStream) {
+      const student = doc.data();
 
-        batch.set(newRef, {
-          studentId: doc.id,
-          studentName: student.name,
-          studentClass: student.standard || "N/A",
-          studentPhone: student.phone || "",
-          title: currentTitle,
-          amount: student.monthlyFeeAmount || "5000",
-          status: "Pending",
-          date: new Date().toLocaleDateString("en-GB"),
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        count++;
-      }
+      // 4. Deterministic ID: ensures we never bill the same student twice for the same month
+      // Format: {studentId}_{Month}_{Year}
+      const docId = `${doc.id}_${month}_${year}`;
+      const feeRef = db.collection("fees").doc(docId);
+
+      // 5. Queue the write operation
+      writer.create(feeRef, {
+        studentId: doc.id,
+        studentName: student.name || "Unknown",
+        studentClass: student.standard || "N/A",
+        studentPhone: student.phone || "",
+        title: currentTitle,
+        amount: student.monthlyFeeAmount || "5000",
+        status: "Pending",
+        date: feeDate,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      count++;
     }
 
-    if (count > 0) await batch.commit();
-    console.log(`Generated fees for ${count} students.`);
+    // 6. Execute any remaining writes
+    await writer.close();
+    console.log(`Fee generation process processed ${count} students.`);
   } catch (error) {
     console.error("Error in generateMonthlyFees:", error);
   }
 });
 
 exports.generateMonthlySalaries = onSchedule("0 10 5 * *", async (event) => {
+  const db = admin.firestore();
   const date = new Date();
-  const currentTitle = `Salary - ${date.toLocaleString("default", { month: "long" })} ${date.getFullYear()}`;
+  const month = date.toLocaleString("default", { month: "long" });
+  const year = date.getFullYear();
+  const currentTitle = `Salary - ${month} ${year}`;
+  const salaryDate = date.toLocaleDateString("en-GB");
+
   console.log(`Starting salary generation: ${currentTitle}`);
 
+  const writer = db.bulkWriter();
+
+  writer.onWriteError((error) => {
+    if (error.code === 6) return false; // Ignore ALREADY_EXISTS
+    return true;
+  });
+
   try {
-    const teachersSnap = await admin
-      .firestore()
+    const teachersStream = db
       .collection("users")
       .where("role", "==", "teacher")
       .where("verified", "==", true)
       .where("salaryType", "==", "Fixed")
-      .get();
+      .stream();
 
-    const salariesSnap = await admin
-      .firestore()
-      .collection("salaries")
-      .where("title", "==", currentTitle)
-      .get();
-
-    const paidTeacherIds = salariesSnap.docs.map((doc) => doc.data().teacherId);
-    const batch = admin.firestore().batch();
     let count = 0;
 
-    for (const doc of teachersSnap.docs) {
-      if (!paidTeacherIds.includes(doc.id)) {
-        const teacher = doc.data();
-        const newRef = admin.firestore().collection("salaries").doc();
+    for await (const doc of teachersStream) {
+      const teacher = doc.data();
 
-        batch.set(newRef, {
-          teacherId: doc.id,
-          teacherName: teacher.name,
-          teacherEmail: teacher.email,
-          teacherPhone: teacher.phone || "",
-          title: currentTitle,
-          amount: teacher.salary || "0",
-          status: "Pending",
-          date: new Date().toLocaleDateString("en-GB"),
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        count++;
-      }
+      // Deterministic ID: {teacherId}_{Month}_{Year}
+      const docId = `${doc.id}_${month}_${year}`;
+      const salaryRef = db.collection("salaries").doc(docId);
+
+      writer.create(salaryRef, {
+        teacherId: doc.id,
+        teacherName: teacher.name || "Unknown",
+        teacherEmail: teacher.email || "",
+        teacherPhone: teacher.phone || "",
+        title: currentTitle,
+        amount: teacher.salary || "0",
+        status: "Pending",
+        date: salaryDate,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      count++;
     }
 
-    if (count > 0) await batch.commit();
-    console.log(`Generated salaries for ${count} teachers.`);
+    await writer.close();
+    console.log(`Salary generation process processed ${count} teachers.`);
   } catch (error) {
     console.error("Error generating salaries:", error);
   }

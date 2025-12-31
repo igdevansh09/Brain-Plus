@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+import functions from "@react-native-firebase/functions"; // Added Functions Import
 import CustomToast from "../../components/CustomToast";
 import messaging from "@react-native-firebase/messaging";
 
@@ -190,10 +190,10 @@ const StudentSignUp = () => {
     setLoading(true);
 
     try {
-      const res = await confirmResult.confirm(otp);
-      const uid = res.user.uid;
+      // 1. Confirm OTP to login
+      await confirmResult.confirm(otp);
 
-      // 2. FETCH THE TOKEN (Handle errors gracefully)
+      // 2. Get FCM Token (Handle errors gracefully)
       let fcmToken = "";
       try {
         fcmToken = await messaging().getToken();
@@ -201,22 +201,18 @@ const StudentSignUp = () => {
         console.log("Failed to get FCM token", e);
       }
 
-      // 3. SAVE IT TO FIRESTORE
-      await firestore()
-        .collection("users")
-        .doc(uid)
-        .set({
-          name: name.trim(),
-          phone: `+91${phone}`,
-          role: "student",
-          standard: selectedClass,
-          stream: selectedStream || "N/A",
-          enrolledSubjects: selectedSubjects,
-          verified: false,
-          monthlyFeeAmount: "0",
-          fcmToken: fcmToken, // <--- CRITICAL ADDITION
-          createdAt: firestore.FieldValue.serverTimestamp(),
-        });
+      // 3. Call Cloud Function to create user Securely [CORRECTED]
+      // We do NOT write to firestore directly from client anymore.
+      await functions().httpsCallable("registerUser")({
+        role: "student",
+        name: name.trim(),
+        // Phone is automatically handled by the backend via auth token
+        standard: selectedClass,
+        stream: selectedStream || "N/A",
+        enrolledSubjects: selectedSubjects,
+        monthlyFeeAmount: "0",
+        fcmToken: fcmToken,
+      });
 
       showToast("Registration Success! Wait for Admin Approval.", "success");
 
@@ -226,7 +222,7 @@ const StudentSignUp = () => {
       }, 500);
     } catch (error) {
       console.error(error);
-      showToast("Registration Failed", "error");
+      showToast("Registration Failed: " + error.message, "error");
     } finally {
       setLoading(false);
     }

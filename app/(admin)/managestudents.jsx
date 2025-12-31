@@ -278,16 +278,27 @@ const ManageStudents = () => {
     setApproveModalVisible(true);
   };
 
+  // --- CORRECTED APPROVAL LOGIC ---
   const confirmApproval = async () => {
     try {
-      await firestore().collection("users").doc(selectedStudent.id).update({
-        verified: true,
-        monthlyFeeAmount: approvalFee,
-      });
+      // 1. Update Fee Manually (if provided)
+      // We do this via direct write because approveUser only handles verification
+      if (approvalFee && approvalFee !== "0") {
+        await firestore().collection("users").doc(selectedStudent.id).update({
+          monthlyFeeAmount: approvalFee,
+        });
+      }
+
+      // 2. Call Cloud Function to Approve
+      // This is CRITICAL: It updates the Auth Claims (verified: true) so the user can actually login
+      const approveUserFn = functions().httpsCallable("approveUser");
+      await approveUserFn({ targetUid: selectedStudent.id });
+
       setApproveModalVisible(false);
       showToast("Student approved!", "success");
     } catch (e) {
-      showToast("Approval failed", "error");
+      console.error("Approval Error:", e);
+      showToast("Approval failed: " + e.message, "error");
     }
   };
 

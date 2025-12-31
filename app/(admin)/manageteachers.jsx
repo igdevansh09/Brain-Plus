@@ -197,20 +197,30 @@ const ManageTeachers = () => {
     }
   };
 
+  // --- CORRECTED APPROVAL LOGIC ---
   const confirmApproval = async () => {
     try {
+      // 1. Update Salary & Type directly in Firestore (Admin Privilege)
       await firestore()
         .collection("users")
         .doc(selectedTeacher.id)
         .update({
-          verified: true,
+          // We DO NOT set 'verified: true' here manually.
+          // The Cloud Function will handle that.
           salary: approvalType === "Fixed" ? approvalSalary : "0",
           salaryType: approvalType,
         });
+
+      // 2. Call Cloud Function to Approve
+      // This ensures Auth Claims are updated so the teacher can login
+      const approveUserFn = functions().httpsCallable("approveUser");
+      await approveUserFn({ targetUid: selectedTeacher.id });
+
       setApproveModalVisible(false);
       showToast("Teacher approved!", "success");
     } catch (e) {
-      showToast("Approval failed", "error");
+      console.error("Approval Error:", e);
+      showToast("Approval failed: " + e.message, "error");
     }
   };
 
