@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 import CustomToast from "../../components/CustomToast";
+import messaging from "@react-native-firebase/messaging";
 
 // --- CONSTANTS ---
 const CLASSES = [
@@ -187,10 +188,20 @@ const StudentSignUp = () => {
     Keyboard.dismiss();
     if (otp.length !== 6) return showToast("Enter 6-digit OTP", "error");
     setLoading(true);
+
     try {
       const res = await confirmResult.confirm(otp);
       const uid = res.user.uid;
 
+      // 2. FETCH THE TOKEN (Handle errors gracefully)
+      let fcmToken = "";
+      try {
+        fcmToken = await messaging().getToken();
+      } catch (e) {
+        console.log("Failed to get FCM token", e);
+      }
+
+      // 3. SAVE IT TO FIRESTORE
       await firestore()
         .collection("users")
         .doc(uid)
@@ -201,8 +212,9 @@ const StudentSignUp = () => {
           standard: selectedClass,
           stream: selectedStream || "N/A",
           enrolledSubjects: selectedSubjects,
-          verified: false, // Needs Admin Approval
-          monthlyFeeAmount: "0", // Admin will set this later
+          verified: false,
+          monthlyFeeAmount: "0",
+          fcmToken: fcmToken, // <--- CRITICAL ADDITION
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
 

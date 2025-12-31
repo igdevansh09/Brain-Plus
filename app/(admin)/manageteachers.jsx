@@ -11,7 +11,6 @@ import {
   Linking,
   ScrollView,
   Image,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
@@ -22,8 +21,44 @@ import firestore from "@react-native-firebase/firestore";
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
 import functions from "@react-native-firebase/functions";
+import ScreenWrapper from "../../components/ScreenWrapper";
 
-// --- THEME ---
+// --- CONSTANTS (COPIED FOR CONSISTENCY) ---
+const CLASS_OPTIONS = [
+  "CS",
+  "Prep",
+  "1st",
+  "2nd",
+  "3rd",
+  "4th",
+  "5th",
+  "6th",
+  "7th",
+  "8th",
+  "9th",
+  "10th",
+  "11th",
+  "12th",
+];
+const SUBJECT_OPTIONS = [
+  "All Subjects",
+  "English",
+  "Hindi",
+  "Maths",
+  "Science",
+  "Social Science",
+  "Physics",
+  "Chemistry",
+  "Biology",
+  "CS",
+  "Accounts",
+  "Business Studies",
+  "Economics",
+  "History",
+  "Geography",
+  "Political Science",
+];
+
 const theme = {
   bg: "bg-[#282C34]",
   card: "bg-[#333842]",
@@ -59,6 +94,10 @@ const ManageTeachers = () => {
   const [editSalaryType, setEditSalaryType] = useState("Fixed");
   const [editProfile, setEditProfile] = useState([]); // Array of {class, subject}
 
+  // Profile Management State
+  const [activeModalType, setActiveModalType] = useState(null); // 'class' or 'subject'
+  const [pendingEntry, setPendingEntry] = useState({ class: "", subject: "" });
+
   const [toast, setToast] = useState({
     visible: false,
     msg: "",
@@ -79,7 +118,6 @@ const ManageTeachers = () => {
   useEffect(() => {
     setLoading(true);
     const isVerified = viewMode === "active";
-
     const unsubscribe = firestore()
       .collection("users")
       .where("role", "==", "teacher")
@@ -98,7 +136,6 @@ const ManageTeachers = () => {
           setLoading(false);
         }
       );
-
     return () => unsubscribe();
   }, [viewMode]);
 
@@ -114,7 +151,8 @@ const ManageTeachers = () => {
     setEditPhone(teacher.phone || "");
     setEditSalary(teacher.salary || "");
     setEditSalaryType(teacher.salaryType || "Fixed");
-    setEditProfile(teacher.teachingProfile || []); // The Pair Entry array
+    setEditProfile(teacher.teachingProfile || []);
+    setPendingEntry({ class: "", subject: "" });
     setEditModalVisible(true);
   };
 
@@ -129,7 +167,7 @@ const ManageTeachers = () => {
         phone: editPhone,
         salary: editSalary,
         salaryType: editSalaryType,
-        // We preserve teachingProfile here to match your signup logic
+        teachingProfile: editProfile, // Save updated profile
       });
       showToast("Teacher updated!", "success");
       setEditModalVisible(false);
@@ -151,13 +189,10 @@ const ManageTeachers = () => {
   const performDelete = async (id) => {
     setAlert({ ...alert, visible: false });
     try {
-      // Calls a Cloud Function to delete from Auth & Firestore
       const deleteUserFn = functions().httpsCallable("deleteTargetUser");
       await deleteUserFn({ targetUid: id });
-
       showToast("Teacher deleted.", "success");
     } catch (error) {
-      console.error("Delete error:", error);
       showToast("Delete failed: " + error.message, "error");
     }
   };
@@ -179,18 +214,36 @@ const ManageTeachers = () => {
     }
   };
 
+  // --- PROFILE EDIT LOGIC ---
+  const addToProfile = () => {
+    if (!pendingEntry.class || !pendingEntry.subject)
+      return showToast("Select Class & Subject", "error");
+    const exists = editProfile.some(
+      (p) =>
+        p.class === pendingEntry.class && p.subject === pendingEntry.subject
+    );
+    if (exists) return showToast("Already assigned", "error");
+
+    setEditProfile([...editProfile, pendingEntry]);
+    setPendingEntry({ class: "", subject: "" }); // Reset
+  };
+
+  const removeFromProfile = (index) => {
+    const updated = [...editProfile];
+    updated.splice(index, 1);
+    setEditProfile(updated);
+  };
+
   const filteredTeachers = teachers.filter(
     (t) =>
       (t.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.phone || "").includes(searchQuery)
   );
 
-  // --- RENDER LIST ITEM ---
   const renderTeacher = ({ item }) => (
     <View
       className={`${theme.card} p-4 rounded-xl mb-3 flex-row items-center border ${theme.borderColor} shadow-sm`}
     >
-      {/* 1. Avatar */}
       <TouchableOpacity
         onPress={() => {
           setSelectedTeacher(item);
@@ -211,8 +264,6 @@ const ManageTeachers = () => {
           </View>
         )}
       </TouchableOpacity>
-
-      {/* 2. Info */}
       <TouchableOpacity
         style={{ flex: 1 }}
         onPress={() => {
@@ -224,8 +275,6 @@ const ManageTeachers = () => {
           {item.name}
         </Text>
       </TouchableOpacity>
-
-      {/* 3. Actions */}
       <View className="flex-row gap-2 ml-2">
         <TouchableOpacity
           onPress={() => handleCall(item.phone)}
@@ -233,7 +282,6 @@ const ManageTeachers = () => {
         >
           <Ionicons name="call" size={18} color="#3b82f6" />
         </TouchableOpacity>
-
         {viewMode === "pending" ? (
           <TouchableOpacity
             onPress={() => {
@@ -252,7 +300,6 @@ const ManageTeachers = () => {
             <Ionicons name="pencil" size={18} color="#eab308" />
           </TouchableOpacity>
         )}
-
         <TouchableOpacity
           onPress={() => handleDelete(item.id)}
           className="bg-red-500/10 p-2 rounded-lg"
@@ -264,9 +311,7 @@ const ManageTeachers = () => {
   );
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg} pt-2`}>
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
-
+    <ScreenWrapper scrollable={false}>
       <CustomAlert
         visible={alert.visible}
         title={alert.title}
@@ -283,7 +328,6 @@ const ManageTeachers = () => {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      {/* --- HEADER --- */}
       <View className="px-4 py-4 flex-row items-center">
         <TouchableOpacity
           onPress={() => router.back()}
@@ -296,7 +340,6 @@ const ManageTeachers = () => {
         </Text>
       </View>
 
-      {/* --- SEARCH --- */}
       <View className="px-4 mb-4">
         <View
           className={`flex-row items-center ${theme.card} rounded-xl px-4 py-3 border ${theme.borderColor}`}
@@ -312,7 +355,6 @@ const ManageTeachers = () => {
         </View>
       </View>
 
-      {/* --- TABS --- */}
       <View className="flex-row px-4 mb-4">
         <TouchableOpacity
           onPress={() => setViewMode("active")}
@@ -336,7 +378,6 @@ const ManageTeachers = () => {
         </TouchableOpacity>
       </View>
 
-      {/* --- LIST --- */}
       {loading ? (
         <ActivityIndicator size="large" color="#f49b33" className="mt-10" />
       ) : (
@@ -354,84 +395,6 @@ const ManageTeachers = () => {
         />
       )}
 
-      {/* --- DETAIL MODAL --- */}
-      <Modal
-        visible={detailModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDetailModalVisible(false)}
-      >
-        <View className="flex-1 bg-black/80 justify-center p-6">
-          <View
-            className={`${theme.card} rounded-2xl p-6 relative border ${theme.borderColor}`}
-          >
-            <TouchableOpacity
-              onPress={() => setDetailModalVisible(false)}
-              className="absolute top-4 right-4 z-10"
-            >
-              <Ionicons name="close" size={24} color="gray" />
-            </TouchableOpacity>
-
-            <View className="items-center mb-6">
-              {selectedTeacher?.profileImage ? (
-                <Image
-                  source={{ uri: selectedTeacher.profileImage }}
-                  className="w-20 h-20 rounded-full border-2 border-[#f49b33] mb-4"
-                />
-              ) : (
-                <View className="w-20 h-20 bg-[#f49b33] rounded-full items-center justify-center mb-4">
-                  <Text className="text-[#282C34] text-3xl font-bold">
-                    {selectedTeacher?.name?.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-              )}
-              <Text className={`${theme.text} text-2xl font-bold`}>
-                {selectedTeacher?.name}
-              </Text>
-              <Text className={theme.subText}>{selectedTeacher?.phone}</Text>
-            </View>
-
-            <ScrollView style={{ maxHeight: 300 }}>
-              <View
-                className={`${theme.bg} p-4 rounded-xl mb-4 border ${theme.borderColor}`}
-              >
-                <Text
-                  className={`${theme.subText} text-xs uppercase mb-2 font-bold`}
-                >
-                  Teaching Profile
-                </Text>
-                {selectedTeacher?.teachingProfile?.map((item, idx) => (
-                  <View
-                    key={idx}
-                    className="flex-row justify-between mb-2 pb-2 border-b border-[#4C5361]/30"
-                  >
-                    <Text className="text-white font-medium">{item.class}</Text>
-                    <Text className={theme.accent + " font-bold"}>
-                      {item.subject}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-
-              <View
-                className={`${theme.bg} p-4 rounded-xl border ${theme.borderColor}`}
-              >
-                <Text
-                  className={`${theme.subText} text-xs uppercase mb-1 font-bold`}
-                >
-                  Salary Info
-                </Text>
-                <Text className="text-green-400 text-2xl font-bold">
-                  {selectedTeacher?.salaryType === "Commission"
-                    ? "Commission Based"
-                    : `₹ ${selectedTeacher?.salary}`}
-                </Text>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
       {/* --- EDIT MODAL --- */}
       <Modal
         visible={editModalVisible}
@@ -443,101 +406,206 @@ const ManageTeachers = () => {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ flex: 1 }}
         >
-        <View className="flex-1 bg-black/80 justify-end">
-          <View
-            className={`${theme.card} rounded-t-3xl p-6 h-[70%] border-t ${theme.borderColor}`}
-          >
-            <View className="flex-row justify-between items-center mb-6">
-              <Text className={`${theme.text} text-xl font-bold`}>
-                Edit Teacher
-              </Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <Ionicons name="close" size={24} color="gray" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text
-                className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
-              >
-                Full Name
-              </Text>
-              <TextInput
-                value={editName}
-                onChangeText={setEditName}
-                className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-4 border ${theme.borderColor}`}
-              />
-
-              <Text
-                className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
-              >
-                Phone
-              </Text>
-              <TextInput
-                value={editPhone}
-                onChangeText={setEditPhone}
-                keyboardType="phone-pad"
-                className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-4 border ${theme.borderColor}`}
-              />
-
-              <Text
-                className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
-              >
-                Salary Type
-              </Text>
-              <View className="flex-row mb-4 bg-[#282C34] rounded-lg p-1 border border-[#4C5361]">
-                <TouchableOpacity
-                  onPress={() => setEditSalaryType("Fixed")}
-                  className={`flex-1 py-2 rounded ${editSalaryType === "Fixed" ? "bg-[#f49b33]" : ""}`}
-                >
-                  <Text
-                    className={`text-center font-bold ${editSalaryType === "Fixed" ? "text-[#282C34]" : "text-gray-400"}`}
-                  >
-                    Fixed
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setEditSalaryType("Commission")}
-                  className={`flex-1 py-2 rounded ${editSalaryType === "Commission" ? "bg-[#f49b33]" : ""}`}
-                >
-                  <Text
-                    className={`text-center font-bold ${editSalaryType === "Commission" ? "text-[#282C34]" : "text-gray-400"}`}
-                  >
-                    Commission
-                  </Text>
+          <View className="flex-1 bg-black/80 justify-end">
+            <View
+              className={`${theme.card} rounded-t-3xl p-6 h-[85%] border-t ${theme.borderColor}`}
+            >
+              <View className="flex-row justify-between items-center mb-6">
+                <Text className={`${theme.text} text-xl font-bold`}>
+                  Edit Teacher
+                </Text>
+                <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+                  <Ionicons name="close" size={24} color="gray" />
                 </TouchableOpacity>
               </View>
-
-              {editSalaryType === "Fixed" && (
-                <>
-                  <Text
-                    className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
-                  >
-                    Salary Amount (₹)
-                  </Text>
-                  <TextInput
-                    value={editSalary}
-                    onChangeText={setEditSalary}
-                    keyboardType="numeric"
-                    className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-8 border ${theme.borderColor}`}
-                  />
-                </>
-              )}
-
-              <TouchableOpacity
-                onPress={handleUpdateTeacher}
-                className={`${theme.accentBg} p-4 rounded-xl items-center mb-6`}
-              >
-                <Text className="text-[#282C34] font-bold text-lg">
-                  Update Profile
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text
+                  className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
+                >
+                  Full Name
                 </Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
+                <TextInput
+                  value={editName}
+                  onChangeText={setEditName}
+                  className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-4 border ${theme.borderColor}`}
+                />
+                <Text
+                  className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
+                >
+                  Phone
+                </Text>
+                <TextInput
+                  value={editPhone}
+                  onChangeText={setEditPhone}
+                  keyboardType="phone-pad"
+                  className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-4 border ${theme.borderColor}`}
+                />
+
+                {/* Teaching Profile Edit Section */}
+                <View className="mb-4 pt-2 border-t border-[#4C5361]">
+                  <Text
+                    className={`${theme.accent} mb-2 text-xs uppercase font-bold`}
+                  >
+                    Teaching Profile
+                  </Text>
+
+                  {/* List of assigned classes */}
+                  {editProfile.map((p, idx) => (
+                    <View
+                      key={idx}
+                      className="flex-row justify-between items-center bg-[#282C34] p-3 rounded-lg mb-2 border border-[#4C5361]"
+                    >
+                      <Text className="text-white font-bold">
+                        {p.class} -{" "}
+                        <Text className={theme.subText}>{p.subject}</Text>
+                      </Text>
+                      <TouchableOpacity onPress={() => removeFromProfile(idx)}>
+                        <Ionicons name="trash" size={18} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+
+                  {/* Add New Entry Row */}
+                  <Text className="text-gray-500 text-xs mb-2 mt-2">
+                    Add New Class/Subject:
+                  </Text>
+                  <View className="flex-row gap-2">
+                    <TouchableOpacity
+                      onPress={() => setActiveModalType("class")}
+                      className={`flex-1 bg-[#282C34] p-3 rounded-xl border ${theme.borderColor}`}
+                    >
+                      <Text
+                        className={
+                          pendingEntry.class ? "text-white" : "text-gray-500"
+                        }
+                      >
+                        {pendingEntry.class || "Select Class"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setActiveModalType("subject")}
+                      className={`flex-1 bg-[#282C34] p-3 rounded-xl border ${theme.borderColor}`}
+                    >
+                      <Text
+                        className={
+                          pendingEntry.subject ? "text-white" : "text-gray-500"
+                        }
+                      >
+                        {pendingEntry.subject || "Select Sub"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={addToProfile}
+                      className="bg-[#f49b33] p-3 rounded-xl justify-center items-center"
+                    >
+                      <Ionicons name="add" size={24} color="#282C34" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <Text
+                  className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
+                >
+                  Salary Type
+                </Text>
+                <View className="flex-row mb-4 bg-[#282C34] rounded-lg p-1 border border-[#4C5361]">
+                  <TouchableOpacity
+                    onPress={() => setEditSalaryType("Fixed")}
+                    className={`flex-1 py-2 rounded ${editSalaryType === "Fixed" ? "bg-[#f49b33]" : ""}`}
+                  >
+                    <Text
+                      className={`text-center font-bold ${editSalaryType === "Fixed" ? "text-[#282C34]" : "text-gray-400"}`}
+                    >
+                      Fixed
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setEditSalaryType("Commission")}
+                    className={`flex-1 py-2 rounded ${editSalaryType === "Commission" ? "bg-[#f49b33]" : ""}`}
+                  >
+                    <Text
+                      className={`text-center font-bold ${editSalaryType === "Commission" ? "text-[#282C34]" : "text-gray-400"}`}
+                    >
+                      Commission
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {editSalaryType === "Fixed" && (
+                  <>
+                    <Text
+                      className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
+                    >
+                      Salary Amount (₹)
+                    </Text>
+                    <TextInput
+                      value={editSalary}
+                      onChangeText={setEditSalary}
+                      keyboardType="numeric"
+                      className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-8 border ${theme.borderColor}`}
+                    />
+                  </>
+                )}
+                <TouchableOpacity
+                  onPress={handleUpdateTeacher}
+                  className={`${theme.accentBg} p-4 rounded-xl items-center mb-6`}
+                >
+                  <Text className="text-[#282C34] font-bold text-lg">
+                    Update Profile
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* --- APPROVE MODAL --- */}
+      {/* --- SELECTION MODAL (NEW) --- */}
+      <Modal
+        visible={!!activeModalType}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActiveModalType(null)}
+      >
+        <View className="flex-1 bg-black/80 justify-center p-6">
+          <View
+            className={`${theme.card} rounded-2xl max-h-[60%] overflow-hidden border ${theme.borderColor}`}
+          >
+            <Text
+              className={`${theme.text} text-center font-bold text-lg p-4 bg-[#282C34]`}
+            >
+              Select {activeModalType === "class" ? "Class" : "Subject"}
+            </Text>
+            <FlatList
+              data={
+                activeModalType === "class" ? CLASS_OPTIONS : SUBJECT_OPTIONS
+              }
+              keyExtractor={(i) => i}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  onPress={() => {
+                    setPendingEntry((prev) => ({
+                      ...prev,
+                      [activeModalType]: item,
+                    }));
+                    setActiveModalType(null);
+                  }}
+                  className={`p-4 border-b ${theme.borderColor} flex-row justify-between`}
+                >
+                  <Text className={`${theme.text} font-medium`}>{item}</Text>
+                </TouchableOpacity>
+              )}
+            />
+            <TouchableOpacity
+              onPress={() => setActiveModalType(null)}
+              className="p-4 items-center bg-[#282C34]"
+            >
+              <Text className={`${theme.accent} font-bold`}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- APPROVE & DETAIL MODALS REMAIN THE SAME --- */}
       <Modal
         visible={approveModalVisible}
         transparent
@@ -554,7 +622,6 @@ const ManageTeachers = () => {
             <Text className={theme.subText + " mb-6"}>
               Verify & set salary for {selectedTeacher?.name}.
             </Text>
-
             <View className="flex-row mb-4 bg-[#282C34] rounded-lg p-1 border border-[#4C5361]">
               <TouchableOpacity
                 onPress={() => setApprovalType("Fixed")}
@@ -577,7 +644,6 @@ const ManageTeachers = () => {
                 </Text>
               </TouchableOpacity>
             </View>
-
             {approvalType === "Fixed" && (
               <TextInput
                 value={approvalSalary}
@@ -586,7 +652,6 @@ const ManageTeachers = () => {
                 className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-6 font-bold text-lg border ${theme.borderColor}`}
               />
             )}
-
             <View className="flex-row gap-4">
               <TouchableOpacity
                 onPress={() => setApproveModalVisible(false)}
@@ -604,7 +669,80 @@ const ManageTeachers = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+      <Modal
+        visible={detailModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDetailModalVisible(false)}
+      >
+        <View className="flex-1 bg-black/80 justify-center p-6">
+          <View
+            className={`${theme.card} rounded-2xl p-6 relative border ${theme.borderColor}`}
+          >
+            <TouchableOpacity
+              onPress={() => setDetailModalVisible(false)}
+              className="absolute top-4 right-4 z-10"
+            >
+              <Ionicons name="close" size={24} color="gray" />
+            </TouchableOpacity>
+            <View className="items-center mb-6">
+              {selectedTeacher?.profileImage ? (
+                <Image
+                  source={{ uri: selectedTeacher.profileImage }}
+                  className="w-20 h-20 rounded-full border-2 border-[#f49b33] mb-4"
+                />
+              ) : (
+                <View className="w-20 h-20 bg-[#f49b33] rounded-full items-center justify-center mb-4">
+                  <Text className="text-[#282C34] text-3xl font-bold">
+                    {selectedTeacher?.name?.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <Text className={`${theme.text} text-2xl font-bold`}>
+                {selectedTeacher?.name}
+              </Text>
+              <Text className={theme.subText}>{selectedTeacher?.phone}</Text>
+            </View>
+            <ScrollView style={{ maxHeight: 300 }}>
+              <View
+                className={`${theme.bg} p-4 rounded-xl mb-4 border ${theme.borderColor}`}
+              >
+                <Text
+                  className={`${theme.subText} text-xs uppercase mb-2 font-bold`}
+                >
+                  Teaching Profile
+                </Text>
+                {selectedTeacher?.teachingProfile?.map((item, idx) => (
+                  <View
+                    key={idx}
+                    className="flex-row justify-between mb-2 pb-2 border-b border-[#4C5361]/30"
+                  >
+                    <Text className="text-white font-medium">{item.class}</Text>
+                    <Text className={theme.accent + " font-bold"}>
+                      {item.subject}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              <View
+                className={`${theme.bg} p-4 rounded-xl border ${theme.borderColor}`}
+              >
+                <Text
+                  className={`${theme.subText} text-xs uppercase mb-1 font-bold`}
+                >
+                  Salary Info
+                </Text>
+                <Text className="text-green-400 text-2xl font-bold">
+                  {selectedTeacher?.salaryType === "Commission"
+                    ? "Commission Based"
+                    : `₹ ${selectedTeacher?.salary}`}
+                </Text>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </ScreenWrapper>
   );
 };
 

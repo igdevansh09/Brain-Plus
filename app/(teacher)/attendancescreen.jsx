@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,19 +8,178 @@ import {
   ActivityIndicator,
   ScrollView,
   Platform,
+  Image,
+  Modal, // <--- Added Modal
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaView } from "react-native-safe-area-context";
+import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
 
 // NATIVE SDK
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 
 import CustomToast from "../../components/CustomToast";
-import CustomAlert from "../../components/CustomAlert"; // IMPORTED
+import CustomAlert from "../../components/CustomAlert";
 
+dayjs.extend(customParseFormat);
+
+// --- THEME ---
+const theme = {
+  bg: "bg-[#282C34]",
+  card: "bg-[#333842]",
+  accent: "text-[#f49b33]",
+  text: "text-white",
+  subText: "text-gray-400",
+  green: "#4CAF50",
+  red: "#F44336",
+  borderColor: "border-[#4C5361]",
+};
+
+// --- HELPER: CUSTOM CALENDAR COMPONENT ---
+const CustomCalendar = ({
+  selectedDate,
+  onSelectDate,
+  markedDates = [], // Array of "DD/MM/YYYY" strings
+  onClose,
+}) => {
+  const [currentMonth, setCurrentMonth] = useState(dayjs(selectedDate));
+
+  const generateDays = () => {
+    const startOfMonth = currentMonth.startOf("month");
+    const endOfMonth = currentMonth.endOf("month");
+    const startDay = startOfMonth.day();
+    const daysInMonth = currentMonth.daysInMonth();
+
+    const days = [];
+    for (let i = 0; i < startDay; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) days.push(startOfMonth.date(i));
+    return days;
+  };
+
+  const days = generateDays();
+  const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  const changeMonth = (dir) => {
+    setCurrentMonth(currentMonth.add(dir, "month"));
+  };
+
+  return (
+    <View className="flex-1 justify-center items-center bg-black/80 p-6">
+      <View
+        className={`${theme.card} w-full rounded-2xl p-4 border ${theme.borderColor}`}
+      >
+        {/* Header */}
+        <View className="flex-row justify-between items-center mb-4 border-b border-[#4C5361] pb-4">
+          <TouchableOpacity onPress={() => changeMonth(-1)} className="p-2">
+            <Ionicons name="chevron-back" size={24} color="#f49b33" />
+          </TouchableOpacity>
+          <Text className="text-white font-bold text-lg">
+            {currentMonth.format("MMMM YYYY")}
+          </Text>
+          <TouchableOpacity
+            onPress={() => changeMonth(1)}
+            disabled={currentMonth.add(1, "month").isAfter(dayjs())}
+            className="p-2"
+          >
+            <Ionicons
+              name="chevron-forward"
+              size={24}
+              color={
+                currentMonth.add(1, "month").isAfter(dayjs())
+                  ? "#555"
+                  : "#f49b33"
+              }
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Days Header */}
+        <View className="flex-row justify-between mb-2">
+          {weekDays.map((d) => (
+            <Text
+              key={d}
+              className="text-gray-500 w-[14%] text-center text-xs font-bold"
+            >
+              {d}
+            </Text>
+          ))}
+        </View>
+
+        {/* Grid */}
+        <View className="flex-row flex-wrap mb-4">
+          {days.map((date, index) => {
+            if (!date)
+              return <View key={`empty-${index}`} className="w-[14%] h-10" />;
+
+            const dateStr = date.format("DD/MM/YYYY");
+            const isSelected = date.isSame(dayjs(selectedDate), "day");
+            const isMarked = markedDates.includes(dateStr);
+            const isFuture = date.isAfter(dayjs(), "day");
+
+            return (
+              <TouchableOpacity
+                key={dateStr}
+                disabled={isFuture}
+                onPress={() => onSelectDate(date.toDate())}
+                className="w-[14%] h-10 justify-center items-center relative mb-1"
+              >
+                <View
+                  className={`w-8 h-8 rounded-full justify-center items-center ${
+                    isSelected
+                      ? "bg-[#f49b33]"
+                      : isMarked
+                        ? "bg-[#333842] border border-green-500/50"
+                        : "bg-transparent"
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-bold ${
+                      isSelected
+                        ? "text-[#282C34]"
+                        : isFuture
+                          ? "text-gray-600"
+                          : "text-white"
+                    }`}
+                  >
+                    {date.date()}
+                  </Text>
+                </View>
+                {isMarked && !isSelected && (
+                  <View className="absolute bottom-0 w-1 h-1 bg-green-500 rounded-full" />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Legend */}
+        <View className="flex-row justify-center items-center mb-4 gap-4">
+          <View className="flex-row items-center">
+            <View className="w-2 h-2 rounded-full bg-green-500 mr-2" />
+            <Text className="text-gray-400 text-[10px]">Recorded</Text>
+          </View>
+          <View className="flex-row items-center">
+            <View className="w-2 h-2 rounded-full bg-[#f49b33] mr-2" />
+            <Text className="text-gray-400 text-[10px]">Selected</Text>
+          </View>
+        </View>
+
+        {/* Close Button */}
+        <TouchableOpacity
+          onPress={onClose}
+          className="bg-[#282C34] py-3 rounded-xl border border-[#4C5361] items-center"
+        >
+          <Text className="text-red-400 font-bold">Close Calendar</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+// --- MAIN SCREEN ---
 const TeacherAttendance = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -36,46 +195,35 @@ const TeacherAttendance = () => {
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Lists
+  // Calendar State
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [markedDates, setMarkedDates] = useState([]);
+
+  // Attendance State
   const [students, setStudents] = useState([]);
-  const [isLocked, setIsLocked] = useState(false);
+  const [attendanceData, setAttendanceData] = useState({}); // { uid: 'Present' | 'Absent' }
+  const [isLocked, setIsLocked] = useState(false); // If already submitted for this date
 
-  // Toast
+  // Toast & Alert
   const [toast, setToast] = useState({
     visible: false,
     msg: "",
     type: "success",
   });
-  const showToast = (msg, type = "success") =>
-    setToast({ visible: true, msg, type });
-
-  // Custom Alert State
   const [alertConfig, setAlertConfig] = useState({
     visible: false,
     title: "",
     message: "",
-    confirmText: "Confirm",
-    cancelText: "Cancel",
     onConfirm: null,
-    type: "default", // default, warning, error
   });
 
-  const theme = {
-    bg: "bg-[#282C34]",
-    card: "bg-[#333842]",
-    accent: "text-[#f49b33]",
-    text: "text-white",
-    subText: "text-gray-400",
-    green: "#4CAF50",
-    red: "#F44336",
-    disabled: "#607D8B",
-  };
+  const showToast = (msg, type = "success") =>
+    setToast({ visible: true, msg, type });
 
-  // --- 1. FETCH TEACHER PROFILE ---
+  // --- 1. FETCH PROFILE ---
   useEffect(() => {
-    const fetchTeacherData = async () => {
+    const fetchProfile = async () => {
       try {
         const uid = auth().currentUser?.uid;
         if (!uid) return;
@@ -91,7 +239,6 @@ const TeacherAttendance = () => {
             setUniqueClasses(classes);
             if (classes.length > 0) handleClassChange(classes[0], profile);
           } else {
-            // Fallback
             const classes = data.classesTaught || [];
             const subjects = data.subjects || [];
             setUniqueClasses(classes);
@@ -108,139 +255,124 @@ const TeacherAttendance = () => {
           }
         }
       } catch (error) {
-        console.log("Error fetching profile:", error);
+        console.log("Profile Error:", error);
       } finally {
         setLoading(false);
       }
     };
-    fetchTeacherData();
+    fetchProfile();
   }, []);
 
-  // --- 2. HANDLE CLASS CHANGE ---
+  // --- 2. FETCH MARKED DATES ---
+  const fetchMarkedDates = useCallback(async () => {
+    if (!selectedClass || !selectedSubject) return;
+    try {
+      const snap = await firestore()
+        .collection("attendance")
+        .where("classId", "==", selectedClass)
+        .where("subject", "==", selectedSubject)
+        .get();
+
+      const dates = snap.docs.map((doc) => doc.data().date);
+      setMarkedDates(dates);
+    } catch (e) {
+      console.log("Error fetching attendance markers", e);
+    }
+  }, [selectedClass, selectedSubject]);
+
+  // --- 3. TRIGGER FETCHES ---
+  useEffect(() => {
+    if (selectedClass && selectedSubject) {
+      fetchMarkedDates();
+      fetchAttendanceForDate();
+    }
+  }, [selectedClass, selectedSubject, currentDate]);
+
   const handleClassChange = (cls, profileData = teachingProfile) => {
     setSelectedClass(cls);
-    const relevantSubjects = profileData
+    const relevant = profileData
       .filter((item) => item.class === cls)
       .map((item) => item.subject);
 
-    setAvailableSubjects(relevantSubjects);
-    if (relevantSubjects.length > 0) {
-      setSelectedSubject(relevantSubjects[0]);
-    } else {
-      setSelectedSubject(null);
-    }
+    setAvailableSubjects(relevant);
+    if (relevant.length > 0) setSelectedSubject(relevant[0]);
+    else setSelectedSubject(null);
   };
 
-  // --- 3. FETCH DATA (STUDENTS & ATTENDANCE) ---
-  useEffect(() => {
-    if (!selectedClass || !selectedSubject) return;
-    loadStudentsAndStatus();
-  }, [selectedClass, selectedSubject, currentDate]);
+  const getFormattedDate = (date) => dayjs(date).format("DD/MM/YYYY");
 
-  const loadStudentsAndStatus = async () => {
+  const fetchAttendanceForDate = async () => {
     setFetchingStudents(true);
-    setStudents([]);
     try {
-      // A. Get Students
-      const studentSnap = await firestore()
-        .collection("users")
-        .where("role", "==", "student")
-        .where("standard", "==", selectedClass)
-        .get();
+      const dateStr = getFormattedDate(currentDate);
 
-      let studentList = studentSnap.docs.map((doc) => ({
-        id: doc.id,
-        name: doc.data().name || "Unknown",
-        rollNo: doc.data().rollNo || "N/A",
-        status: "Present",
-        ...doc.data(),
-      }));
-
-      // B. Check Existing Attendance
-      const dateStr = formatDate(currentDate);
-      const docId = `${selectedClass}_${selectedSubject}_${dateStr}`;
-
-      const attendanceDoc = await firestore()
+      // A. Check for existing attendance record
+      const attQuery = firestore()
         .collection("attendance")
-        .doc(docId)
-        .get();
+        .where("classId", "==", selectedClass)
+        .where("subject", "==", selectedSubject)
+        .where("date", "==", dateStr);
 
-      if (attendanceDoc.exists) {
-        const data = attendanceDoc.data();
-        const records = data?.records || {};
+      const attSnap = await attQuery.get();
+      let savedRecords = null;
 
-        studentList = studentList.map((s) => ({
-          ...s,
-          status: records[s.id] || "Absent",
-        }));
-        setIsLocked(true); // Locks if record exists
+      if (!attSnap.empty) {
+        savedRecords = attSnap.docs[0].data().records; // { uid: 'Present' }
+        setIsLocked(true);
       } else {
         setIsLocked(false);
       }
 
-      studentList.sort((a, b) => a.name.localeCompare(b.name));
-      setStudents(studentList);
+      // B. Fetch Students
+      const q = firestore()
+        .collection("users")
+        .where("role", "==", "student")
+        .where("standard", "==", selectedClass);
+
+      const snapshot = await q.get();
+      const list = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      setStudents(list);
+
+      // C. Set Initial State
+      const initialMap = {};
+      list.forEach((student) => {
+        if (savedRecords && savedRecords[student.id]) {
+          initialMap[student.id] = savedRecords[student.id];
+        } else {
+          initialMap[student.id] = "Present"; // Default to Present
+        }
+      });
+      setAttendanceData(initialMap);
     } catch (error) {
-      console.log("Load Error:", error);
+      console.log("Fetch Error:", error);
+      showToast("Failed to load data", "error");
     } finally {
       setFetchingStudents(false);
     }
   };
 
-  // --- HANDLERS ---
-  const formatDate = (date) => {
-    const d = String(date.getDate()).padStart(2, "0");
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const y = date.getFullYear();
-    return `${d}-${m}-${y}`;
+  const toggleAttendance = (studentId) => {
+    if (isLocked) return; // Prevent edit if locked
+    setAttendanceData((prev) => ({
+      ...prev,
+      [studentId]: prev[studentId] === "Present" ? "Absent" : "Present",
+    }));
   };
 
-  const getFormattedDateDisplay = () => {
-    const options = {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    };
-    return currentDate.toLocaleDateString("en-US", options);
-  };
-
-  const onChangeDate = (event, selectedDate) => {
-    const date = selectedDate || currentDate;
-    setShowDatePicker(Platform.OS === "ios");
+  const handleDateSelection = (date) => {
     setCurrentDate(date);
+    setCalendarVisible(false); // Close Modal
   };
 
-  const toggleStatus = (id) => {
-    if (isLocked) {
-      showToast("Unlock to edit attendance.", "warning");
-      return;
-    }
-    setStudents((prev) =>
-      prev.map((s) =>
-        s.id === id
-          ? { ...s, status: s.status === "Present" ? "Absent" : "Present" }
-          : s
-      )
-    );
-  };
-
-  const markAllPresent = () => {
-    if (isLocked) return;
-    setStudents((prev) => prev.map((s) => ({ ...s, status: "Present" })));
-    showToast("All marked Present");
-  };
-
-  // --- REPLACED Alert.alert WITH CustomAlert ---
   const handleUnlock = () => {
     setAlertConfig({
       visible: true,
       title: "Unlock Attendance?",
-      message:
-        "This will allow you to modify the previously submitted attendance.",
-      confirmText: "Unlock",
-      cancelText: "Cancel",
-      type: "warning",
+      message: "You are about to modify a past record. Proceed?",
       onConfirm: () => {
         setIsLocked(false);
         setAlertConfig((prev) => ({ ...prev, visible: false }));
@@ -249,53 +381,58 @@ const TeacherAttendance = () => {
   };
 
   const handleSubmit = async () => {
-    if (students.length === 0) return;
+    const absentCount = Object.values(attendanceData).filter(
+      (s) => s === "Absent"
+    ).length;
+    const total = students.length;
 
     setAlertConfig({
       visible: true,
       title: "Submit Attendance?",
-      message: `Class: ${selectedClass}\nSubject: ${selectedSubject}\nDate: ${formatDate(currentDate)}`,
-      confirmText: "Submit",
-      cancelText: "Cancel",
-      type: "default",
+      message: `Total: ${total}\nPresent: ${total - absentCount}\nAbsent: ${absentCount}`,
       onConfirm: async () => {
-        setAlertConfig((prev) => ({ ...prev, visible: false })); // Close alert first
+        setAlertConfig((prev) => ({ ...prev, visible: false }));
         setSubmitting(true);
         try {
-          const dateStr = formatDate(currentDate);
-          const docId = `${selectedClass}_${selectedSubject}_${dateStr}`;
+          const dateStr = getFormattedDate(currentDate);
 
-          const recordMap = {};
-          let presentCount = 0;
-          let absentCount = 0;
-
-          students.forEach((s) => {
-            recordMap[s.id] = s.status;
-            if (s.status === "Present") presentCount++;
-            else absentCount++;
-          });
-
-          await firestore()
+          // Check if doc exists to update or create
+          const q = firestore()
             .collection("attendance")
-            .doc(docId)
-            .set({
-              date: dateStr,
-              timestamp: firestore.FieldValue.serverTimestamp(),
-              classId: selectedClass,
-              subject: selectedSubject,
-              teacherId: auth().currentUser.uid,
-              records: recordMap,
-              summary: {
-                present: presentCount,
-                absent: absentCount,
-                total: students.length,
-              },
-            });
+            .where("classId", "==", selectedClass)
+            .where("subject", "==", selectedSubject)
+            .where("date", "==", dateStr);
 
+          const snap = await q.get();
+
+          const payload = {
+            classId: selectedClass,
+            subject: selectedSubject,
+            date: dateStr,
+            teacherId: auth().currentUser.uid,
+            records: attendanceData,
+            updatedAt: firestore.FieldValue.serverTimestamp(),
+          };
+
+          if (!snap.empty) {
+            await firestore()
+              .collection("attendance")
+              .doc(snap.docs[0].id)
+              .update(payload);
+          } else {
+            await firestore()
+              .collection("attendance")
+              .add({
+                ...payload,
+                createdAt: firestore.FieldValue.serverTimestamp(),
+              });
+          }
+
+          showToast("Attendance Saved!", "success");
           setIsLocked(true);
-          showToast("Attendance Submitted!", "success");
-        } catch (e) {
-          showToast("Submission failed.", "error");
+          fetchMarkedDates(); // Refresh calendar dots
+        } catch (error) {
+          showToast("Failed to save.", "error");
         } finally {
           setSubmitting(false);
         }
@@ -303,69 +440,110 @@ const TeacherAttendance = () => {
     });
   };
 
-  // --- RENDERERS ---
-  const renderStudent = ({ item }) => {
-    const isPresent = item.status === "Present";
+  const renderStudentRow = ({ item }) => {
+    const status = attendanceData[item.id] || "Present";
+    const isPresent = status === "Present";
+
     return (
       <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={() => toggleStatus(item.id)}
-        className={`flex-row items-center p-4 mb-3 rounded-2xl border ${isPresent ? "bg-[#333842] border-green-500/30" : "bg-[#333842] border-red-500/30"}`}
+        onPress={() => toggleAttendance(item.id)}
+        activeOpacity={isLocked ? 1 : 0.7}
+        className={`${theme.card} p-3 rounded-xl mb-3 flex-row justify-between items-center border ${
+          isPresent ? "border-green-500/30" : "border-red-500/50 bg-red-500/5"
+        }`}
       >
-        {/* Avatar */}
-        <View
-          className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${isPresent ? "bg-green-500/20" : "bg-red-500/20"}`}
-        >
-          <Text
-            className={`font-bold ${isPresent ? "text-green-400" : "text-red-400"}`}
+        <View className="flex-row items-center flex-1">
+          <View
+            className={`w-10 h-10 rounded-full items-center justify-center mr-3 overflow-hidden border ${
+              isPresent ? "border-[#f49b33]" : "border-red-400"
+            } bg-[#282C34]`}
           >
-            {item.name.charAt(0)}
-          </Text>
+            {item.profileImage ? (
+              <Image
+                source={{ uri: item.profileImage }}
+                className="w-full h-full"
+              />
+            ) : (
+              <Text
+                className={`font-bold ${isPresent ? "text-[#f49b33]" : "text-red-400"}`}
+              >
+                {item.name.charAt(0)}
+              </Text>
+            )}
+          </View>
+          <View>
+            <Text
+              className={`font-bold text-base ${isPresent ? "text-white" : "text-red-300"}`}
+            >
+              {item.name}
+            </Text>
+          </View>
         </View>
 
-        {/* Info */}
-        <View className="flex-1">
-          <Text className="text-white font-bold text-base">{item.name}</Text>
-
-        </View>
-
-        {/* Toggle Status */}
         <View
-          className={`px-3 py-1 rounded-full border ${isPresent ? "bg-green-500/10 border-green-500" : "bg-red-500/10 border-red-500"}`}
+          className={`px-4 py-2 rounded-lg border ${
+            isPresent
+              ? "bg-green-500/10 border-green-500/50"
+              : "bg-red-500/10 border-red-500/50"
+          }`}
         >
           <Text
-            className={`text-xs font-bold ${isPresent ? "text-green-400" : "text-red-400"}`}
+            className={`font-bold text-xs ${
+              isPresent ? "text-green-400" : "text-red-400"
+            }`}
           >
-            {item.status.toUpperCase()}
+            {status.toUpperCase()}
           </Text>
         </View>
       </TouchableOpacity>
     );
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView
+        className={`flex-1 ${theme.bg} justify-center items-center`}
+      >
+        <ActivityIndicator size="large" color="#f49b33" />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView className={`flex-1 ${theme.bg}`}>
       <StatusBar backgroundColor="#282C34" barStyle="light-content" />
-
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
         type={toast.type}
         onHide={() => setToast({ ...toast, visible: false })}
       />
-
       <CustomAlert
         visible={alertConfig.visible}
         title={alertConfig.title}
         message={alertConfig.message}
-        confirmText={alertConfig.confirmText}
-        cancelText={alertConfig.cancelText}
-        type={alertConfig.type}
+        confirmText="Confirm"
+        cancelText="Cancel"
         onConfirm={alertConfig.onConfirm}
         onCancel={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
       />
 
-      {/* --- HEADER --- */}
+      {/* --- CALENDAR MODAL --- */}
+      <Modal
+        visible={calendarVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setCalendarVisible(false)}
+      >
+        <CustomCalendar
+          selectedDate={currentDate}
+          markedDates={markedDates}
+          onSelectDate={handleDateSelection}
+          onClose={() => setCalendarVisible(false)}
+        />
+      </Modal>
+
+      {/* HEADER */}
       <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => router.back()}
@@ -373,76 +551,71 @@ const TeacherAttendance = () => {
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text className="text-white text-xl font-bold">Mark Attendance</Text>
+        <Text className="text-white text-xl font-bold">Attendance</Text>
         <View className="w-10" />
       </View>
 
-      {/* --- DATE BANNER (CLICKABLE) --- */}
-      <View className="px-5 mb-6">
-        <TouchableOpacity
-          onPress={() => setShowDatePicker(true)}
-          className="bg-[#f49b33]/10 border border-[#f49b33]/30 p-4 rounded-xl flex-row justify-between items-center"
+      <ScrollView
+        className="flex-1 px-5 pt-2"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* TOP CARD: DATE & CLASS */}
+        <View
+          className={`${theme.card} p-4 rounded-2xl border ${theme.borderColor} mb-6`}
         >
-          <View>
-            <Text className="text-[#f49b33] text-xs font-bold uppercase tracking-widest">
-              Session Date
+          <View className="flex-row justify-between items-center mb-3">
+            <Text className="text-gray-400 text-xs font-bold uppercase tracking-widest">
+              Session Details
             </Text>
-            <Text className="text-white font-bold text-lg">
-              {getFormattedDateDisplay()}
-            </Text>
+            {isLocked && (
+              <View className="bg-green-500/20 px-2 py-1 rounded">
+                <Text className="text-green-400 text-[10px] font-bold uppercase">
+                  RECORDED
+                </Text>
+              </View>
+            )}
           </View>
-          <Ionicons name="calendar" size={28} color="#f49b33" />
-        </TouchableOpacity>
-      </View>
 
-      {/* --- DATE PICKER --- */}
-      {showDatePicker && (
-        <DateTimePicker
-          value={currentDate}
-          mode="date"
-          display="default"
-          onChange={onChangeDate}
-          maximumDate={new Date()} // Prevent future attendance
-        />
-      )}
-
-      {/* --- SELECTORS --- */}
-      <View className="px-5 mb-2">
-        {/* Class Scroll */}
-        <Text className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1">
-          Select Class
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="mb-4"
-        >
-          {uniqueClasses.map((cls) => (
-            <TouchableOpacity
-              key={cls}
-              onPress={() => handleClassChange(cls)}
-              className={`mr-3 px-5 py-2 rounded-xl border ${selectedClass === cls ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-[#4C5361]"}`}
-            >
-              <Text
-                className={`font-bold ${selectedClass === cls ? "text-[#282C34]" : "text-gray-400"}`}
-              >
-                {cls}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Subject Scroll */}
-        {selectedClass && (
-          <>
-            <Text className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1">
-              Select Subject
+          {/* DATE BUTTON (Triggers Modal) */}
+          <TouchableOpacity
+            onPress={() => setCalendarVisible(true)}
+            className="flex-row items-center bg-[#282C34] p-3 rounded-xl border border-[#4C5361] mb-4"
+          >
+            <Ionicons
+              name="calendar-outline"
+              size={18}
+              color="#f49b33"
+              className="mr-2"
+            />
+            <Text className="text-white font-semibold flex-1">
+              {getFormattedDate(currentDate)}
             </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              className="mb-2"
-            >
+            <Ionicons name="chevron-down" size={16} color="gray" />
+          </TouchableOpacity>
+
+          {/* CLASS SELECTOR */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="mb-3"
+          >
+            {uniqueClasses.map((cls) => (
+              <TouchableOpacity
+                key={cls}
+                onPress={() => handleClassChange(cls)}
+                className={`mr-3 px-5 py-2 rounded-xl border ${selectedClass === cls ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-[#4C5361]"}`}
+              >
+                <Text
+                  className={`font-bold ${selectedClass === cls ? "text-[#282C34]" : "text-gray-400"}`}
+                >
+                  {cls}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {selectedClass && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {availableSubjects.map((sub) => (
                 <TouchableOpacity
                   key={sub}
@@ -457,63 +630,39 @@ const TeacherAttendance = () => {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-          </>
-        )}
-      </View>
+          )}
+        </View>
 
-      {/* --- STATS & ACTIONS --- */}
-      {selectedClass && selectedSubject && !loading && (
-        <View className="px-5 flex-row justify-between items-center py-2 border-b border-[#4C5361]/50 mb-2">
+        {/* STUDENTS LIST */}
+        <View className="flex-row justify-between items-end mb-2 border-b border-[#4C5361]/50 pb-2 mx-1">
+          <Text className="text-white font-bold text-lg">Class Register</Text>
           <Text className="text-gray-400 text-xs">
-            Total Students:{" "}
-            <Text className="text-white font-bold">{students.length}</Text>
+            Total: {students.length}
           </Text>
-          {!isLocked && (
-            <TouchableOpacity
-              onPress={markAllPresent}
-              className="flex-row items-center"
-            >
-              <Text className="text-[#f49b33] text-xs font-bold mr-1">
-                Mark All Present
-              </Text>
-              <Ionicons
-                name="checkmark-done-circle"
-                size={16}
-                color="#f49b33"
-              />
-            </TouchableOpacity>
-          )}
         </View>
-      )}
 
-      {/* --- LIST --- */}
-      {loading || fetchingStudents ? (
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#f49b33" />
-          <Text className="text-gray-500 text-xs mt-2">
-            Loading Class Data...
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={students}
-          keyExtractor={(item) => item.id}
-          renderItem={renderStudent}
-          contentContainerStyle={{ padding: 20, paddingBottom: 150 }}
-          ListEmptyComponent={() => (
-            <View className="items-center mt-10 opacity-50">
-              <MaterialCommunityIcons
-                name="account-group"
-                size={60}
-                color="gray"
-              />
-              <Text className="text-gray-400 mt-2">
-                No students found for this subject.
-              </Text>
-            </View>
-          )}
-        />
-      )}
+        {fetchingStudents ? (
+          <ActivityIndicator color="#f49b33" className="mt-10" />
+        ) : (
+          <FlatList
+            data={students}
+            keyExtractor={(item) => item.id}
+            renderItem={renderStudentRow}
+            scrollEnabled={false}
+            ListEmptyComponent={() => (
+              <View className="items-center py-10 opacity-30">
+                <MaterialCommunityIcons
+                  name="account-off"
+                  size={50}
+                  color="gray"
+                />
+                <Text className="text-gray-400 mt-2">No students found.</Text>
+              </View>
+            )}
+          />
+        )}
+        <View className="h-32" />
+      </ScrollView>
 
       {/* --- SUBMIT / UNLOCK BUTTON --- */}
       {!loading && !fetchingStudents && students.length > 0 && (
@@ -529,9 +678,7 @@ const TeacherAttendance = () => {
                 color="#fff"
                 className="mr-2"
               />
-              <Text className="text-white font-bold ml-2">
-                Attendance Locked (Tap to Edit)
-              </Text>
+              <Text className="text-white font-bold ml-2">Unlock & Edit</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity

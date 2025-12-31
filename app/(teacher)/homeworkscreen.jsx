@@ -74,7 +74,6 @@ const TeacherHomework = () => {
   // --- 1. INITIAL FETCH ---
   useEffect(() => {
     let unsubscribeSnapshot;
-
     const init = async () => {
       try {
         const currentUser = auth().currentUser;
@@ -83,23 +82,19 @@ const TeacherHomework = () => {
           return;
         }
 
-        // A. Fetch Teacher Profile
         const userDoc = await firestore()
           .collection("users")
           .doc(currentUser.uid)
           .get();
-
         if (userDoc.exists) {
           const data = userDoc.data();
           const profile = data.teachingProfile || [];
-
           if (profile && profile.length > 0) {
             setTeachingProfile(profile);
             const classes = [...new Set(profile.map((item) => item.class))];
             setMyClasses(classes);
             if (classes.length > 0) handleClassChange(classes[0], profile);
           } else {
-            // Legacy Fallback
             const classes = data.classesTaught || [];
             const subjects = data.subjects || [];
             setMyClasses(classes);
@@ -112,7 +107,6 @@ const TeacherHomework = () => {
           }
         }
 
-        // B. Real-time History Listener
         unsubscribeSnapshot = firestore()
           .collection("homework")
           .where("teacherId", "==", currentUser.uid)
@@ -138,7 +132,6 @@ const TeacherHomework = () => {
         setLoading(false);
       }
     };
-
     init();
     return () => {
       if (unsubscribeSnapshot) unsubscribeSnapshot();
@@ -173,7 +166,6 @@ const TeacherHomework = () => {
         quality: 0.7,
         allowsEditing: true,
       };
-
       if (useCamera) {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (permission.granted === false) {
@@ -184,7 +176,6 @@ const TeacherHomework = () => {
       } else {
         result = await ImagePicker.launchImageLibraryAsync(options);
       }
-
       if (!result.canceled) {
         const asset = result.assets[0];
         const name = asset.uri.split("/").pop();
@@ -205,7 +196,6 @@ const TeacherHomework = () => {
         copyToCacheDirectory: true,
         multiple: true,
       });
-
       if (!result.canceled) {
         const newDocs = result.assets.map((doc) => ({
           uri: doc.uri,
@@ -224,32 +214,11 @@ const TeacherHomework = () => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // --- 4. UPLOAD & SUBMIT (FIXED) ---
   const uploadFile = async (uri, filename) => {
     const filePath = `homework_attachments/${auth().currentUser.uid}/${Date.now()}_${filename}`;
     const reference = storage().ref(filePath);
-
     await reference.putFile(uri);
-    const url = await reference.getDownloadURL();
-
-    // CRITICAL FIX: Ensure the URL path is properly encoded to avoid broken links
-    // If the URL has unencoded slashes in the path portion, we fix it here.
-    try {
-      if (url.includes("/o/")) {
-        const [baseUrl, rest] = url.split("/o/");
-        const questionMarkIndex = rest.indexOf("?");
-        if (questionMarkIndex !== -1) {
-          const path = rest.substring(0, questionMarkIndex);
-          const query = rest.substring(questionMarkIndex);
-          // decode first to remove any partial encoding, then encode properly
-          const encodedPath = encodeURIComponent(decodeURIComponent(path));
-          return `${baseUrl}/o/${encodedPath}${query}`;
-        }
-      }
-    } catch (e) {
-      console.log("URL sanitization error, returning original:", e);
-    }
-    return url;
+    return await reference.getDownloadURL();
   };
 
   const handleAssign = async () => {
@@ -257,24 +226,17 @@ const TeacherHomework = () => {
       showToast("Title, Class and Subject are required.", "error");
       return;
     }
-
     setUploading(true);
     try {
       const uploadedFiles = [];
       for (const file of attachments) {
         const url = await uploadFile(file.uri, file.name);
-        uploadedFiles.push({
-          name: file.name,
-          url: url,
-          type: file.type,
-        });
+        uploadedFiles.push({ name: file.name, url: url, type: file.type });
       }
-
       const docData = {
         title: title.trim(),
         description: description.trim(),
         attachments: uploadedFiles,
-        // Legacy support
         link: uploadedFiles.length > 0 ? uploadedFiles[0].url : "",
         attachmentName: uploadedFiles.length > 0 ? uploadedFiles[0].name : "",
         fileType: uploadedFiles.length > 0 ? uploadedFiles[0].type : "none",
@@ -284,9 +246,7 @@ const TeacherHomework = () => {
         dueDate: formatDate(new Date()),
         createdAt: firestore.FieldValue.serverTimestamp(),
       };
-
       await firestore().collection("homework").add(docData);
-
       showToast("Homework assigned successfully!", "success");
       setTitle("");
       setDescription("");
@@ -299,16 +259,18 @@ const TeacherHomework = () => {
     }
   };
 
+  // --- DELETE FUNCTION WITH STORAGE CLEANUP ---
   const handleDelete = (id) => {
     setAlertConfig({
       visible: true,
       title: "Delete Assignment?",
-      message: "This will remove the homework for students.",
+      message: "This will permanently remove the homework for everyone.",
       confirmText: "Delete",
       type: "warning",
       onConfirm: async () => {
         setAlertConfig((prev) => ({ ...prev, visible: false }));
         try {
+          // JUST DELETE THE DOC. The Cloud Function does the rest.
           await firestore().collection("homework").doc(id).delete();
           showToast("Deleted successfully", "success");
         } catch (e) {
@@ -320,7 +282,6 @@ const TeacherHomework = () => {
 
   const openAttachment = (docId, attachmentIndex, fileName, fileType) => {
     if (!docId) return showToast("Invalid file reference", "error");
-
     router.push({
       pathname: "/(teacher)/view_attachment",
       params: {
@@ -338,7 +299,6 @@ const TeacherHomework = () => {
       (item.link
         ? [{ name: item.attachmentName, url: item.link, type: item.fileType }]
         : []);
-
     return (
       <View
         className={`${theme.card} p-4 rounded-2xl mb-4 border ${theme.borderColor} shadow-sm`}
@@ -366,15 +326,13 @@ const TeacherHomework = () => {
               </Text>
             ) : null}
           </View>
-
           <TouchableOpacity
-            onPress={() => handleDelete(item.id)}
+            onPress={() => handleDelete(item.id)} // <--- Pass ID only
             className="p-2 mb-2 bg-red-500/10 rounded-lg"
           >
             <Ionicons name="trash-outline" size={18} color="#ef4444" />
           </TouchableOpacity>
         </View>
-
         {displayAttachments.length > 0 && (
           <ScrollView
             horizontal
@@ -405,7 +363,6 @@ const TeacherHomework = () => {
             ))}
           </ScrollView>
         )}
-
         <View className="mt-2 items-end flex-row justify-end items-center">
           <Text className="text-gray-500 text-[10px]">{item.dueDate}</Text>
         </View>
@@ -413,7 +370,7 @@ const TeacherHomework = () => {
     );
   };
 
-  if (loading) {
+  if (loading)
     return (
       <SafeAreaView
         className={`flex-1 ${theme.bg} justify-center items-center`}
@@ -421,7 +378,6 @@ const TeacherHomework = () => {
         <ActivityIndicator size="large" color="#f49b33" />
       </SafeAreaView>
     );
-  }
 
   return (
     <SafeAreaView className={`flex-1 ${theme.bg}`}>
@@ -441,7 +397,6 @@ const TeacherHomework = () => {
         onConfirm={alertConfig.onConfirm}
         onCancel={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
       />
-
       <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => router.back()}
@@ -452,7 +407,6 @@ const TeacherHomework = () => {
         <Text className="text-white text-xl font-bold">Homework</Text>
         <View className="w-10" />
       </View>
-
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
@@ -490,7 +444,6 @@ const TeacherHomework = () => {
                 </Text>
               )}
             </ScrollView>
-
             {selectedClass && (
               <>
                 <Text className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1">
@@ -518,7 +471,6 @@ const TeacherHomework = () => {
               </>
             )}
           </View>
-
           <View
             className={`${theme.card} p-4 rounded-3xl border ${theme.borderColor} mb-6`}
           >
@@ -527,7 +479,6 @@ const TeacherHomework = () => {
                 New Assignment
               </Text>
             </View>
-
             <TextInput
               placeholder="Title (e.g. Chapter 5 Summary)"
               placeholderTextColor="#666"
@@ -535,7 +486,6 @@ const TeacherHomework = () => {
               onChangeText={setTitle}
               className="bg-[#282C34] text-white p-3 rounded-xl border border-[#4C5361] mb-3 font-bold"
             />
-
             <TextInput
               placeholder="Description (Optional)"
               placeholderTextColor="#666"
@@ -546,7 +496,6 @@ const TeacherHomework = () => {
               style={{ textAlignVertical: "top" }}
               className="bg-[#282C34] text-white p-3 rounded-xl border border-[#4C5361] mb-4 text-sm"
             />
-
             <View className="flex-row justify-between mb-4 mt-2">
               <TouchableOpacity
                 onPress={() => pickImage(true)}
@@ -574,7 +523,6 @@ const TeacherHomework = () => {
                 <Text className="text-white font-bold text-xs mt-1">PDF</Text>
               </TouchableOpacity>
             </View>
-
             {attachments.length > 0 && (
               <View className="mb-4">
                 <Text className="text-gray-400 text-[10px] uppercase mb-2 ml-1">
@@ -622,7 +570,6 @@ const TeacherHomework = () => {
                 </ScrollView>
               </View>
             )}
-
             <TouchableOpacity
               onPress={handleAssign}
               disabled={uploading}
@@ -645,7 +592,6 @@ const TeacherHomework = () => {
               )}
             </TouchableOpacity>
           </View>
-
           <View className="flex-row items-center mb-4">
             <MaterialCommunityIcons
               name="history"
@@ -657,7 +603,6 @@ const TeacherHomework = () => {
               Recent Assignments
             </Text>
           </View>
-
           <FlatList
             data={history}
             keyExtractor={(item) => item.id}

@@ -307,9 +307,9 @@ const StudentDashboard = () => {
     { id: "4", name: "Test Scores", icon: "bar-chart", route: "/testscores" },
     {
       id: "5",
-      name: "Apply Leave",
+      name: "Submit Leave",
       icon: "document-text",
-      route: "/applyleaves",
+      route: "/submitleaves",
     },
     { id: "6", name: "Class Notes", icon: "pencil", route: "/classnotes" },
   ];
@@ -513,20 +513,15 @@ const StudentDashboard = () => {
                   className="w-full h-full"
                 />
               ) : (
-                <Text className="text-white text-xl font-bold">
+                <Text className="text-white text-lg font-bold">
                   {studentData?.name ? studentData.name.charAt(0) : "S"}
                 </Text>
               )}
             </View>
           </TouchableOpacity>
           <View className="flex-1">
-            <Text className={`${theme.text} text-lg font-bold`}>
+            <Text className={`${theme.text} text-2xl font-bold`}>
               {studentData?.name || "Student"}
-            </Text>
-            <Text className={`${theme.subText} text-sm`}>
-              {studentData?.standard
-                ? `${studentData.standard} - ${studentData.stream || ""}`
-                : ""}
             </Text>
           </View>
           <TouchableOpacity onPress={() => setLogoutAlertVisible(true)}>

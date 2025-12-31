@@ -5,6 +5,8 @@ import {
   StatusBar,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
+  StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -112,61 +114,55 @@ const ViewAttachment = () => {
     console.log("ViewAttachment - urlToShow:", urlToShow);
   }, [urlToShow]);
 
-    const isInvalid = !rawUrl && !params.docId;
+  const isInvalid = !rawUrl && !params.docId;
+
   return (
-    <View style={{ flex: 1, backgroundColor: "#000" }}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       {/* HEADER */}
-      <SafeAreaView>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            padding: 12,
-            justifyContent: "space-between",
-            backgroundColor: "#111",
-            marginTop: StatusBar.currentHeight || 0,
-          }}
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
         >
-          <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
 
-          <Text
-            style={{
-              color: "#fff",
-              fontWeight: "bold",
-              flex: 1,
-              marginLeft: 12,
-            }}
-            numberOfLines={1}
-          >
-            {fileTitle}
-          </Text>
-        </View>
-      </SafeAreaView>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {fileTitle}
+        </Text>
+        <View style={{ width: 24 }} />
+      </View>
 
-      {/* CONTENT */}
-      {/* CONTENT */}
-      <View style={{ flex: 1 }}>
+      {/* CONTENT AREA */}
+      <View style={styles.content}>
         {isInvalid ? (
-          <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-              backgroundColor: "#000",
-            }}
-          >
-            <Text style={{ color: "white" }}>Invalid file URL</Text>
+          <View style={styles.centerContainer}>
+            <Ionicons name="alert-circle-outline" size={48} color="#FF5252" />
+            <Text style={styles.errorText}>Invalid File URL</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.centerContainer}>
+            <Ionicons name="warning-outline" size={48} color="#FF5252" />
+            <Text style={styles.errorText}>Failed to load file</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setError(false);
+                setLoading(true);
+                // Trigger re-render/re-fetch trick could go here
+              }}
+              style={styles.retryButton}
+            >
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <>
             {fileType === "image" && urlToShow && (
               <Image
                 source={{ uri: urlToShow }}
-                style={{ width: "100%", height: "100%" }}
+                style={styles.fullScreen}
                 resizeMode="contain"
                 onLoadStart={() => setLoading(true)}
                 onLoadEnd={() => setLoading(false)}
@@ -180,7 +176,7 @@ const ViewAttachment = () => {
             {fileType === "pdf" && urlToShow && (
               <Pdf
                 source={{ uri: urlToShow, cache: true }}
-                style={{ flex: 1 }}
+                style={styles.fullScreen}
                 trustAllCerts={false}
                 onLoadComplete={() => setLoading(false)}
                 onError={(err) => {
@@ -190,11 +186,82 @@ const ViewAttachment = () => {
                 }}
               />
             )}
+
+            {loading && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color="#f49b33" />
+              </View>
+            )}
           </>
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#333",
+    backgroundColor: "#111",
+  },
+  backButton: {
+    padding: 4,
+  },
+  headerTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+    flex: 1,
+    textAlign: "center",
+    marginHorizontal: 10,
+  },
+  content: {
+    flex: 1,
+    backgroundColor: "#000",
+    position: "relative",
+  },
+  fullScreen: {
+    width: "100%",
+    height: "100%",
+    flex: 1,
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorText: {
+    color: "#FF5252",
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  retryButton: {
+    marginTop: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    backgroundColor: "#333",
+    borderRadius: 8,
+  },
+  retryText: {
+    color: "#fff",
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});
 
 export default ViewAttachment;

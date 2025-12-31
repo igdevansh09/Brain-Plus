@@ -230,9 +230,9 @@ const AdminDashboard = () => {
     },
     {
       id: "7",
-      name: "Teacher Leaves",
+      name: "Leaves",
       icon: "calendar-outline",
-      route: "/(admin)/teacher_leaves",
+      route: "/(admin)/all_leaves",
     },
     {
       id: "8",
@@ -385,10 +385,9 @@ const AdminDashboard = () => {
               {renderAvatar("small")}
             </TouchableOpacity>
             <View className="ml-4">
-              <Text className={`${theme.text} text-xl font-bold`}>
+              <Text className={`${theme.text} text-2xl font-bold`}>
                 {adminData?.name || "Admin"}
               </Text>
-              <Text className={`${theme.subText} text-xs`}>Administrator</Text>
             </View>
           </View>
           <TouchableOpacity

@@ -10,7 +10,6 @@ import {
   ScrollView,
   Modal,
   FlatList,
-  Alert, // Added Alert for delete confirmation
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -190,23 +189,42 @@ const ManageContent = () => {
     }
   };
 
-  const handleDeleteBanner = (id) => {
-    Alert.alert("Delete Banner", "This cannot be undone", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await firestore().collection("banners").doc(id).delete();
-            showToast("Banner deleted");
-            fetchBanners();
-          } catch (e) {
-            showToast("Delete failed", "error");
-          }
-        },
-      },
-    ]);
+  // --- NEW: Logic to actually delete the banner and image
+  const performBannerDelete = async (id, imageUrl) => {
+    setAlertVisible(false); // Close the popup
+    try {
+      // 1. Delete image from Storage (if exists)
+      if (imageUrl) {
+        try {
+          await storage().refFromURL(imageUrl).delete();
+          console.log("Image deleted from storage");
+        } catch (storageErr) {
+          console.warn(
+            "Storage delete failed (file might be missing):",
+            storageErr
+          );
+        }
+      }
+
+      // 2. Delete document from Firestore
+      await firestore().collection("banners").doc(id).delete();
+
+      showToast("Banner deleted");
+      fetchBanners();
+    } catch (e) {
+      console.error(e);
+      showToast("Delete failed", "error");
+    }
+  };
+
+  // --- UPDATED: Triggers the CustomAlert instead of Alert.alert
+  const handleDeleteBanner = (id, imageUrl) => {
+    setAlertTitle("Delete Banner");
+    setAlertMessage("This cannot be undone.");
+    setAlertType("warning");
+    // Pass the function that triggers the delete
+    setAlertConfirmAction(() => () => performBannerDelete(id, imageUrl));
+    setAlertVisible(true);
   };
 
   // --- 2. SUBJECT LOGIC (Existing) ---
@@ -549,7 +567,7 @@ const ManageContent = () => {
                     : "Just now"}
                 </Text>
                 <TouchableOpacity
-                  onPress={() => handleDeleteBanner(item.id)}
+                  onPress={() => handleDeleteBanner(item.id, item.imageUrl)} // <--- NEW LINE
                   className="bg-red-500/10 p-2 rounded-lg"
                 >
                   <Ionicons name="trash-outline" size={20} color="#ef4444" />
@@ -830,6 +848,6 @@ const ManageContent = () => {
       </Modal>
     </SafeAreaView>
   );
-};
+};;
 
 export default ManageContent;

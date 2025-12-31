@@ -306,12 +306,13 @@ const TeacherNotesUploader = () => {
     setAlertConfig({
       visible: true,
       title: "Delete Material?",
-      message: "This will remove the file from student access.",
+      message: "This will permanently remove the notes for everyone.",
       confirmText: "Delete",
       type: "warning",
       onConfirm: async () => {
         setAlertConfig((prev) => ({ ...prev, visible: false }));
         try {
+          // JUST DELETE THE DOC.
           await firestore().collection("materials").doc(id).delete();
           showToast("Deleted successfully", "success");
         } catch (e) {
@@ -372,7 +373,7 @@ const TeacherNotesUploader = () => {
           </View>
 
           <TouchableOpacity
-            onPress={() => handleDelete(item.id)}
+            onPress={() => handleDelete(item.id)} // <--- Pass ID only
             className="p-2 mb-2 bg-red-500/10 rounded-lg"
           >
             <Ionicons name="trash-outline" size={18} color="#ef4444" />

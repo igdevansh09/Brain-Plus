@@ -21,6 +21,7 @@ import firestore from "@react-native-firebase/firestore";
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
 import functions from "@react-native-firebase/functions";
+import ScreenWrapper from "../../components/ScreenWrapper";
 
 // --- CONSTANTS ---
 const CLASS_OPTIONS = [
@@ -145,30 +146,19 @@ const ManageStudents = () => {
     return () => unsubscribe();
   }, [viewMode]);
 
-  // --- 2. EDIT LOGIC ---
-  useEffect(() => {
-    if (!editModalVisible) return;
-
-    if (editClass === "CS") {
-      setEditStream("N/A");
-      setEditSubjects(["N/A"]);
-      setAvailableSubjects([]);
-    } else if (["Prep", "1st", "2nd", "3rd"].includes(editClass)) {
-      setEditStream("N/A");
-      setEditSubjects(["All Subjects"]);
-      setAvailableSubjects([]);
-    } else if (
-      ["4th", "5th", "6th", "7th", "8th", "9th", "10th"].includes(editClass)
-    ) {
-      setEditStream("N/A");
-      setAvailableSubjects(SUB_GENERAL);
-    } else if (["11th", "12th"].includes(editClass)) {
-      if (editStream === "Science") setAvailableSubjects(SUB_SCIENCE);
-      else if (editStream === "Commerce") setAvailableSubjects(SUB_COMMERCE);
-      else if (editStream === "Arts") setAvailableSubjects(SUB_ARTS);
-      else setAvailableSubjects([]);
+  // --- HELPER: Determine Subjects ---
+  const getSubjectsList = (cls, stream) => {
+    if (cls === "CS") return [];
+    if (["Prep", "1st", "2nd", "3rd"].includes(cls)) return [];
+    if (["4th", "5th", "6th", "7th", "8th", "9th", "10th"].includes(cls))
+      return SUB_GENERAL;
+    if (["11th", "12th"].includes(cls)) {
+      if (stream === "Science") return SUB_SCIENCE;
+      if (stream === "Commerce") return SUB_COMMERCE;
+      if (stream === "Arts") return SUB_ARTS;
     }
-  }, [editClass, editStream, editModalVisible]);
+    return [];
+  };
 
   const toggleSubject = (subject) => {
     setEditSubjects((prev) => {
@@ -187,11 +177,52 @@ const ManageStudents = () => {
     setEditingId(student.id);
     setEditName(student.name);
     setEditPhone(student.phone || "");
-    setEditClass(student.standard || student.studentClass || "");
-    setEditStream(student.stream || "N/A");
+
+    // Set Fields & Calculate Initial Available Subjects
+    const cls = student.standard || student.studentClass || "";
+    const strm = student.stream || "N/A";
+
+    setEditClass(cls);
+    setEditStream(strm);
     setEditSubjects(student.enrolledSubjects || []);
     setEditFee(student.monthlyFeeAmount || "");
+
+    setAvailableSubjects(getSubjectsList(cls, strm));
+
     setEditModalVisible(true);
+  };
+
+  const handleSelection = (type, value) => {
+    if (type === "class") {
+      setEditClass(value);
+
+      // Reset logic based on new class
+      if (value === "CS") {
+        setEditStream("N/A");
+        setEditSubjects(["N/A"]);
+        setAvailableSubjects([]);
+      } else if (["Prep", "1st", "2nd", "3rd"].includes(value)) {
+        setEditStream("N/A");
+        setEditSubjects(["All Subjects"]);
+        setAvailableSubjects([]);
+      } else if (
+        ["4th", "5th", "6th", "7th", "8th", "9th", "10th"].includes(value)
+      ) {
+        setEditStream("N/A");
+        setEditSubjects([]);
+        setAvailableSubjects(SUB_GENERAL);
+      } else if (["11th", "12th"].includes(value)) {
+        setEditStream("N/A"); // Force user to re-select stream
+        setEditSubjects([]);
+        setAvailableSubjects([]);
+      }
+      setActiveModalType(null);
+    } else if (type === "stream") {
+      setEditStream(value);
+      setEditSubjects([]);
+      setAvailableSubjects(getSubjectsList(editClass, value));
+      setActiveModalType(null);
+    }
   };
 
   const handleUpdateStudent = async () => {
@@ -233,10 +264,8 @@ const ManageStudents = () => {
   const performDelete = async (id) => {
     setAlert({ ...alert, visible: false });
     try {
-      // Calls a Cloud Function to delete from Auth & Firestore
       const deleteUserFn = functions().httpsCallable("deleteTargetUser");
       await deleteUserFn({ targetUid: id });
-
       showToast("Student deleted.", "success");
     } catch (error) {
       console.error("Delete error:", error);
@@ -270,12 +299,10 @@ const ManageStudents = () => {
     );
   });
 
-  // --- RENDER LIST ITEM ---
   const renderStudent = ({ item }) => (
     <View
       className={`${theme.card} p-4 rounded-xl mb-3 flex-row items-center border ${theme.borderColor} shadow-sm`}
     >
-      {/* 1. Avatar */}
       <TouchableOpacity
         onPress={() => {
           setSelectedStudent(item);
@@ -296,8 +323,6 @@ const ManageStudents = () => {
           </View>
         )}
       </TouchableOpacity>
-
-      {/* 2. Info */}
       <TouchableOpacity
         style={{ flex: 1 }}
         onPress={() => {
@@ -309,8 +334,6 @@ const ManageStudents = () => {
           {item.name}
         </Text>
       </TouchableOpacity>
-
-      {/* 3. Actions */}
       <View className="flex-row gap-2 ml-2">
         <TouchableOpacity
           onPress={() => handleCall(item.phone)}
@@ -318,7 +341,6 @@ const ManageStudents = () => {
         >
           <Ionicons name="call" size={18} color="#3b82f6" />
         </TouchableOpacity>
-
         {viewMode === "pending" ? (
           <TouchableOpacity
             onPress={() => initiateApproval(item)}
@@ -334,7 +356,6 @@ const ManageStudents = () => {
             <Ionicons name="pencil" size={18} color="#eab308" />
           </TouchableOpacity>
         )}
-
         <TouchableOpacity
           onPress={() => handleDelete(item.id)}
           className="bg-red-500/10 p-2 rounded-lg"
@@ -346,10 +367,7 @@ const ManageStudents = () => {
   );
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg} pt-2`}>
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
-
-      {/* --- ALERTS & TOASTS --- */}
+    <ScreenWrapper scrollable={false}>
       <CustomAlert
         visible={alert.visible}
         title={alert.title}
@@ -366,7 +384,6 @@ const ManageStudents = () => {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      {/* --- HEADER --- */}
       <View className="px-4 py-4 flex-row items-center">
         <TouchableOpacity
           onPress={() => router.back()}
@@ -377,7 +394,6 @@ const ManageStudents = () => {
         <Text className={`${theme.text} text-2xl font-bold`}>Students</Text>
       </View>
 
-      {/* --- SEARCH --- */}
       <View className="px-4 mb-4">
         <View
           className={`flex-row items-center ${theme.card} rounded-xl px-4 py-3 border ${theme.borderColor}`}
@@ -393,7 +409,6 @@ const ManageStudents = () => {
         </View>
       </View>
 
-      {/* --- TABS --- */}
       <View className="flex-row px-4 mb-4">
         <TouchableOpacity
           onPress={() => setViewMode("active")}
@@ -417,7 +432,6 @@ const ManageStudents = () => {
         </TouchableOpacity>
       </View>
 
-      {/* --- LIST --- */}
       {loading ? (
         <ActivityIndicator size="large" color="#f49b33" className="mt-10" />
       ) : (
@@ -442,129 +456,124 @@ const ManageStudents = () => {
         transparent
         onRequestClose={() => setEditModalVisible(false)}
       >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-      >
-        <View className="flex-1 bg-black/80 justify-end">
-          <View
-            className={`${theme.card} rounded-t-3xl p-6 h-[85%] border-t ${theme.borderColor}`}
-          >
-            <View className="flex-row justify-between items-center mb-6">
-              <Text className={`${theme.text} text-xl font-bold`}>
-                Edit Student
-              </Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <Ionicons name="close" size={24} color="gray" />
-              </TouchableOpacity>
-            </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
+        >
+          <View className="flex-1 bg-black/80 justify-end">
+            <View
+              className={`${theme.card} rounded-t-3xl p-6 h-[85%] border-t ${theme.borderColor}`}
+            >
+              <View className="flex-row justify-between items-center mb-6">
+                <Text className={`${theme.text} text-xl font-bold`}>
+                  Edit Student
+                </Text>
+                <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+                  <Ionicons name="close" size={24} color="gray" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text
+                  className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
+                >
+                  Full Name
+                </Text>
+                <TextInput
+                  value={editName}
+                  onChangeText={setEditName}
+                  className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-4 border ${theme.borderColor}`}
+                />
+                <Text
+                  className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
+                >
+                  Phone
+                </Text>
+                <TextInput
+                  value={editPhone}
+                  onChangeText={setEditPhone}
+                  keyboardType="phone-pad"
+                  className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-4 border ${theme.borderColor}`}
+                />
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Basic Info */}
-              <Text
-                className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
-              >
-                Full Name
-              </Text>
-              <TextInput
-                value={editName}
-                onChangeText={setEditName}
-                className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-4 border ${theme.borderColor}`}
-              />
-
-              <Text
-                className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
-              >
-                Phone
-              </Text>
-              <TextInput
-                value={editPhone}
-                onChangeText={setEditPhone}
-                keyboardType="phone-pad"
-                className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-4 border ${theme.borderColor}`}
-              />
-
-              {/* Class & Stream */}
-              <View className="flex-row gap-4 mb-4">
-                <View className="flex-1">
-                  <Text
-                    className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
-                  >
-                    Class
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setActiveModalType("class")}
-                    className={`${theme.bg} p-4 rounded-xl border ${theme.borderColor}`}
-                  >
-                    <Text className={theme.text}>{editClass || "Select"}</Text>
-                  </TouchableOpacity>
-                </View>
-                {["11th", "12th"].includes(editClass) && (
+                <View className="flex-row gap-4 mb-4">
                   <View className="flex-1">
                     <Text
                       className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
                     >
-                      Stream
+                      Class
                     </Text>
                     <TouchableOpacity
-                      onPress={() => setActiveModalType("stream")}
+                      onPress={() => setActiveModalType("class")}
                       className={`${theme.bg} p-4 rounded-xl border ${theme.borderColor}`}
                     >
                       <Text className={theme.text}>
-                        {editStream || "Select"}
+                        {editClass || "Select"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  {["11th", "12th"].includes(editClass) && (
+                    <View className="flex-1">
+                      <Text
+                        className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
+                      >
+                        Stream
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => setActiveModalType("stream")}
+                        className={`${theme.bg} p-4 rounded-xl border ${theme.borderColor}`}
+                      >
+                        <Text className={theme.text}>
+                          {editStream || "Select"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+
+                {availableSubjects.length > 0 && (
+                  <View className="mb-4">
+                    <Text
+                      className={`${theme.accent} mb-2 text-xs uppercase font-bold`}
+                    >
+                      Subjects
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setActiveModalType("subject")}
+                      className={`${theme.bg} p-4 rounded-xl border ${theme.borderColor}`}
+                    >
+                      <Text className={theme.text} numberOfLines={1}>
+                        {editSubjects.length
+                          ? editSubjects.join(", ")
+                          : "Select Subjects"}
                       </Text>
                     </TouchableOpacity>
                   </View>
                 )}
-              </View>
 
-              {/* Subjects (Conditional) */}
-              {availableSubjects.length > 0 && (
-                <View className="mb-4">
-                  <Text
-                    className={`${theme.accent} mb-2 text-xs uppercase font-bold`}
-                  >
-                    Subjects
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setActiveModalType("subject")}
-                    className={`${theme.bg} p-4 rounded-xl border ${theme.borderColor}`}
-                  >
-                    <Text className={theme.text} numberOfLines={1}>
-                      {editSubjects.length
-                        ? editSubjects.join(", ")
-                        : "Select Subjects"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Fee */}
-              <Text
-                className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
-              >
-                Monthly Fee (₹)
-              </Text>
-              <TextInput
-                value={editFee}
-                onChangeText={setEditFee}
-                keyboardType="numeric"
-                className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-8 font-bold text-lg border ${theme.borderColor}`}
-              />
-
-              <TouchableOpacity
-                onPress={handleUpdateStudent}
-                className={`${theme.accentBg} p-4 rounded-xl items-center mb-6`}
-              >
-                <Text className="text-[#282C34] font-bold text-lg">
-                  Save Changes
+                <Text
+                  className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
+                >
+                  Monthly Fee (₹)
                 </Text>
-              </TouchableOpacity>
-            </ScrollView>
+                <TextInput
+                  value={editFee}
+                  onChangeText={setEditFee}
+                  keyboardType="numeric"
+                  className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-8 font-bold text-lg border ${theme.borderColor}`}
+                />
+                <TouchableOpacity
+                  onPress={handleUpdateStudent}
+                  className={`${theme.accentBg} p-4 rounded-xl items-center mb-6`}
+                >
+                  <Text className="text-[#282C34] font-bold text-lg">
+                    Save Changes
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
           </View>
-        </View>
-      </KeyboardAvoidingView>
-        </Modal>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* --- SELECTION MODAL --- */}
       <Modal
@@ -599,13 +608,11 @@ const ManageStudents = () => {
                 return (
                   <TouchableOpacity
                     onPress={() => {
-                      if (activeModalType === "class") {
-                        setEditClass(item);
-                        setActiveModalType(null);
-                      } else if (activeModalType === "stream") {
-                        setEditStream(item);
-                        setActiveModalType(null);
-                      } else toggleSubject(item);
+                      if (activeModalType === "class")
+                        handleSelection("class", item);
+                      else if (activeModalType === "stream")
+                        handleSelection("stream", item);
+                      else toggleSubject(item);
                     }}
                     className={`p-4 border-b ${theme.borderColor} flex-row justify-between ${isSelected ? "bg-[#f49b33]/20" : ""}`}
                   >
@@ -631,7 +638,7 @@ const ManageStudents = () => {
         </View>
       </Modal>
 
-      {/* --- APPROVE MODAL --- */}
+      {/* --- APPROVE & DETAIL MODALS REMAIN THE SAME --- */}
       <Modal
         visible={approveModalVisible}
         transparent
@@ -648,7 +655,6 @@ const ManageStudents = () => {
             <Text className={theme.subText + " mb-6"}>
               Confirm verifying {selectedStudent?.name}.
             </Text>
-
             <Text
               className={`${theme.accent} mb-1 text-xs uppercase font-bold`}
             >
@@ -660,7 +666,6 @@ const ManageStudents = () => {
               keyboardType="numeric"
               className={`${theme.bg} ${theme.text} p-4 rounded-xl mb-6 font-bold text-lg border ${theme.borderColor}`}
             />
-
             <View className="flex-row gap-4">
               <TouchableOpacity
                 onPress={() => setApproveModalVisible(false)}
@@ -678,8 +683,6 @@ const ManageStudents = () => {
           </View>
         </View>
       </Modal>
-
-      {/* --- DETAIL MODAL --- */}
       <Modal
         visible={detailModalVisible}
         transparent
@@ -696,9 +699,7 @@ const ManageStudents = () => {
             >
               <Ionicons name="close" size={24} color="gray" />
             </TouchableOpacity>
-
             <View className="items-center mb-6">
-              {/* AVATAR IN DETAIL VIEW */}
               {selectedStudent?.profileImage ? (
                 <Image
                   source={{ uri: selectedStudent.profileImage }}
@@ -711,13 +712,11 @@ const ManageStudents = () => {
                   </Text>
                 </View>
               )}
-
               <Text className={`${theme.text} text-2xl font-bold`}>
                 {selectedStudent?.name}
               </Text>
               <Text className={theme.subText}>{selectedStudent?.phone}</Text>
             </View>
-
             <View
               className={`${theme.bg} p-4 rounded-xl mb-4 border ${theme.borderColor}`}
             >
@@ -744,7 +743,6 @@ const ManageStudents = () => {
                 {selectedStudent?.enrolledSubjects?.join(", ")}
               </Text>
             </View>
-
             <View
               className={`${theme.bg} p-4 rounded-xl border ${theme.borderColor}`}
             >
@@ -758,7 +756,7 @@ const ManageStudents = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 

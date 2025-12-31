@@ -110,23 +110,6 @@ const ManageNotices = () => {
     }
   };
 
-  const handleDelete = (id) => {
-    setAlert({
-      visible: true,
-      title: "Delete Notice?",
-      msg: "This action cannot be undone.",
-      onConfirm: async () => {
-        setAlert({ ...alert, visible: false });
-        try {
-          await firestore().collection("notices").doc(id).delete();
-          showToast("Notice deleted.", "success");
-        } catch (error) {
-          showToast("Delete failed.", "error");
-        }
-      },
-    });
-  };
-
   const renderNotice = ({ item }) => (
     <View
       className={`${theme.card} p-5 rounded-2xl mb-4 border ${theme.borderColor} shadow-sm`}
@@ -144,12 +127,6 @@ const ManageNotices = () => {
           </View>
           <Text className="text-gray-400 text-xs mb-3 italic">{item.date}</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => handleDelete(item.id)}
-          className="p-2 bg-red-500/10 rounded-xl border border-red-500/30"
-        >
-          <Ionicons name="trash-outline" size={20} color="#ef4444" />
-        </TouchableOpacity>
       </View>
 
       <View className="bg-[#282C34] p-3 rounded-xl border border-[#4C5361]/50">

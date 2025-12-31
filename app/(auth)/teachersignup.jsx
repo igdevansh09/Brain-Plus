@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 import CustomToast from "../../components/CustomToast";
+import messaging from "@react-native-firebase/messaging";
 
 // --- CONSTANTS ---
 const ALL_CLASSES = [
@@ -161,15 +162,22 @@ const TeacherSignUp = () => {
     Keyboard.dismiss();
     if (otp.length !== 6) return showToast("Enter 6-digit OTP", "error");
     setLoading(true);
+
     try {
       const res = await confirmResult.confirm(otp);
       const uid = res.user.uid;
 
-      // Flatten data for easier querying if needed, or keep structured
-      // We will save the structured `entries` array directly.
-      // We also derive simple arrays for backward compatibility / easy searching
+      // 2. FETCH THE TOKEN
+      let fcmToken = "";
+      try {
+        fcmToken = await messaging().getToken();
+      } catch (e) {
+        console.log("Failed to get FCM token", e);
+      }
+
       const distinctClasses = [...new Set(entries.map((e) => e.class))];
 
+      // 3. SAVE IT
       await firestore()
         .collection("users")
         .doc(uid)
@@ -177,10 +185,11 @@ const TeacherSignUp = () => {
           name: name.trim(),
           phone: `+91${phone}`,
           role: "teacher",
-          teachingProfile: entries, // The structured pairs
-          classesTaught: distinctClasses, // Helper array for search
+          teachingProfile: entries,
+          classesTaught: distinctClasses,
           verified: false,
           salary: "0",
+          fcmToken: fcmToken, // <--- CRITICAL ADDITION
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
 

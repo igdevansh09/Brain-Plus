@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
-import { View, ActivityIndicator, LogBox } from "react-native";
+import { View, ActivityIndicator } from "react-native";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import "../global.css";
 import { ToastProvider } from "../context/ToastContext";
@@ -22,7 +22,6 @@ const InitialLayout = () => {
   const { user, userRole, loading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
-  const [ready, setReady] = useState(false);
 
   // --- Notifications Setup ---
   useEffect(() => {
@@ -40,36 +39,46 @@ const InitialLayout = () => {
   }, []);
 
   // --- Routing Logic ---
+  // --- Routing Logic ---
   useEffect(() => {
     if (loading) return;
-    // Run routing logic, then mark layout as ready to render screens
+
     const inAuthGroup = segments[0] === "(auth)";
     const inAdminGroup = segments[0] === "(admin)";
     const inTeacherGroup = segments[0] === "(teacher)";
     const inStudentGroup = segments[0] === "(student)";
 
-    const inProtectedRoute = inAdminGroup || inTeacherGroup || inStudentGroup;
+    // Check if user is on the landing page or login options
+    const inPublicArea =
+      segments.length === 0 ||
+      segments[0] === "index" ||
+      segments[0] === "login_options";
 
     if (user && userRole) {
-      // --- LOGGED IN & AUTHORIZED ---
+      // --- LOGGED IN ---
 
+      // 1. Admin Redirect
       if (userRole === "admin" && !inAdminGroup) {
         router.replace("/(admin)/admindashboard");
-      } else if (userRole === "teacher" && !inTeacherGroup) {
+      }
+      // 2. Teacher Redirect
+      else if (userRole === "teacher" && !inTeacherGroup) {
         router.replace("/(teacher)/teacherdashboard");
-      } else if (userRole === "student" && !inStudentGroup) {
+      }
+      // 3. Student Redirect
+      else if (userRole === "student" && !inStudentGroup) {
         router.replace("/(student)/studentdashboard");
       }
-    } else {
-      // --- NOT LOGGED IN / NOT VERIFIED ---
-      if (inProtectedRoute) {
+    } else if (!user) {
+      // --- NOT LOGGED IN ---
+      // If they are in a protected area, kick them out
+      if (inAdminGroup || inTeacherGroup || inStudentGroup) {
         router.replace("/");
       }
     }
-    setReady(true);
   }, [user, userRole, loading, segments]);
 
-  if (loading || !ready) {
+  if (loading) {
     return (
       <View className="flex-1 bg-[#282C34] justify-center items-center">
         <ActivityIndicator size="large" color="#f49b33" />
@@ -91,7 +100,7 @@ const InitialLayout = () => {
       </Stack>
     </ToastProvider>
   );
-};
+};;
 
 export default function RootLayout() {
   return (

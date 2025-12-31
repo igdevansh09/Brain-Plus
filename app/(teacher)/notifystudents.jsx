@@ -35,14 +35,13 @@ const TeacherClassUpdates = () => {
   // Selections
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedSubject, setSelectedSubject] = useState(null);
-  const [selectedTag, setSelectedTag] = useState("General"); // Quick Tag
+  const [selectedTag, setSelectedTag] = useState("General");
 
   // Form
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [teacherName, setTeacherName] = useState("");
 
-  // Toast
   const [toast, setToast] = useState({
     visible: false,
     msg: "",
@@ -50,6 +49,7 @@ const TeacherClassUpdates = () => {
   });
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
+
   const theme = {
     bg: "bg-[#282C34]",
     card: "bg-[#333842]",
@@ -60,14 +60,13 @@ const TeacherClassUpdates = () => {
     send: "#f49b33",
   };
 
-  // --- 1. FETCH PROFILE & HISTORY ---
+  // --- 1. FETCH PROFILE (ONCE) ---
   useEffect(() => {
-    const init = async () => {
+    const fetchProfile = async () => {
       try {
         const uid = auth().currentUser?.uid;
         if (!uid) return;
 
-        // Fetch User Profile
         const userDoc = await firestore().collection("users").doc(uid).get();
         if (userDoc.exists) {
           const data = userDoc.data();
@@ -78,10 +77,9 @@ const TeacherClassUpdates = () => {
             setTeachingProfile(profile);
             const classes = [...new Set(profile.map((item) => item.class))];
             setUniqueClasses(classes);
-            // Auto-select first
             if (classes.length > 0) handleClassChange(classes[0], profile);
           } else {
-            // Fallback
+            // Fallback for older data structure
             const classes = data.classesTaught || [];
             const subjects = data.subjects || [];
             setUniqueClasses(classes);
@@ -97,31 +95,43 @@ const TeacherClassUpdates = () => {
             }
           }
         }
-
-        // Fetch History
-        const historySnap = await firestore()
-          .collection("class_notices")
-          .where("teacherId", "==", uid)
-          .orderBy("createdAt", "desc")
-          .limit(20)
-          .get();
-
-        const list = historySnap.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setHistory(list);
       } catch (error) {
-        console.log("Init Error:", error);
-      } finally {
-        setLoading(false);
+        console.log("Profile Error:", error);
       }
     };
 
-    init();
+    fetchProfile();
   }, []);
 
-  // --- 2. HANDLE SELECTION ---
+  // --- 2. FETCH HISTORY (REAL-TIME LISTENER) ---
+  useEffect(() => {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+
+    setLoading(true);
+    const unsubscribe = firestore()
+      .collection("class_notices")
+      .where("teacherId", "==", uid)
+      .orderBy("createdAt", "desc")
+      .onSnapshot(
+        (snapshot) => {
+          const list = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+          setHistory(list);
+          setLoading(false);
+        },
+        (error) => {
+          console.error("History Listener Error:", error);
+          setLoading(false);
+        }
+      );
+
+    return () => unsubscribe();
+  }, []);
+
+  // --- HANDLE SELECTION ---
   const handleClassChange = (cls, profileData = teachingProfile) => {
     setSelectedClass(cls);
     const relevant = profileData
@@ -133,7 +143,7 @@ const TeacherClassUpdates = () => {
     else setSelectedSubject(null);
   };
 
-  // --- 3. SEND NOTICE ---
+  // --- SEND NOTICE ---
   const handleSend = async () => {
     if (
       !title.trim() ||
@@ -147,29 +157,21 @@ const TeacherClassUpdates = () => {
 
     setSending(true);
     try {
-      const noticeData = {
-        title: title.trim(),
-        subject: selectedSubject,
-        tag: selectedTag,
-        message: message.trim(),
-        content: message.trim(), // Legacy support
-        classId: selectedClass,
-        teacherId: auth().currentUser.uid,
-        teacherName: teacherName,
-        date: new Date().toLocaleDateString("en-GB"),
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        type: "Class Update",
-      };
-
-      const docRef = await firestore()
+      await firestore()
         .collection("class_notices")
-        .add(noticeData);
-
-      // Update local history immediately
-      setHistory((prev) => [
-        { id: docRef.id, ...noticeData, createdAt: new Date() },
-        ...prev,
-      ]);
+        .add({
+          title: title.trim(),
+          subject: selectedSubject,
+          tag: selectedTag,
+          message: message.trim(),
+          content: message.trim(),
+          classId: selectedClass,
+          teacherId: auth().currentUser.uid,
+          teacherName: teacherName,
+          date: new Date().toLocaleDateString("en-GB"),
+          createdAt: firestore.FieldValue.serverTimestamp(),
+          type: "Class Update",
+        });
 
       showToast(`Sent to ${selectedClass}!`, "success");
       setTitle("");
@@ -182,9 +184,7 @@ const TeacherClassUpdates = () => {
     }
   };
 
-  // --- RENDER HISTORY CARD ---
   const renderHistoryItem = ({ item }) => {
-    // Determine Icon based on Tag
     let icon = "notifications";
     if (item.tag === "Homework") icon = "book";
     if (item.tag === "Test") icon = "document-text";
@@ -241,7 +241,6 @@ const TeacherClassUpdates = () => {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      {/* --- HEADER --- */}
       <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => router.back()}
@@ -261,7 +260,6 @@ const TeacherClassUpdates = () => {
           className="flex-1 px-5 pt-4"
           showsVerticalScrollIndicator={false}
         >
-          {/* --- SELECTORS --- */}
           <View className="mb-6">
             <Text className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1">
               Target Class
@@ -310,11 +308,9 @@ const TeacherClassUpdates = () => {
             )}
           </View>
 
-          {/* --- COMPOSER CARD --- */}
           <View
             className={`${theme.card} p-4 rounded-2xl border ${theme.borderColor} mb-6`}
           >
-
             <TextInput
               placeholder="Title (e.g. Test Syllabus)"
               placeholderTextColor="#666"
@@ -357,7 +353,6 @@ const TeacherClassUpdates = () => {
             </TouchableOpacity>
           </View>
 
-          {/* --- HISTORY --- */}
           <Text className="text-[#f49b33] font-bold text-lg mb-4 px-1">
             Recent Updates
           </Text>

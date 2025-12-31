@@ -38,42 +38,55 @@ const getDaysCount = (start, end) => {
   }
 };
 
-const LeaveCard = ({ item }) => {
-  const [teacherData, setTeacherData] = useState(null);
+const LeaveCard = ({ item, type }) => {
+  const [userData, setUserData] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
+
+  // Determine ID and Name based on the leave type
+  const isTeacher = type === "Teachers";
+  const userId = isTeacher ? item.teacherId : item.studentId;
+
+  // Fallback name if user profile fails to load
+  const fallbackName = isTeacher ? item.teacherName : item.studentName;
 
   useEffect(() => {
     let isMounted = true;
-    const fetchTeacherProfile = async () => {
+    const fetchProfile = async () => {
       try {
-        if (item.teacherId) {
+        if (userId) {
           const userDoc = await firestore()
             .collection("users")
-            .doc(item.teacherId)
+            .doc(userId)
             .get();
           if (isMounted && userDoc.exists) {
-            setTeacherData(userDoc.data());
+            setUserData(userDoc.data());
           }
         }
       } catch (error) {
-        console.log("Error fetching teacher:", error);
+        console.log("Error fetching user:", error);
       } finally {
         if (isMounted) setLoadingData(false);
       }
     };
-    fetchTeacherProfile();
+    fetchProfile();
     return () => {
       isMounted = false;
     };
-  }, [item.teacherId]);
+  }, [userId]);
 
   const handleCall = () => {
-    const phone = teacherData?.phone || item.phone;
+    const phone = userData?.phone || item.phone;
     if (phone) Linking.openURL(`tel:${phone}`);
-    else Alert.alert("Unavailable", "No phone number found for this teacher.");
+    else Alert.alert("Unavailable", "No phone number found.");
   };
 
   const daysCount = getDaysCount(item.startDate, item.endDate);
+
+  // Display Name logic
+  const displayName = userData?.name || fallbackName || "Unknown";
+
+  // Avatar Initial
+  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <View
@@ -83,24 +96,24 @@ const LeaveCard = ({ item }) => {
       <View className="flex-row items-center mb-4">
         {/* Avatar Section */}
         <View className="mr-4">
-          {teacherData?.profileImage ? (
+          {userData?.profileImage ? (
             <Image
-              source={{ uri: teacherData.profileImage }}
+              source={{ uri: userData.profileImage }}
               className="w-14 h-14 rounded-full border border-[#f49b33]"
             />
           ) : (
             <View className="w-14 h-14 rounded-full bg-[#f49b33]/20 items-center justify-center border border-[#f49b33]/30">
               <Text className="text-[#f49b33] font-bold text-xl">
-                {item.teacherName?.charAt(0) || "T"}
+                {initial}
               </Text>
             </View>
           )}
         </View>
 
-        {/* Name & Days Info */}
+        {/* Name & Info */}
         <View className="flex-1">
           <Text className="text-white font-bold text-lg leading-tight">
-            {item.teacherName}
+            {displayName}
           </Text>
           <View className="flex-row items-center mt-1">
             <View className="bg-[#f49b33] px-2 py-0.5 rounded mr-2">
@@ -108,6 +121,13 @@ const LeaveCard = ({ item }) => {
                 {daysCount} {daysCount > 1 ? "Days" : "Day"} Leave
               </Text>
             </View>
+
+            {/* Show Class for Students */}
+            {!isTeacher && userData?.standard && (
+              <Text className="text-gray-400 text-xs ml-1">
+                Class: {userData.standard}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -146,26 +166,46 @@ const LeaveCard = ({ item }) => {
   );
 };
 
-const AdminTeacherLeaves = () => {
+const AllLeaves = () => {
   const router = useRouter();
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("Teachers"); // "Teachers" or "Students"
 
   useEffect(() => {
+    setLoading(true);
+
+    // --- COLLECTION SELECTION LOGIC ---
+    // Teachers -> "teacher_leaves"
+    // Students -> "leaves" (As per instruction)
+    const collectionName =
+      activeTab === "Teachers" ? "teacher_leaves" : "leaves";
+
     const unsubscribe = firestore()
-      .collection("teacher_leaves")
+      .collection(collectionName)
       .orderBy("createdAt", "desc")
-      .onSnapshot((snapshot) => {
-        if (!snapshot) return;
-        const list = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setLeaves(list);
-        setLoading(false);
-      });
+      .onSnapshot(
+        (snapshot) => {
+          if (!snapshot) {
+            setLeaves([]);
+            setLoading(false);
+            return;
+          }
+          const list = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+          setLeaves(list);
+          setLoading(false);
+        },
+        (err) => {
+          console.log("Error fetching leaves:", err);
+          setLoading(false);
+        }
+      );
+
     return () => unsubscribe();
-  }, []);
+  }, [activeTab]);
 
   return (
     <SafeAreaView className={`flex-1 ${theme.bg}`}>
@@ -182,6 +222,30 @@ const AdminTeacherLeaves = () => {
         <Text className="text-white text-2xl font-bold">Absence Log</Text>
       </View>
 
+      {/* --- TABS --- */}
+      <View className="flex-row px-5 mb-4">
+        <TouchableOpacity
+          onPress={() => setActiveTab("Teachers")}
+          className={`flex-1 py-3 items-center border-b-2 ${activeTab === "Teachers" ? "border-[#f49b33]" : "border-[#333842]"}`}
+        >
+          <Text
+            className={`${activeTab === "Teachers" ? "text-[#f49b33] font-bold" : "text-gray-400 font-medium"}`}
+          >
+            Teachers
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setActiveTab("Students")}
+          className={`flex-1 py-3 items-center border-b-2 ${activeTab === "Students" ? "border-[#f49b33]" : "border-[#333842]"}`}
+        >
+          <Text
+            className={`${activeTab === "Students" ? "text-[#f49b33] font-bold" : "text-gray-400 font-medium"}`}
+          >
+            Students
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* --- LIST --- */}
       {loading ? (
         <ActivityIndicator size="large" color="#f49b33" className="mt-10" />
@@ -189,7 +253,7 @@ const AdminTeacherLeaves = () => {
         <FlatList
           data={leaves}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <LeaveCard item={item} />}
+          renderItem={({ item }) => <LeaveCard item={item} type={activeTab} />}
           contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
           ListEmptyComponent={
             <View className="mt-20 items-center opacity-30">
@@ -199,7 +263,7 @@ const AdminTeacherLeaves = () => {
                 color="gray"
               />
               <Text className="text-white text-center mt-4">
-                No absence notifications.
+                No {activeTab.toLowerCase()} leaves found.
               </Text>
             </View>
           }
@@ -209,4 +273,4 @@ const AdminTeacherLeaves = () => {
   );
 };
 
-export default AdminTeacherLeaves;
+export default AllLeaves;

@@ -535,11 +535,8 @@ const TeacherDashboard = () => {
           </TouchableOpacity>
 
           <View className="flex-1">
-            <Text className={`${theme.text} text-lg font-bold`}>
-              {teacherData?.name || "Teacher"}
-            </Text>
-            <Text className={`${theme.subText} text-sm`} numberOfLines={1}>
-              {teacherData?.classesTaught?.join(", ") || "No Classes Assigned"}
+            <Text className={`${theme.text} text-2xl font-bold`}>
+              {teacherData?.name || "Teacher"} 
             </Text>
           </View>
 

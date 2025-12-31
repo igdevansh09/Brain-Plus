@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   ScrollView,
   Linking,
-  Alert,
   Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,6 +15,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import firestore from "@react-native-firebase/firestore";
 import CustomToast from "../../components/CustomToast";
+import CustomAlert from "../../components/CustomAlert";
 
 const theme = {
   bg: "bg-[#282C34]",
@@ -169,6 +169,13 @@ const FeeReports = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
+  const [confirmAlert, setConfirmAlert] = useState({
+    visible: false,
+    id: null,
+    newStatus: null,
+    message: "",
+  });
+
   const FILTER_OPTIONS = [
     "All",
     "Prep",
@@ -228,25 +235,27 @@ const FeeReports = () => {
     totalExpected > 0 ? (totalCollected / totalExpected) * 100 : 0;
 
   const handleUpdateStatus = (id, newStatus) => {
-    Alert.alert("Confirm Action", `Mark fee as ${newStatus}?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Confirm",
-        onPress: async () => {
-          try {
-            const updateData = { status: newStatus };
-            if (newStatus === "Paid")
-              updateData.paidAt = new Date().toISOString();
-            if (newStatus === "Pending") updateData.transactionRef = null;
+    setConfirmAlert({
+      visible: true,
+      id,
+      newStatus,
+      message: `Mark fee as ${newStatus}?`,
+    });
+  };
 
-            await firestore().collection("fees").doc(id).update(updateData);
-            showToast(`Fee marked as ${newStatus}`, "success");
-          } catch (e) {
-            showToast("Error updating fee", "error");
-          }
-        },
-      },
-    ]);
+  const performUpdateStatus = async () => {
+    const { id, newStatus } = confirmAlert;
+    setConfirmAlert({ ...confirmAlert, visible: false });
+    try {
+      const updateData = { status: newStatus };
+      if (newStatus === "Paid") updateData.paidAt = new Date().toISOString();
+      if (newStatus === "Pending") updateData.transactionRef = null;
+
+      await firestore().collection("fees").doc(id).update(updateData);
+      showToast(`Fee marked as ${newStatus}`, "success");
+    } catch (e) {
+      showToast("Error updating fee", "error");
+    }
   };
 
   return (
@@ -339,6 +348,13 @@ const FeeReports = () => {
           }
         />
       )}
+      <CustomAlert
+        visible={confirmAlert.visible}
+        title={"Confirm Action"}
+        message={confirmAlert.message}
+        onCancel={() => setConfirmAlert({ ...confirmAlert, visible: false })}
+        onConfirm={performUpdateStatus}
+      />
     </SafeAreaView>
   );
 };
