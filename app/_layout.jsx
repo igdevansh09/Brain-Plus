@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
-import { View, ActivityIndicator } from "react-native";
+import { View, ActivityIndicator, LogBox } from "react-native";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import "../global.css";
 import { ToastProvider } from "../context/ToastContext";
@@ -12,7 +12,13 @@ import {
 import NotificationManager from "../components/NotificationManager";
 import AnimatedSplashScreen from "../components/AnimatedSplashScreen";
 
-// --- SILENCE FIREBASE WARNINGS ---
+// Ignore Firebase Deprecation Warnings
+LogBox.ignoreLogs([
+  "This method is deprecated",
+  "Method called was",
+  "Please use `getApp()` instead",
+  "Please see migration guide for more details",
+]);
 
 // Background Handler
 messaging().setBackgroundMessageHandler(async (remoteMessage) => {
