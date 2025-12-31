@@ -10,6 +10,7 @@ import {
   requestUserPermission,
 } from "../utils/notificationService";
 import NotificationManager from "../components/NotificationManager";
+import AnimatedSplashScreen from "../components/AnimatedSplashScreen";
 
 // --- SILENCE FIREBASE WARNINGS ---
 
@@ -79,11 +80,7 @@ const InitialLayout = () => {
   }, [user, userRole, loading, segments]);
 
   if (loading) {
-    return (
-      <View className="flex-1 bg-[#282C34] justify-center items-center">
-        <ActivityIndicator size="large" color="#f49b33" />
-      </View>
-    );
+    return <AnimatedSplashScreen />;
   }
 
   return (
