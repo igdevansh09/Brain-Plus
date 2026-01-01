@@ -43,5 +43,5 @@ app-example
 /android
 
 .expo/
-google-services.json
-functions/service-account.json
+# google-services.json
+# functions/service-account.json
