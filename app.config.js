@@ -72,5 +72,14 @@ export default {
         projectId: "0f31f7c4-2531-4f23-abcb-1ad7d8a72d64",
       },
     },
+
+    // --- ADD THESE NEW KEYS HERE ---
+    updates: {
+      url: "https://u.expo.dev/0f31f7c4-2531-4f23-abcb-1ad7d8a72d64",
+    },
+    runtimeVersion: {
+      policy: "appVersion",
+    },
+    // ------------------------------
   },
 };
