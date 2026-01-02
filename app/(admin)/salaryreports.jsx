@@ -13,10 +13,12 @@ import {
   Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import firestore from "@react-native-firebase/firestore";
+import functions from "@react-native-firebase/functions"; // Added functions
 import CustomToast from "../../components/CustomToast";
+import CustomAlert from "../../components/CustomAlert";
 
 const theme = {
   bg: "bg-[#282C34]",
@@ -134,6 +136,7 @@ const TeacherSalaryReports = () => {
   const [salaries, setSalaries] = useState([]);
   const [filteredSalaries, setFilteredSalaries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false); // Loading for generator
 
   // States
   const [isAdding, setIsAdding] = useState(false);
@@ -144,6 +147,11 @@ const TeacherSalaryReports = () => {
 
   const [payModalVisible, setPayModalVisible] = useState(false);
   const [selectedSalaryId, setSelectedSalaryId] = useState(null);
+
+  const [generateConfirm, setGenerateConfirm] = useState({
+    visible: false,
+    message: "",
+  });
 
   const [commissionTeachers, setCommissionTeachers] = useState([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
@@ -257,6 +265,30 @@ const TeacherSalaryReports = () => {
     }
   };
 
+  // --- GENERATE SALARIES HANDLER ---
+  const handleGenerateSalaries = () => {
+    setGenerateConfirm({
+      visible: true,
+      message:
+        "This will create salary slips for all fixed-salary teachers for the current month.\n\nAre you sure?",
+    });
+  };
+
+  const performGenerateSalaries = async () => {
+    setGenerateConfirm({ ...generateConfirm, visible: false });
+    setGenerating(true);
+    try {
+      const fn = functions().httpsCallable("generateMonthlySalaries");
+      const result = await fn();
+      showToast(result.data.message, "success");
+    } catch (error) {
+      console.error(error);
+      showToast("Failed to generate salaries.", "error");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <SafeAreaView className={`flex-1 ${theme.bg}`}>
       <StatusBar backgroundColor="#282C34" barStyle="light-content" />
@@ -267,20 +299,42 @@ const TeacherSalaryReports = () => {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
+      {/* --- HEADER --- */}
       <View className="px-5 py-4 flex-row items-center justify-between">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
-        >
-          <Ionicons name="arrow-back" size={22} color="white" />
-        </TouchableOpacity>
-        <Text className="text-white text-2xl font-bold">Salary Ledger</Text>
-        <TouchableOpacity
-          onPress={() => setIsAdding(true)}
-          className="bg-[#333842] p-2 rounded-full border border-[#f49b33]"
-        >
-          <Ionicons name="add" size={24} color="#f49b33" />
-        </TouchableOpacity>
+        <View className="flex-row items-center">
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
+          >
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+          <Text className="text-white text-2xl font-bold ml-4">
+            Salary Ledger
+          </Text>
+        </View>
+
+        <View className="flex-row gap-3">
+          {/* THUNDERBOLT BUTTON */}
+          <TouchableOpacity
+            onPress={handleGenerateSalaries}
+            disabled={generating}
+            className={`p-2 rounded-full border border-[#4C5361] ${generating ? "bg-gray-600" : "bg-[#f49b33]/20"}`}
+          >
+            {generating ? (
+              <ActivityIndicator size="small" color="#f49b33" />
+            ) : (
+              <Ionicons name="flash" size={24} color="#f49b33" />
+            )}
+          </TouchableOpacity>
+
+          {/* ADD BUTTON */}
+          <TouchableOpacity
+            onPress={() => setIsAdding(true)}
+            className="bg-[#333842] p-2 rounded-full border border-[#f49b33]"
+          >
+            <Ionicons name="add" size={24} color="#f49b33" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View className="px-5 mb-4">
@@ -445,6 +499,15 @@ const TeacherSalaryReports = () => {
           </View>
         </View>
       </Modal>
+      <CustomAlert
+        visible={generateConfirm.visible}
+        title={"Generate Monthly Salaries"}
+        message={generateConfirm.message}
+        onCancel={() =>
+          setGenerateConfirm({ ...generateConfirm, visible: false })
+        }
+        onConfirm={performGenerateSalaries}
+      />
     </SafeAreaView>
   );
 };

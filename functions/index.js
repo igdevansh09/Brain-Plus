@@ -4,7 +4,6 @@
  */
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { onSchedule } = require("firebase-functions/v2/scheduler");
 const {
   onDocumentCreated,
   onDocumentUpdated,
@@ -495,10 +494,16 @@ exports.onMaterials = onDocumentCreated("materials/{id}", async (event) => {
 });
 
 // ==================================================================
-// 💰 AUTOMATED CRON JOBS (Fees & Salaries)
+// 💰 MANUAL FEE & SALARY GENERATION (OnCall - Optimized)
 // ==================================================================
 
-exports.generateMonthlyFees = onSchedule("0 10 5 * *", async (event) => {
+// CHANGED: Using onCall with BulkWriter and Streams for performance
+exports.generateMonthlyFees = onCall(async (request) => {
+  // 1. Security Check: Only Admin
+  if (request.auth?.token?.role !== "admin") {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+
   const db = admin.firestore();
   const date = new Date();
   const month = date.toLocaleString("default", { month: "long" });
@@ -506,23 +511,21 @@ exports.generateMonthlyFees = onSchedule("0 10 5 * *", async (event) => {
   const currentTitle = `Tuition Fee - ${month} ${year}`;
   const feeDate = date.toLocaleDateString("en-GB");
 
-  console.log(`Starting fee generation: ${currentTitle}`);
+  console.log(`Starting manual fee generation: ${currentTitle}`);
 
-  // 1. Use BulkWriter for automatic batching and flow control
+  // 2. Use BulkWriter for automatic batching and flow control
   const writer = db.bulkWriter();
 
-  // 2. Handle duplicates gracefully (Idempotency)
-  // If a fee with the deterministic ID already exists, ignore the error (don't retry)
+  // 3. Handle duplicates gracefully (Idempotency)
   writer.onWriteError((error) => {
-    if (error.code === 6) {
-      // 6 = ALREADY_EXISTS
-      return false;
+    if (error.code === 6) { // 6 = ALREADY_EXISTS
+      return false; // Ignore error, don't retry
     }
-    return true; // Retry other network errors
+    return true; // Retry other errors
   });
 
   try {
-    // 3. Use .stream() to process users one by one without overloading RAM
+    // 4. Use .stream() to process users without overloading RAM
     const studentsStream = db
       .collection("users")
       .where("role", "==", "student")
@@ -534,12 +537,12 @@ exports.generateMonthlyFees = onSchedule("0 10 5 * *", async (event) => {
     for await (const doc of studentsStream) {
       const student = doc.data();
 
-      // 4. Deterministic ID: ensures we never bill the same student twice for the same month
-      // Format: {studentId}_{Month}_{Year}
+      // 5. Deterministic ID: {studentId}_{Month}_{Year}
+      // This prevents billing the same student twice for the same month
       const docId = `${doc.id}_${month}_${year}`;
       const feeRef = db.collection("fees").doc(docId);
 
-      // 5. Queue the write operation
+      // 6. Queue the write operation
       writer.create(feeRef, {
         studentId: doc.id,
         studentName: student.name || "Unknown",
@@ -554,15 +557,25 @@ exports.generateMonthlyFees = onSchedule("0 10 5 * *", async (event) => {
       count++;
     }
 
-    // 6. Execute any remaining writes
+    // 7. Execute all writes
     await writer.close();
-    console.log(`Fee generation process processed ${count} students.`);
+    console.log(`Fee generation process handled ${count} students.`);
+    
+    return { success: true, message: `Fee generation process started for ${count} students.` };
+
   } catch (error) {
     console.error("Error in generateMonthlyFees:", error);
+    throw new HttpsError("internal", error.message);
   }
 });
 
-exports.generateMonthlySalaries = onSchedule("0 10 5 * *", async (event) => {
+// CHANGED: Using onCall with BulkWriter and Streams
+exports.generateMonthlySalaries = onCall(async (request) => {
+  // 1. Security Check: Only Admin
+  if (request.auth?.token?.role !== "admin") {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+
   const db = admin.firestore();
   const date = new Date();
   const month = date.toLocaleString("default", { month: "long" });
@@ -570,7 +583,7 @@ exports.generateMonthlySalaries = onSchedule("0 10 5 * *", async (event) => {
   const currentTitle = `Salary - ${month} ${year}`;
   const salaryDate = date.toLocaleDateString("en-GB");
 
-  console.log(`Starting salary generation: ${currentTitle}`);
+  console.log(`Starting manual salary generation: ${currentTitle}`);
 
   const writer = db.bulkWriter();
 
@@ -611,9 +624,13 @@ exports.generateMonthlySalaries = onSchedule("0 10 5 * *", async (event) => {
     }
 
     await writer.close();
-    console.log(`Salary generation process processed ${count} teachers.`);
+    console.log(`Salary generation process handled ${count} teachers.`);
+
+    return { success: true, message: `Salary generation process started for ${count} teachers.` };
+
   } catch (error) {
     console.error("Error generating salaries:", error);
+    throw new HttpsError("internal", error.message);
   }
 });
 
@@ -698,8 +715,21 @@ exports.cleanupUserData = onDocumentDeleted("users/{uid}", async (event) => {
     // --- 2. CLEANUP FOR TEACHERS ---
     if (userData.role === "teacher") {
       // Delete Salaries
-      const salarySnap = await db.collection("salaries").where("teacherId", "==", uid).get();
+      const salarySnap = await db
+        .collection("salaries")
+        .where("teacherId", "==", uid)
+        .get();
       salarySnap.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+        operationCount++;
+      });
+
+      // [NEW] Delete Class Notices created by this teacher
+      const noticesSnap = await db
+        .collection("class_notices")
+        .where("teacherId", "==", uid)
+        .get();
+      noticesSnap.docs.forEach((doc) => {
         batch.delete(doc.ref);
         operationCount++;
       });

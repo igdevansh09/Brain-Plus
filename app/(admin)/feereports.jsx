@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import firestore from "@react-native-firebase/firestore";
+import functions from "@react-native-firebase/functions"; // Added functions
 import CustomToast from "../../components/CustomToast";
 import CustomAlert from "../../components/CustomAlert";
 
@@ -160,6 +161,7 @@ const FeeReports = () => {
   const [filteredFees, setFilteredFees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedClassFilter, setSelectedClassFilter] = useState("All");
+  const [generating, setGenerating] = useState(false); // Loading state for thunderbolt button
 
   const [toast, setToast] = useState({
     visible: false,
@@ -173,6 +175,11 @@ const FeeReports = () => {
     visible: false,
     id: null,
     newStatus: null,
+    message: "",
+  });
+
+  const [generateConfirm, setGenerateConfirm] = useState({
+    visible: false,
     message: "",
   });
 
@@ -258,6 +265,30 @@ const FeeReports = () => {
     }
   };
 
+  // --- GENERATE FEES HANDLER ---
+  const handleGenerateFees = () => {
+    setGenerateConfirm({
+      visible: true,
+      message:
+        "This will create fee invoices for all active students for the current month.\n\nAre you sure?",
+    });
+  };
+
+  const performGenerateFees = async () => {
+    setGenerateConfirm({ ...generateConfirm, visible: false });
+    setGenerating(true);
+    try {
+      const fn = functions().httpsCallable("generateMonthlyFees");
+      const result = await fn();
+      showToast(result.data.message, "success");
+    } catch (error) {
+      console.error(error);
+      showToast("Failed to generate fees.", "error");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <SafeAreaView className={`flex-1 ${theme.bg}`}>
       <StatusBar backgroundColor="#282C34" barStyle="light-content" />
@@ -268,15 +299,30 @@ const FeeReports = () => {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
+      {/* --- HEADER --- */}
       <View className="px-5 py-4 flex-row items-center justify-between">
+        <View className="flex-row items-center">
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="bg-[#333842] p-2 rounded-full border border-[#4C5361] mr-4"
+          >
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
+          <Text className="text-white text-2xl font-bold">Fee Ledger</Text>
+        </View>
+
+        {/* THUNDERBOLT BUTTON */}
         <TouchableOpacity
-          onPress={() => router.back()}
-          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
+          onPress={handleGenerateFees}
+          disabled={generating}
+          className={`p-2 rounded-full border border-[#4C5361] ${generating ? "bg-gray-600" : "bg-[#f49b33]/20"}`}
         >
-          <Ionicons name="arrow-back" size={22} color="white" />
+          {generating ? (
+            <ActivityIndicator size="small" color="#f49b33" />
+          ) : (
+            <Ionicons name="flash" size={24} color="#f49b33" />
+          )}
         </TouchableOpacity>
-        <Text className="text-white text-2xl font-bold">Fee Ledger</Text>
-        <View className="w-10" />
       </View>
 
       <View className="px-5 mb-6">
@@ -354,6 +400,15 @@ const FeeReports = () => {
         message={confirmAlert.message}
         onCancel={() => setConfirmAlert({ ...confirmAlert, visible: false })}
         onConfirm={performUpdateStatus}
+      />
+      <CustomAlert
+        visible={generateConfirm.visible}
+        title={"Generate Monthly Fees"}
+        message={generateConfirm.message}
+        onCancel={() =>
+          setGenerateConfirm({ ...generateConfirm, visible: false })
+        }
+        onConfirm={performGenerateFees}
       />
     </SafeAreaView>
   );

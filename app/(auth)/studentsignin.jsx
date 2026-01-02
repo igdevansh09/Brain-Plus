@@ -67,11 +67,17 @@ const StudentSignIn = () => {
       showToast("OTP sent!", "success");
     } catch (error) {
       console.error(error);
-      const errMsg =
-        error.code === "auth/too-many-requests"
-          ? "Too many attempts. Try later."
-          : "Failed to send OTP.";
-      showToast(errMsg, "error");
+      
+      // --- FIXED ERROR HANDLING ---
+      if (error.code === 'auth/too-many-requests') {
+        showToast("Too many attempts. Please try again in 1 hour.", "error");
+      } else if (error.code === 'auth/invalid-phone-number') {
+        showToast("Invalid phone number format.", "error");
+      } else if (error.code === 'auth/quota-exceeded') {
+        showToast("SMS Quota Exceeded. Contact Support.", "error");
+      } else {
+        showToast("Failed to send OTP. Try again later.", "error");
+      }
     } finally {
       setLoading(false);
     }
@@ -122,7 +128,8 @@ const StudentSignIn = () => {
         showToast("Invalid OTP code.", "error");
       } else if (error.code === "auth/session-expired") {
         showToast("OTP expired. Resend it.", "error");
-      } else {
+      }
+      else {
         showToast("Login failed. Try again.", "error");
       }
     } finally {
