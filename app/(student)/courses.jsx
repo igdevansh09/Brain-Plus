@@ -12,6 +12,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // --- NATIVE SDK IMPORTS ---
 import auth from "@react-native-firebase/auth";
@@ -19,20 +20,12 @@ import firestore from "@react-native-firebase/firestore";
 
 const MyCourses = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [courses, setCourses] = useState([]);
 
-  const theme = {
-    bg: "bg-[#282C34]",
-    card: "bg-[#333842]",
-    accent: "text-[#f49b33]",
-    text: "text-white",
-    subText: "text-gray-400",
-    border: "border-[#4C5361]",
-  };
-
-  // --- 1. FETCH DATA (FIXED QUERY) ---
+  // --- 1. FETCH DATA ---
   const fetchCourses = async () => {
     try {
       const user = auth().currentUser;
@@ -88,12 +81,26 @@ const MyCourses = () => {
       <TouchableOpacity
         activeOpacity={0.8}
         onPress={() =>
-          router.push({ pathname: "/(student)/videoplayer", params: { id: item.id } })
+          router.push({
+            pathname: "/(student)/videoplayer",
+            params: { id: item.id },
+          })
         }
-        className={`${theme.card} flex-row p-3 rounded-2xl mb-4 border ${theme.border} items-center`}
+        style={{
+          backgroundColor: theme.bgSecondary,
+          borderColor: theme.border,
+          shadowColor: theme.shadow,
+        }}
+        className="flex-row p-3 rounded-2xl mb-4 border items-center shadow-sm"
       >
         {/* Thumbnail */}
-        <View className="w-20 h-20 bg-gray-700 rounded-xl overflow-hidden mr-4 border border-[#4C5361]">
+        <View
+          style={{
+            backgroundColor: theme.bgTertiary,
+            borderColor: theme.border,
+          }}
+          className="w-20 h-20 rounded-xl overflow-hidden mr-4 border"
+        >
           {item.thumbnail ? (
             <Image
               source={{ uri: item.thumbnail }}
@@ -105,7 +112,7 @@ const MyCourses = () => {
               <MaterialCommunityIcons
                 name="book-open-page-variant"
                 size={24}
-                color="#666"
+                color={theme.textMuted}
               />
             </View>
           )}
@@ -114,21 +121,32 @@ const MyCourses = () => {
         {/* Content */}
         <View className="flex-1 justify-center">
           <View className="flex-row justify-between items-start">
-            <Text className="text-[#f49b33] text-[10px] font-bold uppercase tracking-widest mb-1">
+            <Text
+              style={{ color: theme.accent }}
+              className="text-[10px] font-bold uppercase tracking-widest mb-1"
+            >
               {subject}
             </Text>
           </View>
 
           <Text
-            className="text-white font-bold text-lg leading-6 mb-1"
+            style={{ color: theme.textPrimary }}
+            className="font-bold text-lg leading-6 mb-1"
             numberOfLines={2}
           >
             {item.title}
           </Text>
 
           <View className="flex-row items-center">
-            <Ionicons name="play-circle-outline" size={14} color="#888" />
-            <Text className="text-gray-400 text-xs ml-1">
+            <Ionicons
+              name="play-circle-outline"
+              size={14}
+              color={theme.textSecondary}
+            />
+            <Text
+              style={{ color: theme.textSecondary }}
+              className="text-xs ml-1"
+            >
               {lessonCount} Videos
             </Text>
           </View>
@@ -136,7 +154,7 @@ const MyCourses = () => {
 
         {/* Action Icon */}
         <View className="pl-2">
-          <Ionicons name="chevron-forward" size={20} color="#4C5361" />
+          <Ionicons name="chevron-forward" size={20} color={theme.textMuted} />
         </View>
       </TouchableOpacity>
     );
@@ -145,26 +163,39 @@ const MyCourses = () => {
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${theme.bg} justify-center items-center`}
+        style={{ backgroundColor: theme.bgPrimary }}
+        className="flex-1 justify-center items-center"
       >
-        <ActivityIndicator size="large" color="#f49b33" />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg}`}>
-      <StatusBar barStyle="light-content" backgroundColor="#282C34" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={theme.bgPrimary}
+      />
 
       {/* --- HEADER --- */}
       <View className="px-5 pt-3 pb-4 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => router.back()}
-          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+          }}
+          className="p-2 rounded-full border"
         >
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text className="text-white text-xl font-bold">My Courses</Text>
+        <Text
+          style={{ color: theme.textPrimary }}
+          className="text-xl font-bold"
+        >
+          My Courses
+        </Text>
         <View className="w-10" />
       </View>
 
@@ -183,13 +214,18 @@ const MyCourses = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#f49b33"
+            tintColor={theme.accent}
+            colors={[theme.accent]}
           />
         }
         ListEmptyComponent={() => (
           <View className="items-center py-20 opacity-40">
-            <MaterialCommunityIcons name="bookshelf" size={64} color="gray" />
-            <Text className="text-gray-400 mt-4 text-base">
+            <MaterialCommunityIcons
+              name="bookshelf"
+              size={64}
+              color={theme.textMuted}
+            />
+            <Text style={{ color: theme.textMuted }} className="mt-4 text-base">
               No courses found.
             </Text>
           </View>

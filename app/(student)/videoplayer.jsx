@@ -12,6 +12,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // --- NATIVE SDK ---
 import firestore from "@react-native-firebase/firestore";
@@ -21,6 +22,7 @@ const { width } = Dimensions.get("window");
 const StudentVideoPlayer = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
 
   // Params can come from 'My Courses' (id) or direct playlist (legacy)
   const {
@@ -37,17 +39,6 @@ const StudentVideoPlayer = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const playerRef = useRef();
-
-  // Theme
-  const theme = {
-    bg: "#1A1D21",
-    card: "#282C34",
-    accent: "#f49b33",
-    text: "#FFFFFF",
-    subText: "#A0A0A0",
-    border: "#333842",
-    activeItem: "#f49b3315",
-  };
 
   // --- 1. INITIALIZATION ---
   useEffect(() => {
@@ -131,11 +122,11 @@ const StudentVideoPlayer = () => {
     return (
       <TouchableOpacity
         onPress={() => handleVideoSelect(index)}
-        className={`flex-row items-center p-4 mb-2 mx-4 rounded-xl border ${
-          isActive
-            ? "border-[#f49b33] bg-[#f49b33]/10"
-            : "border-[#333842] bg-[#282C34]"
-        }`}
+        style={{
+          borderColor: isActive ? theme.accent : theme.border,
+          backgroundColor: isActive ? theme.accentSoft10 : theme.bgSecondary,
+        }}
+        className="flex-row items-center p-4 mb-2 mx-4 rounded-xl border"
       >
         {/* Number / Icon */}
         <View className="mr-4">
@@ -143,10 +134,13 @@ const StudentVideoPlayer = () => {
             <MaterialCommunityIcons
               name="play-circle"
               size={24}
-              color="#f49b33"
+              color={theme.accent}
             />
           ) : (
-            <Text className="text-gray-500 font-bold text-lg w-6 text-center">
+            <Text
+              style={{ color: theme.textMuted }}
+              className="font-bold text-lg w-6 text-center"
+            >
               {index + 1}
             </Text>
           )}
@@ -155,12 +149,18 @@ const StudentVideoPlayer = () => {
         {/* Info */}
         <View className="flex-1">
           <Text
-            className={`font-bold text-sm mb-1 ${isActive ? "text-[#f49b33]" : "text-white"}`}
+            style={{
+              color: isActive ? theme.accent : theme.textPrimary,
+            }}
+            className="font-bold text-sm mb-1"
             numberOfLines={2}
           >
             {item.title}
           </Text>
-          <Text className="text-gray-500 text-[10px] uppercase">
+          <Text
+            style={{ color: theme.textSecondary }}
+            className="text-[10px] uppercase"
+          >
             Video • {item.videoId ? "Ready" : "Unavailable"}
           </Text>
         </View>
@@ -168,7 +168,7 @@ const StudentVideoPlayer = () => {
         {/* Status */}
         {isActive && (
           <View className="ml-2">
-            <Ionicons name="stats-chart" size={16} color="#f49b33" />
+            <Ionicons name="stats-chart" size={16} color={theme.accent} />
           </View>
         )}
       </TouchableOpacity>
@@ -180,22 +180,25 @@ const StudentVideoPlayer = () => {
       <SafeAreaView
         style={{
           flex: 1,
-          backgroundColor: theme.bg,
+          backgroundColor: theme.bgPrimary,
           justifyContent: "center",
           alignItems: "center",
         }}
       >
-        <ActivityIndicator size="large" color="#f49b33" />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
       <StatusBar barStyle="light-content" backgroundColor="black" />
 
       {/* --- VIDEO SECTION (FIXED TOP) --- */}
-      <View className="bg-black w-full aspect-video relative z-10 shadow-lg">
+      <View
+        style={{ backgroundColor: theme.black }}
+        className="w-full aspect-video relative z-10 shadow-lg"
+      >
         {currentVideo ? (
           <YoutubePlayer
             ref={playerRef}
@@ -210,13 +213,18 @@ const StudentVideoPlayer = () => {
             }}
           />
         ) : (
-          <View className="flex-1 justify-center items-center bg-[#282C34]">
+          <View
+            style={{ backgroundColor: theme.bgSecondary }}
+            className="flex-1 justify-center items-center"
+          >
             <MaterialCommunityIcons
               name="video-off-outline"
               size={40}
-              color="#666"
+              color={theme.textMuted}
             />
-            <Text className="text-gray-500 mt-2">No video selected</Text>
+            <Text style={{ color: theme.textMuted }} className="mt-2">
+              No video selected
+            </Text>
           </View>
         )}
       </View>
@@ -225,19 +233,34 @@ const StudentVideoPlayer = () => {
       <View className="flex-1">
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* 1. INFO CARD */}
-          <View className="px-5 py-5 border-b border-[#333842]">
-            <Text className="text-white text-xl font-bold mb-2 leading-7">
+          <View
+            style={{ borderColor: theme.border }}
+            className="px-5 py-5 border-b"
+          >
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="text-xl font-bold mb-2 leading-7"
+            >
               {currentVideo?.title || courseInfo.title}
             </Text>
 
             <View className="flex-row items-center justify-between mb-4">
               <View className="flex-row items-center">
-                <View className="bg-[#f49b33]/20 px-2 py-1 rounded mr-2">
-                  <Text className="text-[#f49b33] text-[10px] font-bold uppercase">
+                <View
+                  style={{ backgroundColor: theme.accentSoft20 }}
+                  className="px-2 py-1 rounded mr-2"
+                >
+                  <Text
+                    style={{ color: theme.accent }}
+                    className="text-[10px] font-bold uppercase"
+                  >
                     Lecture {currentIndex + 1}
                   </Text>
                 </View>
-                <Text className="text-gray-400 text-xs">
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-xs"
+                >
                   {playlist.length} Videos
                 </Text>
               </View>
@@ -247,32 +270,54 @@ const StudentVideoPlayer = () => {
                 <TouchableOpacity
                   onPress={handlePrev}
                   disabled={currentIndex === 0}
-                  className={`p-2 rounded-full mr-2 ${currentIndex === 0 ? "opacity-30" : "bg-[#333842]"}`}
+                  style={{
+                    backgroundColor: theme.bgSecondary,
+                    opacity: currentIndex === 0 ? 0.3 : 1,
+                  }}
+                  className="p-2 rounded-full mr-2"
                 >
-                  <Ionicons name="play-skip-back" size={18} color="white" />
+                  <Ionicons
+                    name="play-skip-back"
+                    size={18}
+                    color={theme.textPrimary}
+                  />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleNext}
                   disabled={currentIndex === playlist.length - 1}
-                  className={`p-2 rounded-full ${currentIndex === playlist.length - 1 ? "opacity-30" : "bg-[#333842]"}`}
+                  style={{
+                    backgroundColor: theme.bgSecondary,
+                    opacity: currentIndex === playlist.length - 1 ? 0.3 : 1,
+                  }}
+                  className="p-2 rounded-full"
                 >
-                  <Ionicons name="play-skip-forward" size={18} color="white" />
+                  <Ionicons
+                    name="play-skip-forward"
+                    size={18}
+                    color={theme.textPrimary}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
 
             {/* Description Accordion (Simple) */}
-            <Text className="text-gray-400 text-sm leading-5">
+            <Text
+              style={{ color: theme.textSecondary }}
+              className="text-sm leading-5"
+            >
               {courseInfo.description}
             </Text>
-
-
           </View>
 
           {/* 2. PLAYLIST HEADER */}
           <View className="px-5 py-4 flex-row items-center justify-between">
-            <Text className="text-white font-bold text-lg">Course Content</Text>
-            <Text className="text-gray-500 text-xs">
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="font-bold text-lg"
+            >
+              Course Content
+            </Text>
+            <Text style={{ color: theme.textMuted }} className="text-xs">
               {currentIndex + 1} / {playlist.length}
             </Text>
           </View>
@@ -291,9 +336,11 @@ const StudentVideoPlayer = () => {
               <MaterialCommunityIcons
                 name="playlist-remove"
                 size={60}
-                color="gray"
+                color={theme.textMuted}
               />
-              <Text className="text-gray-500 mt-2">No videos available.</Text>
+              <Text style={{ color: theme.textMuted }} className="mt-2">
+                No videos available.
+              </Text>
             </View>
           )}
         </ScrollView>

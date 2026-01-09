@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, FlatList, Image, Dimensions } from "react-native";
 import firestore from "@react-native-firebase/firestore";
+import { useTheme } from "../context/ThemeContext"; // Import Theme Hook
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 32;
 
 const BannerCarousel = () => {
+  const { theme } = useTheme(); // Get dynamic theme
   const [originalBanners, setOriginalBanners] = useState([]);
   const [infiniteBanners, setInfiniteBanners] = useState([]);
   const flatListRef = useRef(null);
@@ -99,6 +101,11 @@ const BannerCarousel = () => {
               source={{ uri: item.imageUrl }}
               className="w-full h-full rounded-2xl"
               resizeMode="cover"
+              style={{
+                backgroundColor: theme.bgTertiary, // Theme-aware placeholder
+                borderColor: theme.border, // Theme-aware border
+                borderWidth: 1,
+              }}
             />
           </View>
         )}

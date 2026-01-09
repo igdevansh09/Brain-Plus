@@ -14,13 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import firestore from "@react-native-firebase/firestore";
-
-const theme = {
-  bg: "bg-[#282C34]",
-  card: "bg-[#333842]",
-  accent: "text-[#f49b33]",
-  borderColor: "border-[#4C5361]",
-};
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // Helper: Calculate Days
 const getDaysCount = (start, end) => {
@@ -37,6 +31,7 @@ const getDaysCount = (start, end) => {
 };
 
 const StudentLeaveCard = ({ item }) => {
+  const { theme } = useTheme(); // Get dynamic theme values
   const [studentData, setStudentData] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
 
@@ -76,7 +71,12 @@ const StudentLeaveCard = ({ item }) => {
 
   return (
     <View
-      className={`${theme.card} p-4 rounded-2xl mb-4 border ${theme.borderColor} shadow-sm`}
+      style={{
+        backgroundColor: theme.bgSecondary,
+        borderColor: theme.border,
+        shadowColor: theme.shadow,
+      }}
+      className="p-4 rounded-2xl mb-4 border shadow-sm"
     >
       {/* Header: Avatar, Info & Call */}
       <View className="flex-row items-center mb-4">
@@ -85,11 +85,21 @@ const StudentLeaveCard = ({ item }) => {
           {studentData?.profileImage ? (
             <Image
               source={{ uri: studentData.profileImage }}
-              className="w-14 h-14 rounded-full border border-[#f49b33]"
+              style={{ borderColor: theme.accent }}
+              className="w-14 h-14 rounded-full border"
             />
           ) : (
-            <View className="w-14 h-14 rounded-full bg-[#f49b33]/20 items-center justify-center border border-[#f49b33]/30">
-              <Text className="text-[#f49b33] font-bold text-xl">
+            <View
+              style={{
+                backgroundColor: theme.accentSoft20,
+                borderColor: theme.accentSoft30,
+              }}
+              className="w-14 h-14 rounded-full items-center justify-center border"
+            >
+              <Text
+                style={{ color: theme.accent }}
+                className="font-bold text-xl"
+              >
                 {item.studentName?.charAt(0) || "S"}
               </Text>
             </View>
@@ -98,16 +108,25 @@ const StudentLeaveCard = ({ item }) => {
 
         {/* Name & Days Info */}
         <View className="flex-1">
-          <Text className="text-white font-bold text-lg leading-tight">
+          <Text
+            style={{ color: theme.textPrimary }}
+            className="font-bold text-lg leading-tight"
+          >
             {item.studentName}
           </Text>
           <View className="flex-row items-center mt-1">
-            <View className="bg-[#f49b33] px-2 py-0.5 rounded mr-2">
-              <Text className="text-[#282C34] text-[10px] font-bold">
+            <View
+              style={{ backgroundColor: theme.accent }}
+              className="px-2 py-0.5 rounded mr-2"
+            >
+              <Text
+                style={{ color: theme.textDark }}
+                className="text-[10px] font-bold"
+              >
                 {daysCount} {daysCount > 1 ? "Days" : "Day"} Leave
               </Text>
             </View>
-            <Text className="text-gray-400 text-xs">
+            <Text style={{ color: theme.textSecondary }} className="text-xs">
               {studentData?.standard || "Student"}
             </Text>
           </View>
@@ -116,31 +135,52 @@ const StudentLeaveCard = ({ item }) => {
         {/* Call Button */}
         <TouchableOpacity
           onPress={handleCall}
-          className="bg-[#282C34] w-10 h-10 rounded-full items-center justify-center border border-[#4C5361]"
+          style={{
+            backgroundColor: theme.bgTertiary,
+            borderColor: theme.border,
+          }}
+          className="w-10 h-10 rounded-full items-center justify-center border"
         >
-          <Ionicons name="call" size={18} color="#f49b33" />
+          <Ionicons name="call" size={18} color={theme.accent} />
         </TouchableOpacity>
       </View>
 
       {/* Date Range Strip */}
-      <View className="bg-[#282C34] rounded-xl flex-row items-center justify-between p-3 mb-3 border border-[#4C5361]/50">
+      <View
+        style={{
+          backgroundColor: theme.bgTertiary,
+          borderColor: theme.border,
+        }}
+        className="rounded-xl flex-row items-center justify-between p-3 mb-3 border"
+      >
         <View className="flex-row items-center">
           <MaterialCommunityIcons
             name="calendar-arrow-right"
             size={20}
-            color="#9CA3AF"
+            color={theme.textMuted}
           />
-          <Text className="text-gray-300 font-bold ml-3 text-sm">
+          <Text
+            style={{ color: theme.textSecondary }}
+            className="font-bold ml-3 text-sm"
+          >
             {item.startDate}
           </Text>
         </View>
-        <Ionicons name="arrow-forward" size={16} color="#4C5361" />
-        <Text className="text-gray-300 font-bold text-sm">{item.endDate}</Text>
+        <Ionicons name="arrow-forward" size={16} color={theme.textMuted} />
+        <Text
+          style={{ color: theme.textSecondary }}
+          className="font-bold text-sm"
+        >
+          {item.endDate}
+        </Text>
       </View>
 
       {/* Reason */}
-      <View className="pl-2 border-l-2 border-[#f49b33]/50">
-        <Text className="text-gray-400 text-sm italic">
+      <View
+        style={{ borderLeftColor: theme.accentSoft50 }}
+        className="pl-2 border-l-2"
+      >
+        <Text style={{ color: theme.textMuted }} className="text-sm italic">
           &quot;{item.reason || "No reason provided."}&quot;
         </Text>
       </View>
@@ -150,6 +190,7 @@ const StudentLeaveCard = ({ item }) => {
 
 const TeacherStudentLeaves = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -178,23 +219,39 @@ const TeacherStudentLeaves = () => {
   }, []);
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg}`}>
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        backgroundColor={theme.bgPrimary}
+        barStyle={isDark ? "light-content" : "dark-content"}
+      />
 
       {/* --- HEADER --- */}
       <View className="px-5 py-4 flex-row items-center">
         <TouchableOpacity
           onPress={() => router.back()}
-          className="bg-[#333842] p-2 rounded-full border border-[#4C5361] mr-4"
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+          }}
+          className="p-2 rounded-full border mr-4"
         >
-          <Ionicons name="arrow-back" size={22} color="white" />
+          <Ionicons name="arrow-back" size={22} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text className="text-white text-2xl font-bold">Student Leaves</Text>
+        <Text
+          style={{ color: theme.textPrimary }}
+          className="text-2xl font-bold"
+        >
+          Student Leaves
+        </Text>
       </View>
 
       {/* --- LIST --- */}
       {loading ? (
-        <ActivityIndicator size="large" color="#f49b33" className="mt-10" />
+        <ActivityIndicator
+          size="large"
+          color={theme.accent}
+          className="mt-10"
+        />
       ) : (
         <FlatList
           data={leaves}
@@ -206,9 +263,12 @@ const TeacherStudentLeaves = () => {
               <MaterialCommunityIcons
                 name="calendar-check"
                 size={80}
-                color="gray"
+                color={theme.textMuted}
               />
-              <Text className="text-white text-center mt-4">
+              <Text
+                style={{ color: theme.textMuted }}
+                className="text-center mt-4"
+              >
                 No leave applications found.
               </Text>
             </View>

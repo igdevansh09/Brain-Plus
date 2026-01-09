@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -19,6 +20,7 @@ import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 import CustomToast from "../../components/CustomToast";
 import messaging from "@react-native-firebase/messaging";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // --- CONSTANTS ---
 const CLASSES = [
@@ -67,6 +69,7 @@ const SUB_ARTS = [
 
 const StudentSignUp = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [confirmResult, setConfirmResult] = useState(null);
@@ -178,13 +181,13 @@ const StudentSignUp = () => {
       showToast("OTP Sent!", "success");
     } catch (error) {
       console.error(error);
-      
+
       // --- CUSTOM ERROR HANDLING ---
-      if (error.code === 'auth/too-many-requests') {
+      if (error.code === "auth/too-many-requests") {
         showToast("Too many attempts. Please try again in 1 hour.", "error");
-      } else if (error.code === 'auth/invalid-phone-number') {
+      } else if (error.code === "auth/invalid-phone-number") {
         showToast("Invalid phone number format.", "error");
-      } else if (error.code === 'auth/quota-exceeded') {
+      } else if (error.code === "auth/quota-exceeded") {
         showToast("SMS Quota Exceeded. Contact Support.", "error");
       } else {
         showToast("Failed to send OTP. Try again later.", "error");
@@ -243,13 +246,19 @@ const StudentSignUp = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#282C34]">
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={theme.bgPrimary}
+      />
+
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
         type={toast.type}
         onHide={() => setToast({ ...toast, visible: false })}
       />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -257,26 +266,42 @@ const StudentSignUp = () => {
         <ScrollView contentContainerStyle={{ padding: 24, flexGrow: 1 }}>
           <View className="flex-row items-center mb-6">
             <TouchableOpacity onPress={() => router.back()} className="mr-4">
-              <Ionicons name="arrow-back" size={24} color="white" />
+              <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
             </TouchableOpacity>
-            <Text className="text-white text-3xl font-bold">Student Reg.</Text>
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="text-3xl font-bold"
+            >
+              Student Reg.
+            </Text>
           </View>
 
           {step === 1 ? (
             <>
               {/* Basic Info */}
-              <Text className="text-[#f49b33] mb-1 ml-1 font-semibold">
+              <Text
+                style={{ color: theme.accent }}
+                className="mb-1 ml-1 font-semibold"
+              >
                 Full Name
               </Text>
               <TextInput
                 value={name}
                 onChangeText={setName}
-                className="bg-[#333842] text-white p-4 rounded-xl mb-4 border border-gray-600"
+                style={{
+                  backgroundColor: theme.bgSecondary,
+                  color: theme.textPrimary,
+                  borderColor: theme.border,
+                }}
+                className="p-4 rounded-xl mb-4 border"
                 placeholder="Student Name"
-                placeholderTextColor="#666"
+                placeholderTextColor={theme.textMuted}
               />
 
-              <Text className="text-[#f49b33] mb-1 ml-1 font-semibold">
+              <Text
+                style={{ color: theme.accent }}
+                className="mb-1 ml-1 font-semibold"
+              >
                 Phone
               </Text>
               <TextInput
@@ -284,23 +309,36 @@ const StudentSignUp = () => {
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
                 maxLength={10}
-                className="bg-[#333842] text-white p-4 rounded-xl mb-4 border border-gray-600"
+                style={{
+                  backgroundColor: theme.bgSecondary,
+                  color: theme.textPrimary,
+                  borderColor: theme.border,
+                }}
+                className="p-4 rounded-xl mb-4 border"
                 placeholder="9876543210"
-                placeholderTextColor="#666"
+                placeholderTextColor={theme.textMuted}
               />
 
               {/* Class Selector */}
-              <Text className="text-[#f49b33] mb-1 ml-1 font-semibold">
+              <Text
+                style={{ color: theme.accent }}
+                className="mb-1 ml-1 font-semibold"
+              >
                 Class
               </Text>
               <TouchableOpacity
                 onPress={() => setModalType("class")}
-                className="bg-[#333842] p-4 rounded-xl border border-gray-600 mb-4"
+                style={{
+                  backgroundColor: theme.bgSecondary,
+                  borderColor: theme.border,
+                }}
+                className="p-4 rounded-xl border mb-4"
               >
                 <Text
-                  className={
-                    selectedClass ? "text-white font-bold" : "text-gray-500"
-                  }
+                  style={{
+                    color: selectedClass ? theme.textPrimary : theme.textMuted,
+                    fontWeight: selectedClass ? "bold" : "normal",
+                  }}
                 >
                   {selectedClass || "Select Class"}
                 </Text>
@@ -309,7 +347,10 @@ const StudentSignUp = () => {
               {/* Stream Selector (Conditional) */}
               {["11th", "12th"].includes(selectedClass) && (
                 <>
-                  <Text className="text-[#f49b33] mb-1 ml-1 font-semibold">
+                  <Text
+                    style={{ color: theme.accent }}
+                    className="mb-1 ml-1 font-semibold"
+                  >
                     Stream
                   </Text>
                   <View className="flex-row justify-between mb-4">
@@ -317,10 +358,26 @@ const StudentSignUp = () => {
                       <TouchableOpacity
                         key={stm}
                         onPress={() => setSelectedStream(stm)}
-                        className={`flex-1 p-3 rounded-xl border mr-2 items-center ${selectedStream === stm ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-gray-600"}`}
+                        style={{
+                          backgroundColor:
+                            selectedStream === stm
+                              ? theme.accent
+                              : theme.bgSecondary,
+                          borderColor:
+                            selectedStream === stm
+                              ? theme.accent
+                              : theme.border,
+                        }}
+                        className="flex-1 p-3 rounded-xl border mr-2 items-center"
                       >
                         <Text
-                          className={`font-bold ${selectedStream === stm ? "text-[#282C34]" : "text-white"}`}
+                          style={{
+                            color:
+                              selectedStream === stm
+                                ? theme.textDark
+                                : theme.textPrimary,
+                            fontWeight: "bold",
+                          }}
                         >
                           {stm}
                         </Text>
@@ -331,14 +388,26 @@ const StudentSignUp = () => {
               )}
 
               {/* Subject Selection Grid */}
-              <Text className="text-[#f49b33] mb-2 ml-1 font-semibold">
+              <Text
+                style={{ color: theme.accent }}
+                className="mb-2 ml-1 font-semibold"
+              >
                 Subjects to Enroll
               </Text>
 
               {isSubjectLocked ? (
                 // Locked State (CS or Prep-3rd)
-                <View className="bg-[#333842] p-4 rounded-xl border border-gray-600 mb-6 opacity-80">
-                  <Text className="text-gray-400 italic text-center">
+                <View
+                  style={{
+                    backgroundColor: theme.bgSecondary,
+                    borderColor: theme.border,
+                  }}
+                  className="p-4 rounded-xl border mb-6 opacity-80"
+                >
+                  <Text
+                    style={{ color: theme.textMuted }}
+                    className="italic text-center"
+                  >
                     {lockMessage}
                   </Text>
                 </View>
@@ -352,10 +421,23 @@ const StudentSignUp = () => {
                         <TouchableOpacity
                           key={sub}
                           onPress={() => toggleSubject(sub)}
-                          className={`mr-2 mb-2 px-4 py-2 rounded-full border ${isSelected ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-gray-600"}`}
+                          style={{
+                            backgroundColor: isSelected
+                              ? theme.accent
+                              : theme.bgSecondary,
+                            borderColor: isSelected
+                              ? theme.accent
+                              : theme.border,
+                          }}
+                          className="mr-2 mb-2 px-4 py-2 rounded-full border"
                         >
                           <Text
-                            className={`font-bold ${isSelected ? "text-[#282C34]" : "text-gray-300"}`}
+                            style={{
+                              color: isSelected
+                                ? theme.textDark
+                                : theme.textPrimary,
+                              fontWeight: "bold",
+                            }}
                           >
                             {sub}
                           </Text>
@@ -363,7 +445,10 @@ const StudentSignUp = () => {
                       );
                     })
                   ) : (
-                    <Text className="text-gray-500 italic ml-2">
+                    <Text
+                      style={{ color: theme.textMuted }}
+                      className="italic ml-2"
+                    >
                       Select Class{" "}
                       {["11th", "12th"].includes(selectedClass)
                         ? "& Stream"
@@ -377,12 +462,18 @@ const StudentSignUp = () => {
               <TouchableOpacity
                 onPress={handleSendOTP}
                 disabled={loading}
-                className="bg-[#f49b33] p-4 rounded-xl items-center mt-auto shadow-lg"
+                style={{
+                  backgroundColor: loading ? theme.gray500 : theme.accent,
+                }}
+                className="p-4 rounded-xl items-center mt-auto shadow-lg"
               >
                 {loading ? (
-                  <ActivityIndicator color="#282C34" />
+                  <ActivityIndicator color={theme.textDark} />
                 ) : (
-                  <Text className="text-[#282C34] font-bold text-lg">
+                  <Text
+                    style={{ color: theme.textDark }}
+                    className="font-bold text-lg"
+                  >
                     Get OTP
                   </Text>
                 )}
@@ -391,7 +482,10 @@ const StudentSignUp = () => {
           ) : (
             // Step 2: OTP
             <>
-              <Text className="text-gray-400 text-center mb-6">
+              <Text
+                style={{ color: theme.textSecondary }}
+                className="text-center mb-6"
+              >
                 Enter OTP sent to +91 {phone}
               </Text>
               <TextInput
@@ -399,20 +493,31 @@ const StudentSignUp = () => {
                 onChangeText={setOtp}
                 keyboardType="number-pad"
                 maxLength={6}
-                className="bg-[#333842] text-white p-4 rounded-xl mb-6 text-center text-2xl tracking-widest border border-gray-600"
+                style={{
+                  backgroundColor: theme.bgSecondary,
+                  color: theme.textPrimary,
+                  borderColor: theme.border,
+                }}
+                className="p-4 rounded-xl mb-6 text-center text-2xl tracking-widest border"
                 placeholder="------"
-                placeholderTextColor="#666"
+                placeholderTextColor={theme.textMuted}
                 autoFocus
               />
               <TouchableOpacity
                 onPress={handleRegister}
                 disabled={loading}
-                className="bg-[#f49b33] p-4 rounded-xl items-center"
+                style={{
+                  backgroundColor: loading ? theme.gray500 : theme.accent,
+                }}
+                className="p-4 rounded-xl items-center"
               >
                 {loading ? (
-                  <ActivityIndicator color="#282C34" />
+                  <ActivityIndicator color={theme.textDark} />
                 ) : (
-                  <Text className="text-[#282C34] font-bold text-lg">
+                  <Text
+                    style={{ color: theme.textDark }}
+                    className="font-bold text-lg"
+                  >
                     Verify & Register
                   </Text>
                 )}
@@ -421,7 +526,7 @@ const StudentSignUp = () => {
                 onPress={() => setStep(1)}
                 className="mt-4 items-center"
               >
-                <Text className="text-gray-400">Wrong Details?</Text>
+                <Text style={{ color: theme.textMuted }}>Wrong Details?</Text>
               </TouchableOpacity>
             </>
           )}
@@ -435,9 +540,24 @@ const StudentSignUp = () => {
         animationType="fade"
         onRequestClose={() => setModalType(null)}
       >
-        <View className="flex-1 bg-black/80 justify-center p-6">
-          <View className="bg-[#333842] rounded-xl max-h-[70%] border border-[#f49b33]">
-            <Text className="text-[#f49b33] text-center font-bold text-lg p-4 border-b border-gray-700">
+        <View
+          style={{ backgroundColor: theme.blackSoft80 }}
+          className="flex-1 justify-center p-6"
+        >
+          <View
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.accent,
+            }}
+            className="rounded-xl max-h-[70%] border"
+          >
+            <Text
+              style={{
+                color: theme.accent,
+                borderColor: theme.border,
+              }}
+              className="text-center font-bold text-lg p-4 border-b"
+            >
               Select Class
             </Text>
             <FlatList
@@ -449,10 +569,18 @@ const StudentSignUp = () => {
                     setSelectedClass(item);
                     setModalType(null);
                   }}
-                  className="p-4 border-b border-gray-700 items-center"
+                  style={{ borderColor: theme.border }}
+                  className="p-4 border-b items-center"
                 >
                   <Text
-                    className={`text-lg font-bold ${selectedClass === item ? "text-[#f49b33]" : "text-white"}`}
+                    style={{
+                      color:
+                        selectedClass === item
+                          ? theme.accent
+                          : theme.textPrimary,
+                      fontSize: 18,
+                      fontWeight: selectedClass === item ? "bold" : "normal",
+                    }}
                   >
                     {item}
                   </Text>
@@ -461,9 +589,12 @@ const StudentSignUp = () => {
             />
             <TouchableOpacity
               onPress={() => setModalType(null)}
-              className="p-4 items-center bg-[#282C34] rounded-b-xl"
+              style={{ backgroundColor: theme.bgPrimary }}
+              className="p-4 items-center rounded-b-xl"
             >
-              <Text className="text-red-400 font-bold">Cancel</Text>
+              <Text style={{ color: theme.errorBright }} className="font-bold">
+                Cancel
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import messaging from "@react-native-firebase/messaging";
 import { useRouter } from "expo-router";
 import { useAuth } from "../context/AuthContext";
-import CustomAlert from "./CustomAlert"; // Ensure path is correct
+import CustomAlert from "./CustomAlert";
 
 const NotificationManager = () => {
   const router = useRouter();
@@ -113,7 +113,7 @@ const NotificationManager = () => {
       title={alertConfig.title}
       message={alertConfig.message}
       confirmText="View"
-      type="info" // or "success" based on your preference
+      type="info"
       onConfirm={() => handleNotificationClick(alertConfig.data)}
       onCancel={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
     />

@@ -14,6 +14,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // NATIVE SDK
 import auth from "@react-native-firebase/auth";
@@ -23,6 +24,7 @@ import CustomToast from "../../components/CustomToast";
 
 const TeacherClassUpdates = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
@@ -49,16 +51,6 @@ const TeacherClassUpdates = () => {
   });
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
-
-  const theme = {
-    bg: "bg-[#282C34]",
-    card: "bg-[#333842]",
-    accent: "text-[#f49b33]",
-    text: "text-white",
-    subText: "text-gray-400",
-    borderColor: "border-[#4C5361]",
-    send: "#f49b33",
-  };
 
   // --- 1. FETCH PROFILE (ONCE) ---
   useEffect(() => {
@@ -193,27 +185,48 @@ const TeacherClassUpdates = () => {
 
     return (
       <View
-        className={`${theme.card} p-4 rounded-2xl mb-4 border ${theme.borderColor}`}
+        style={{
+          backgroundColor: theme.bgSecondary,
+          borderColor: theme.border,
+        }}
+        className="p-4 rounded-2xl mb-4 border"
       >
         <View className="flex-row justify-between items-start mb-2">
           <View className="flex-row items-center">
-            <View className="bg-[#f49b33]/20 p-2 rounded-full mr-3">
-              <Ionicons name={icon} size={16} color="#f49b33" />
+            <View
+              style={{ backgroundColor: theme.accentSoft20 }}
+              className="p-2 rounded-full mr-3"
+            >
+              <Ionicons name={icon} size={16} color={theme.accent} />
             </View>
             <View>
-              <Text className="text-white font-bold text-base">
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="font-bold text-base"
+              >
                 {item.title}
               </Text>
-              <Text className="text-gray-400 text-xs">
+              <Text style={{ color: theme.textSecondary }} className="text-xs">
                 {item.classId} • {item.subject}
               </Text>
             </View>
           </View>
-          <Text className="text-gray-500 text-[10px]">{item.date}</Text>
+          <Text style={{ color: theme.textMuted }} className="text-[10px]">
+            {item.date}
+          </Text>
         </View>
 
-        <View className="bg-[#282C34] p-3 rounded-xl border border-[#4C5361]/50">
-          <Text className="text-gray-300 text-sm leading-5">
+        <View
+          style={{
+            backgroundColor: theme.bgTertiary,
+            borderColor: theme.borderSoft,
+          }}
+          className="p-3 rounded-xl border"
+        >
+          <Text
+            style={{ color: theme.textSecondary }}
+            className="text-sm leading-5"
+          >
             {item.message || item.content}
           </Text>
         </View>
@@ -224,16 +237,20 @@ const TeacherClassUpdates = () => {
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${theme.bg} justify-center items-center`}
+        style={{ backgroundColor: theme.bgPrimary }}
+        className="flex-1 justify-center items-center"
       >
-        <ActivityIndicator size="large" color="#f49b33" />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg}`}>
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={theme.bgPrimary}
+      />
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
@@ -244,11 +261,20 @@ const TeacherClassUpdates = () => {
       <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => router.back()}
-          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+          }}
+          className="p-2 rounded-full border"
         >
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text className="text-white text-xl font-bold">New Announcement</Text>
+        <Text
+          style={{ color: theme.textPrimary }}
+          className="text-xl font-bold"
+        >
+          New Announcement
+        </Text>
         <View className="w-10" />
       </View>
 
@@ -261,7 +287,10 @@ const TeacherClassUpdates = () => {
           showsVerticalScrollIndicator={false}
         >
           <View className="mb-6">
-            <Text className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1">
+            <Text
+              style={{ color: theme.textSecondary }}
+              className="text-xs font-bold uppercase mb-2 ml-1"
+            >
               Target Class
             </Text>
             <ScrollView
@@ -273,10 +302,22 @@ const TeacherClassUpdates = () => {
                 <TouchableOpacity
                   key={cls}
                   onPress={() => handleClassChange(cls)}
-                  className={`mr-3 px-5 py-2 rounded-xl border ${selectedClass === cls ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-[#4C5361]"}`}
+                  style={{
+                    backgroundColor:
+                      selectedClass === cls ? theme.accent : theme.bgSecondary,
+                    borderColor:
+                      selectedClass === cls ? theme.accent : theme.border,
+                  }}
+                  className="mr-3 px-5 py-2 rounded-xl border"
                 >
                   <Text
-                    className={`font-bold ${selectedClass === cls ? "text-[#282C34]" : "text-gray-400"}`}
+                    style={{
+                      color:
+                        selectedClass === cls
+                          ? theme.textDark
+                          : theme.textMuted,
+                      fontWeight: "bold",
+                    }}
                   >
                     {cls}
                   </Text>
@@ -286,7 +327,10 @@ const TeacherClassUpdates = () => {
 
             {selectedClass && (
               <>
-                <Text className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1">
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-xs font-bold uppercase mb-2 ml-1"
+                >
                   Target Subject
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -294,10 +338,24 @@ const TeacherClassUpdates = () => {
                     <TouchableOpacity
                       key={sub}
                       onPress={() => setSelectedSubject(sub)}
-                      className={`mr-3 px-5 py-2 rounded-xl border ${selectedSubject === sub ? "bg-blue-500 border-blue-500" : "bg-[#333842] border-[#4C5361]"}`}
+                      style={{
+                        backgroundColor:
+                          selectedSubject === sub
+                            ? theme.info
+                            : theme.bgSecondary,
+                        borderColor:
+                          selectedSubject === sub ? theme.info : theme.border,
+                      }}
+                      className="mr-3 px-5 py-2 rounded-xl border"
                     >
                       <Text
-                        className={`font-bold ${selectedSubject === sub ? "text-white" : "text-gray-400"}`}
+                        style={{
+                          color:
+                            selectedSubject === sub
+                              ? theme.white
+                              : theme.textMuted,
+                          fontWeight: "bold",
+                        }}
                       >
                         {sub}
                       </Text>
@@ -309,43 +367,61 @@ const TeacherClassUpdates = () => {
           </View>
 
           <View
-            className={`${theme.card} p-4 rounded-2xl border ${theme.borderColor} mb-6`}
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.border,
+            }}
+            className="p-4 rounded-2xl border mb-6"
           >
             <TextInput
               placeholder="Title (e.g. Test Syllabus)"
-              placeholderTextColor="#666"
+              placeholderTextColor={theme.placeholder}
               value={title}
               onChangeText={setTitle}
-              className="bg-[#282C34] text-white p-4 rounded-xl border border-[#4C5361] mb-3 font-bold text-base"
+              style={{
+                backgroundColor: theme.bgTertiary,
+                borderColor: theme.border,
+                color: theme.textPrimary,
+              }}
+              className="p-4 rounded-xl border mb-3 font-bold text-base"
             />
 
             <TextInput
               placeholder="Write your message here..."
-              placeholderTextColor="#666"
+              placeholderTextColor={theme.placeholder}
               multiline
               numberOfLines={5}
               value={message}
               onChangeText={setMessage}
-              className="bg-[#282C34] text-white p-4 rounded-xl border border-[#4C5361] mb-4 text-sm"
-              style={{ textAlignVertical: "top" }}
+              style={{
+                textAlignVertical: "top",
+                backgroundColor: theme.bgTertiary,
+                borderColor: theme.border,
+                color: theme.textPrimary,
+              }}
+              className="p-4 rounded-xl border mb-4 text-sm"
             />
 
             <TouchableOpacity
               onPress={handleSend}
               disabled={sending}
-              className="bg-[#f49b33] py-4 rounded-xl flex-row justify-center items-center shadow-lg"
+              style={{ backgroundColor: theme.accent }}
+              className="py-4 rounded-xl flex-row justify-center items-center shadow-lg"
             >
               {sending ? (
-                <ActivityIndicator color="#282C34" />
+                <ActivityIndicator color={theme.textDark} />
               ) : (
                 <>
                   <Ionicons
                     name="send"
                     size={20}
-                    color="#282C34"
+                    color={theme.textDark}
                     className="mr-2"
                   />
-                  <Text className="text-[#282C34] font-bold text-lg">
+                  <Text
+                    style={{ color: theme.textDark }}
+                    className="font-bold text-lg"
+                  >
                     Post Announcement
                   </Text>
                 </>
@@ -353,7 +429,10 @@ const TeacherClassUpdates = () => {
             </TouchableOpacity>
           </View>
 
-          <Text className="text-[#f49b33] font-bold text-lg mb-4 px-1">
+          <Text
+            style={{ color: theme.accent }}
+            className="font-bold text-lg mb-4 px-1"
+          >
             Recent Updates
           </Text>
           <FlatList
@@ -366,9 +445,9 @@ const TeacherClassUpdates = () => {
                 <MaterialCommunityIcons
                   name="bell-sleep"
                   size={50}
-                  color="gray"
+                  color={theme.textMuted}
                 />
-                <Text className="text-gray-400 mt-2">
+                <Text style={{ color: theme.textMuted }} className="mt-2">
                   No updates sent recently.
                 </Text>
               </View>

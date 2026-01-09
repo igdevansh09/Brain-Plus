@@ -15,6 +15,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // NATIVE SDK
 import auth from "@react-native-firebase/auth";
@@ -24,6 +25,7 @@ import CustomToast from "../../components/CustomToast";
 
 const TeacherLeaveRequest = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -48,16 +50,6 @@ const TeacherLeaveRequest = () => {
   });
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
-
-  const theme = {
-    bg: "bg-[#282C34]",
-    card: "bg-[#333842]",
-    accent: "text-[#f49b33]",
-    text: "text-white",
-    subText: "text-gray-400",
-    borderColor: "border-[#4C5361]",
-    info: "#29B6F6",
-  };
 
   // --- 1. FETCH PROFILE & HISTORY ---
   useEffect(() => {
@@ -172,48 +164,72 @@ const TeacherLeaveRequest = () => {
 
     return (
       <View
-        className={`${theme.card} p-4 rounded-2xl mb-4 border ${theme.borderColor} shadow-sm`}
+        style={{
+          backgroundColor: theme.bgSecondary,
+          borderColor: theme.border,
+          shadowColor: theme.shadow,
+        }}
+        className="p-4 rounded-2xl mb-4 border shadow-sm"
       >
         <View className="flex-row justify-between items-start mb-2">
           <View className="flex-row items-center">
             <View
-              style={{ backgroundColor: `${theme.info}20` }}
+              style={{ backgroundColor: theme.infoSoft }}
               className="p-2 rounded-full mr-3"
             >
               <Ionicons
                 name="checkmark-circle-outline"
                 size={20}
-                color={theme.info}
+                color={theme.infoBright}
               />
             </View>
             <View>
-              <Text className="text-white font-bold text-base">
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="font-bold text-base"
+              >
                 Notification Sent
               </Text>
-              <Text className="text-gray-400 text-xs">
+              <Text style={{ color: theme.textSecondary }} className="text-xs">
                 Posted: {dateDisplay}
               </Text>
             </View>
           </View>
-          <View className="bg-[#282C34] px-3 py-1 rounded-lg border border-[#4C5361]">
-            <Text className="text-[#f49b33] font-bold text-xs">
+          <View
+            style={{
+              backgroundColor: theme.bgTertiary,
+              borderColor: theme.border,
+            }}
+            className="px-3 py-1 rounded-lg border"
+          >
+            <Text style={{ color: theme.accent }} className="font-bold text-xs">
               {item.duration || 1} Days
             </Text>
           </View>
         </View>
 
         <View className="flex-row items-center my-2 pl-1">
-          <Text className="text-white font-bold">{item.startDate}</Text>
+          <Text style={{ color: theme.textPrimary }} className="font-bold">
+            {item.startDate}
+          </Text>
           <Ionicons
             name="arrow-forward"
             size={14}
-            color="#666"
+            color={theme.textMuted}
             style={{ marginHorizontal: 8 }}
           />
-          <Text className="text-white font-bold">{item.endDate}</Text>
+          <Text style={{ color: theme.textPrimary }} className="font-bold">
+            {item.endDate}
+          </Text>
         </View>
 
-        <Text className="text-gray-400 text-sm italic mt-1 border-l-2 border-[#f49b33] pl-2">
+        <Text
+          style={{
+            color: theme.textSecondary,
+            borderLeftColor: theme.accent,
+          }}
+          className="text-sm italic mt-1 border-l-2 pl-2"
+        >
           &quot;{item.reason}&quot;
         </Text>
       </View>
@@ -223,16 +239,20 @@ const TeacherLeaveRequest = () => {
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${theme.bg} justify-center items-center`}
+        style={{ backgroundColor: theme.bgPrimary }}
+        className="flex-1 justify-center items-center"
       >
-        <ActivityIndicator size="large" color="#f49b33" />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg}`}>
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        backgroundColor={theme.bgPrimary}
+        barStyle={isDark ? "light-content" : "dark-content"}
+      />
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
@@ -244,11 +264,20 @@ const TeacherLeaveRequest = () => {
       <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => router.back()}
-          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+          }}
+          className="p-2 rounded-full border"
         >
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text className="text-white text-xl font-bold">Inform Absence</Text>
+        <Text
+          style={{ color: theme.textPrimary }}
+          className="text-xl font-bold"
+        >
+          Inform Absence
+        </Text>
         <View className="w-10" />
       </View>
 
@@ -262,9 +291,17 @@ const TeacherLeaveRequest = () => {
         >
           {/* --- APPLICATION FORM --- */}
           <View
-            className={`${theme.card} p-5 rounded-3xl border ${theme.borderColor} mb-8 shadow-lg`}
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.border,
+              shadowColor: theme.shadow,
+            }}
+            className="p-5 rounded-3xl border mb-8 shadow-lg"
           >
-            <Text className="text-[#f49b33] text-xs font-bold uppercase mb-4 tracking-widest">
+            <Text
+              style={{ color: theme.accent }}
+              className="text-xs font-bold uppercase mb-4 tracking-widest"
+            >
               New Notice
             </Text>
 
@@ -272,18 +309,30 @@ const TeacherLeaveRequest = () => {
             <View className="flex-row justify-between mb-4">
               {/* Start Date */}
               <View className="flex-1 mr-2">
-                <Text className="text-gray-400 text-xs mb-2 ml-1">From</Text>
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-xs mb-2 ml-1"
+                >
+                  From
+                </Text>
                 <TouchableOpacity
                   onPress={() => setShowStartPicker(true)}
-                  className="bg-[#282C34] p-3 rounded-xl border border-[#4C5361] flex-row items-center"
+                  style={{
+                    backgroundColor: theme.bgTertiary,
+                    borderColor: theme.border,
+                  }}
+                  className="p-3 rounded-xl border flex-row items-center"
                 >
                   <Ionicons
                     name="calendar-outline"
                     size={18}
-                    color="#f49b33"
+                    color={theme.accent}
                     className="mr-2"
                   />
-                  <Text className="text-white font-bold">
+                  <Text
+                    style={{ color: theme.textPrimary }}
+                    className="font-bold"
+                  >
                     {formatDate(startDate)}
                   </Text>
                 </TouchableOpacity>
@@ -291,18 +340,30 @@ const TeacherLeaveRequest = () => {
 
               {/* End Date */}
               <View className="flex-1 ml-2">
-                <Text className="text-gray-400 text-xs mb-2 ml-1">To</Text>
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-xs mb-2 ml-1"
+                >
+                  To
+                </Text>
                 <TouchableOpacity
                   onPress={() => setShowEndPicker(true)}
-                  className="bg-[#282C34] p-3 rounded-xl border border-[#4C5361] flex-row items-center"
+                  style={{
+                    backgroundColor: theme.bgTertiary,
+                    borderColor: theme.border,
+                  }}
+                  className="p-3 rounded-xl border flex-row items-center"
                 >
                   <Ionicons
                     name="calendar-outline"
                     size={18}
-                    color="#f49b33"
+                    color={theme.accent}
                     className="mr-2"
                   />
-                  <Text className="text-white font-bold">
+                  <Text
+                    style={{ color: theme.textPrimary }}
+                    className="font-bold"
+                  >
                     {formatDate(endDate)}
                   </Text>
                 </TouchableOpacity>
@@ -310,25 +371,41 @@ const TeacherLeaveRequest = () => {
             </View>
 
             {/* Reason Input */}
-            <Text className="text-gray-400 text-xs mb-2 ml-1">
+            <Text
+              style={{ color: theme.textSecondary }}
+              className="text-xs mb-2 ml-1"
+            >
               Reason for Absence
             </Text>
             <TextInput
               placeholder="E.g. Medical emergency, Urgent work..."
-              placeholderTextColor="#666"
+              placeholderTextColor={theme.placeholder}
               value={reason}
               onChangeText={setReason}
               multiline
               numberOfLines={3}
-              style={{ textAlignVertical: "top" }}
-              className="bg-[#282C34] text-white p-4 rounded-xl border border-[#4C5361] mb-6 text-sm"
+              style={{
+                textAlignVertical: "top",
+                backgroundColor: theme.bgTertiary,
+                borderColor: theme.border,
+                color: theme.textPrimary,
+              }}
+              className="p-4 rounded-xl border mb-6 text-sm"
             />
 
             {/* Summary & Submit */}
             <View className="flex-row items-center justify-between">
               <View>
-                <Text className="text-gray-500 text-xs">Total Duration</Text>
-                <Text className="text-white font-bold text-lg">
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-xs"
+                >
+                  Total Duration
+                </Text>
+                <Text
+                  style={{ color: theme.textPrimary }}
+                  className="font-bold text-lg"
+                >
                   {getDuration()} Days
                 </Text>
               </View>
@@ -336,16 +413,27 @@ const TeacherLeaveRequest = () => {
               <TouchableOpacity
                 onPress={handleSubmit}
                 disabled={submitting}
-                className="bg-[#f49b33] py-3 px-6 rounded-xl flex-row items-center shadow-md"
+                style={{
+                  backgroundColor: theme.accent,
+                  shadowColor: theme.shadow,
+                }}
+                className="py-3 px-6 rounded-xl flex-row items-center shadow-md"
               >
                 {submitting ? (
-                  <ActivityIndicator color="#282C34" size="small" />
+                  <ActivityIndicator color={theme.textDark} size="small" />
                 ) : (
                   <>
-                    <Text className="text-[#282C34] font-bold mr-2">
+                    <Text
+                      style={{ color: theme.textDark }}
+                      className="font-bold mr-2"
+                    >
                       Notify Admin
                     </Text>
-                    <Ionicons name="paper-plane" size={16} color="#282C34" />
+                    <Ionicons
+                      name="paper-plane"
+                      size={16}
+                      color={theme.textDark}
+                    />
                   </>
                 )}
               </TouchableOpacity>
@@ -357,10 +445,13 @@ const TeacherLeaveRequest = () => {
             <MaterialCommunityIcons
               name="history"
               size={20}
-              color="#f49b33"
+              color={theme.accent}
               className="mr-2"
             />
-            <Text className="text-white font-bold text-lg">
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="font-bold text-lg"
+            >
               Past Notifications
             </Text>
           </View>
@@ -376,9 +467,9 @@ const TeacherLeaveRequest = () => {
                 <MaterialCommunityIcons
                   name="file-document-outline"
                   size={60}
-                  color="gray"
+                  color={theme.textMuted}
                 />
-                <Text className="text-gray-400 mt-2">
+                <Text style={{ color: theme.textMuted }} className="mt-2">
                   No leave history found.
                 </Text>
               </View>

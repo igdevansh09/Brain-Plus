@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,10 +9,11 @@ import {
   RefreshControl,
   TouchableOpacity,
   Modal,
-  Image, // <--- ADDED IMPORT
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // --- NATIVE SDK IMPORTS ---
 import auth from "@react-native-firebase/auth";
@@ -22,6 +23,7 @@ import CustomToast from "../../components/CustomToast";
 
 const StudentFees = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -39,17 +41,6 @@ const StudentFees = () => {
     msg: "",
     type: "success",
   });
-
-  const colors = {
-    bg: "#282C34",
-    card: "#333842",
-    accent: "#f49b33",
-    text: "#FFFFFF",
-    subText: "#BBBBBB",
-    dueRed: "#F44336",
-    paidGreen: "#4CAF50",
-    verifyBlue: "#29B6F6",
-  };
 
   const showToast = (msg, type = "success") => {
     setToast({ visible: true, msg, type });
@@ -142,36 +133,39 @@ const StudentFees = () => {
         onPress={() => openPaymentModal(item)}
         activeOpacity={0.9}
         style={{
-          backgroundColor: colors.card,
-          borderColor: isVerifying ? colors.verifyBlue : colors.dueRed,
+          backgroundColor: theme.bgSecondary,
+          borderColor: isVerifying ? theme.verifyBlue : theme.dueRed,
         }}
         className="p-4 rounded-xl mb-3 border"
       >
         <View className="flex-row justify-between items-center">
           <View className="flex-1 pr-3">
             <Text
-              style={{ color: colors.text }}
+              style={{ color: theme.textPrimary }}
               className="text-lg font-semibold"
             >
               {item.title}
             </Text>
-            <Text style={{ color: colors.subText, fontSize: 12 }}>
+            <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
               Due Date: {item.date}
             </Text>
           </View>
           <View className="items-end">
             <Text
-              style={{ color: isVerifying ? colors.verifyBlue : colors.dueRed }}
+              style={{ color: isVerifying ? theme.verifyBlue : theme.dueRed }}
               className="text-2xl font-bold"
             >
               ₹{item.amount}
             </Text>
 
             {isVerifying ? (
-              <View className="bg-blue-500/20 px-2 py-1 rounded mt-1">
+              <View
+                style={{ backgroundColor: theme.infoSoft }}
+                className="px-2 py-1 rounded mt-1"
+              >
                 <Text
                   style={{
-                    color: colors.verifyBlue,
+                    color: theme.verifyBlue,
                     fontSize: 10,
                     fontWeight: "bold",
                   }}
@@ -180,10 +174,13 @@ const StudentFees = () => {
                 </Text>
               </View>
             ) : (
-              <View className="bg-red-500/20 px-2 py-1 rounded mt-1">
+              <View
+                style={{ backgroundColor: theme.errorSoft }}
+                className="px-2 py-1 rounded mt-1"
+              >
                 <Text
                   style={{
-                    color: colors.dueRed,
+                    color: theme.dueRed,
                     fontSize: 10,
                     fontWeight: "bold",
                   }}
@@ -201,19 +198,23 @@ const StudentFees = () => {
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${colors.bg} justify-center items-center`}
+        style={{ backgroundColor: theme.bgPrimary }}
+        className="flex-1 justify-center items-center"
       >
-        <ActivityIndicator size="large" color={colors.accent} />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.bg }}
+      style={{ flex: 1, backgroundColor: theme.bgPrimary }}
       className="pt-8"
     >
-      <StatusBar backgroundColor={colors.bg} barStyle="light-content" />
+      <StatusBar
+        backgroundColor={theme.bgPrimary}
+        barStyle={isDark ? "light-content" : "dark-content"}
+      />
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
@@ -223,10 +224,10 @@ const StudentFees = () => {
 
       <View className="px-4 pb-4 py-7 flex-row items-center">
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
         <Text
-          style={{ color: colors.text }}
+          style={{ color: theme.textPrimary }}
           className="text-2xl font-semibold ml-4"
         >
           Fee Status
@@ -239,13 +240,14 @@ const StudentFees = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.accent}
+            tintColor={theme.accent}
+            colors={[theme.accent]}
           />
         }
       >
         <View className="mb-6">
           <Text
-            style={{ color: colors.accent }}
+            style={{ color: theme.accent }}
             className="text-xl font-semibold mb-3"
           >
             Pending Dues
@@ -253,14 +255,17 @@ const StudentFees = () => {
           {pendingFees.length > 0 ? (
             pendingFees.map((item) => renderDueFee({ item }))
           ) : (
-            <View className="p-5 items-center justify-center bg-[#333842] rounded-xl">
+            <View
+              style={{ backgroundColor: theme.bgSecondary }}
+              className="p-5 items-center justify-center rounded-xl"
+            >
               <Ionicons
                 name="checkmark-circle-outline"
                 size={40}
-                color={colors.paidGreen}
+                color={theme.paidGreen}
               />
               <Text
-                style={{ color: colors.text }}
+                style={{ color: theme.textPrimary }}
                 className="mt-2 text-lg font-semibold"
               >
                 No Dues
@@ -271,7 +276,7 @@ const StudentFees = () => {
 
         <View className="mb-8">
           <Text
-            style={{ color: colors.accent }}
+            style={{ color: theme.accent }}
             className="text-xl font-semibold mb-3"
           >
             Payment History
@@ -280,17 +285,23 @@ const StudentFees = () => {
             historyFees.map((item) => (
               <View
                 key={item.id}
-                style={{ backgroundColor: colors.card }}
-                className="p-4 rounded-xl mb-3 flex-row justify-between items-center border border-[#4C5361]"
+                style={{
+                  backgroundColor: theme.bgSecondary,
+                  borderColor: theme.border,
+                }}
+                className="p-4 rounded-xl mb-3 flex-row justify-between items-center border"
               >
                 <View>
                   <Text
-                    style={{ color: colors.text }}
+                    style={{ color: theme.textPrimary }}
                     className="text-base font-semibold"
                   >
                     {item.title}
                   </Text>
-                  <Text style={{ color: colors.subText }} className="text-sm">
+                  <Text
+                    style={{ color: theme.textSecondary }}
+                    className="text-sm"
+                  >
                     Paid on:{" "}
                     {item.paidAt
                       ? new Date(item.paidAt).toLocaleDateString()
@@ -299,14 +310,14 @@ const StudentFees = () => {
                 </View>
                 <View className="items-end">
                   <Text
-                    style={{ color: colors.paidGreen }}
+                    style={{ color: theme.paidGreen }}
                     className="text-lg font-bold"
                   >
                     ₹{item.amount}
                   </Text>
                   <Text
                     style={{
-                      color: colors.paidGreen,
+                      color: theme.paidGreen,
                       fontSize: 10,
                       fontWeight: "bold",
                     }}
@@ -318,7 +329,7 @@ const StudentFees = () => {
             ))
           ) : (
             <Text
-              style={{ color: colors.subText }}
+              style={{ color: theme.textMuted }}
               className="text-center italic"
             >
               No payment history found.
@@ -329,26 +340,41 @@ const StudentFees = () => {
 
       {/* --- OFFLINE PAYMENT MODAL --- */}
       <Modal visible={payModalVisible} animationType="slide" transparent>
-        <View className="flex-1 bg-black/80 justify-center p-5">
-          <View className="bg-[#333842] p-6 rounded-2xl border border-[#f49b33]">
+        <View
+          style={{ backgroundColor: theme.blackSoft80 }}
+          className="flex-1 justify-center p-5"
+        >
+          <View
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.accent,
+            }}
+            className="p-6 rounded-2xl border"
+          >
             <View className="flex-row justify-between items-center mb-4">
-              <Text className="text-white text-xl font-bold">
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="text-xl font-bold"
+              >
                 Scan to Pay: ₹{selectedFee?.amount}
               </Text>
               <TouchableOpacity onPress={() => setPayModalVisible(false)}>
-                <Ionicons name="close" size={24} color="gray" />
+                <Ionicons name="close" size={24} color={theme.textMuted} />
               </TouchableOpacity>
             </View>
 
-            <Text className="text-gray-400 text-sm mb-4">
-              1. Take the screenshot of the QR Code below with any UPI App.{"\n"}
+            <Text
+              style={{ color: theme.textSecondary }}
+              className="text-sm mb-4"
+            >
+              1. Take the screenshot of the QR Code below with any UPI App.
+              {"\n"}
               2. Complete the payment.{"\n"}
               3. Click &quot;Submit&quot; below.
             </Text>
 
             {/* --- QR CODE DISPLAY --- */}
             <View className="bg-white p-4 rounded-xl mb-4 items-center justify-center self-center overflow-hidden">
-              {/* MAKE SURE TO ADD 'qr_code.png' TO ASSETS/IMAGES */}
               <Image
                 source={require("../../assets/images/qr_code.png")}
                 style={{ width: 200, height: 200 }}
@@ -359,12 +385,16 @@ const StudentFees = () => {
             <TouchableOpacity
               onPress={handleSubmitProof}
               disabled={submitting}
-              className="w-full bg-[#f49b33] p-4 rounded-xl items-center"
+              style={{ backgroundColor: theme.accent }}
+              className="w-full p-4 rounded-xl items-center"
             >
               {submitting ? (
-                <ActivityIndicator color="#282C34" />
+                <ActivityIndicator color={theme.textDark} />
               ) : (
-                <Text className="text-[#282C34] font-bold text-lg">
+                <Text
+                  style={{ color: theme.textDark }}
+                  className="font-bold text-lg"
+                >
                   Submit
                 </Text>
               )}

@@ -672,7 +672,6 @@ exports.cleanupUserData = onDocumentDeleted("users/{uid}", async (event) => {
       });
 
       // C. Delete Individual Test Results
-      // (If you use the 'test_results' collection mentioned in notification triggers)
       const resultsSnap = await db.collection("test_results").where("studentId", "==", uid).get();
       resultsSnap.docs.forEach((doc) => {
         batch.delete(doc.ref);
@@ -680,17 +679,14 @@ exports.cleanupUserData = onDocumentDeleted("users/{uid}", async (event) => {
       });
 
       // D. Remove from Shared Exam Sheets (Map Field)
-      // This removes their score from the Teacher's "Exam Results" sheet
       if (userData.standard) {
         const examsSnap = await db.collection("exam_results")
           .where("classId", "==", userData.standard)
           .get();
         
         for (const doc of examsSnap.docs) {
-          // We can't batch 'update' easily with logic, so we run these immediately
           await doc.ref.update({
             [`results.${uid}`]: admin.firestore.FieldValue.delete(),
-            // Optional: Decrement student count? (Complex, skipping to avoid sync bugs)
           });
           console.log(`Removed score from Exam: ${doc.id}`);
         }
@@ -714,7 +710,7 @@ exports.cleanupUserData = onDocumentDeleted("users/{uid}", async (event) => {
 
     // --- 2. CLEANUP FOR TEACHERS ---
     if (userData.role === "teacher") {
-      // Delete Salaries
+      // A. Delete Salaries
       const salarySnap = await db
         .collection("salaries")
         .where("teacherId", "==", uid)
@@ -724,12 +720,24 @@ exports.cleanupUserData = onDocumentDeleted("users/{uid}", async (event) => {
         operationCount++;
       });
 
-      // [NEW] Delete Class Notices created by this teacher
+      // B. Delete Class Notices created by this teacher
       const noticesSnap = await db
         .collection("class_notices")
         .where("teacherId", "==", uid)
         .get();
       noticesSnap.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+        operationCount++;
+      });
+
+      // C. [NEW] Delete Attendance marked by this teacher
+      // Assumes your attendance documents have a 'teacherId' field
+      const attendanceSnap = await db
+        .collection("attendance")
+        .where("teacherId", "==", uid)
+        .get();
+      
+      attendanceSnap.docs.forEach((doc) => {
         batch.delete(doc.ref);
         operationCount++;
       });

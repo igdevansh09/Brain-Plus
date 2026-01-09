@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // --- NATIVE SDK ---
 import firestore from "@react-native-firebase/firestore";
@@ -22,6 +23,7 @@ const { width } = Dimensions.get("window");
 const GuestVideoPlayer = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { theme, isDark } = useTheme(); // Get theme values
 
   // Params
   const {
@@ -38,16 +40,6 @@ const GuestVideoPlayer = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const playerRef = useRef();
-
-  // Theme (Using Student Player Dark Theme)
-  const theme = {
-    bg: "#1A1D21",
-    card: "#282C34",
-    accent: "#f49b33",
-    text: "#FFFFFF",
-    subText: "#A0A0A0",
-    border: "#333842",
-  };
 
   // --- 1. INITIALIZATION ---
   useEffect(() => {
@@ -138,21 +130,24 @@ const GuestVideoPlayer = () => {
     return (
       <TouchableOpacity
         onPress={() => handleVideoSelect(index)}
-        className={`flex-row items-center p-4 mb-2 mx-4 rounded-xl border ${
-          isActive
-            ? "border-[#f49b33] bg-[#f49b33]/10"
-            : "border-[#333842] bg-[#282C34]"
-        }`}
+        style={{
+          backgroundColor: isActive ? theme.accentSoft10 : theme.bgSecondary,
+          borderColor: isActive ? theme.accent : theme.border,
+        }}
+        className={`flex-row items-center p-4 mb-2 mx-4 rounded-xl border`}
       >
         <View className="mr-4">
           {isActive ? (
             <MaterialCommunityIcons
               name="play-circle"
               size={24}
-              color="#f49b33"
+              color={theme.accent}
             />
           ) : (
-            <Text className="text-gray-500 font-bold text-lg w-6 text-center">
+            <Text
+              style={{ color: theme.textMuted }}
+              className="font-bold text-lg w-6 text-center"
+            >
               {index + 1}
             </Text>
           )}
@@ -160,19 +155,23 @@ const GuestVideoPlayer = () => {
 
         <View className="flex-1">
           <Text
-            className={`font-bold text-sm mb-1 ${isActive ? "text-[#f49b33]" : "text-white"}`}
+            style={{ color: isActive ? theme.accent : theme.textPrimary }}
+            className="font-bold text-sm mb-1"
             numberOfLines={2}
           >
             {item.title}
           </Text>
-          <Text className="text-gray-500 text-[10px] uppercase">
+          <Text
+            style={{ color: theme.textMuted }}
+            className="text-[10px] uppercase"
+          >
             Video • {item.videoId ? "Ready" : "Unavailable"}
           </Text>
         </View>
 
         {isActive && (
           <View className="ml-2">
-            <Ionicons name="stats-chart" size={16} color="#f49b33" />
+            <Ionicons name="stats-chart" size={16} color={theme.accent} />
           </View>
         )}
       </TouchableOpacity>
@@ -184,19 +183,22 @@ const GuestVideoPlayer = () => {
       <SafeAreaView
         style={{
           flex: 1,
-          backgroundColor: theme.bg,
+          backgroundColor: theme.bgPrimary,
           justifyContent: "center",
           alignItems: "center",
         }}
       >
-        <ActivityIndicator size="large" color="#f49b33" />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-      <StatusBar barStyle="light-content" backgroundColor="black" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor="black" // Keep black for video area focus
+      />
 
       {/* --- VIDEO PLAYER --- */}
       <View className="bg-black w-full aspect-video relative z-10 shadow-lg">
@@ -214,13 +216,18 @@ const GuestVideoPlayer = () => {
             }}
           />
         ) : (
-          <View className="flex-1 justify-center items-center bg-[#282C34]">
+          <View
+            style={{ backgroundColor: theme.bgSecondary }}
+            className="flex-1 justify-center items-center"
+          >
             <MaterialCommunityIcons
               name="video-off-outline"
               size={40}
-              color="#666"
+              color={theme.textMuted}
             />
-            <Text className="text-gray-500 mt-2">No video selected</Text>
+            <Text style={{ color: theme.textMuted }} className="mt-2">
+              No video selected
+            </Text>
           </View>
         )}
       </View>
@@ -229,19 +236,34 @@ const GuestVideoPlayer = () => {
       <View className="flex-1">
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* INFO CARD */}
-          <View className="px-5 py-5 border-b border-[#333842]">
-            <Text className="text-white text-xl font-bold mb-2 leading-7">
+          <View
+            style={{ borderColor: theme.border }}
+            className="px-5 py-5 border-b"
+          >
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="text-xl font-bold mb-2 leading-7"
+            >
               {currentVideo?.title || courseInfo.title}
             </Text>
 
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center">
-                <View className="bg-[#f49b33]/20 px-2 py-1 rounded mr-2">
-                  <Text className="text-[#f49b33] text-[10px] font-bold uppercase">
+                <View
+                  style={{ backgroundColor: theme.accentSoft20 }}
+                  className="px-2 py-1 rounded mr-2"
+                >
+                  <Text
+                    style={{ color: theme.accent }}
+                    className="text-[10px] font-bold uppercase"
+                  >
                     Lecture {currentIndex + 1}
                   </Text>
                 </View>
-                <Text className="text-gray-400 text-xs">
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-xs"
+                >
                   {playlist.length} Videos
                 </Text>
               </View>
@@ -251,16 +273,26 @@ const GuestVideoPlayer = () => {
                 <TouchableOpacity
                   onPress={handlePrev}
                   disabled={currentIndex === 0}
-                  className={`p-2 rounded-full mr-2 ${currentIndex === 0 ? "opacity-30" : "bg-[#333842]"}`}
+                  style={{ backgroundColor: theme.bgSecondary }}
+                  className={`p-2 rounded-full mr-2 ${currentIndex === 0 ? "opacity-30" : ""}`}
                 >
-                  <Ionicons name="play-skip-back" size={18} color="white" />
+                  <Ionicons
+                    name="play-skip-back"
+                    size={18}
+                    color={theme.textPrimary}
+                  />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleNext}
                   disabled={currentIndex === playlist.length - 1}
-                  className={`p-2 rounded-full ${currentIndex === playlist.length - 1 ? "opacity-30" : "bg-[#333842]"}`}
+                  style={{ backgroundColor: theme.bgSecondary }}
+                  className={`p-2 rounded-full ${currentIndex === playlist.length - 1 ? "opacity-30" : ""}`}
                 >
-                  <Ionicons name="play-skip-forward" size={18} color="white" />
+                  <Ionicons
+                    name="play-skip-forward"
+                    size={18}
+                    color={theme.textPrimary}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -268,10 +300,17 @@ const GuestVideoPlayer = () => {
             {/* UPSELL BUTTON (Guest Specific) */}
             <TouchableOpacity
               onPress={handleSignUp}
-              className="flex-row items-center justify-center bg-[#333842] py-3 rounded-xl border border-[#f49b33]/50 mt-5"
+              style={{
+                backgroundColor: theme.bgSecondary,
+                borderColor: theme.accentSoft50 || theme.accent,
+              }}
+              className="flex-row items-center justify-center py-3 rounded-xl border mt-5"
             >
-              <Ionicons name="lock-closed" size={18} color="#f49b33" />
-              <Text className="text-white ml-2 font-bold text-xs uppercase">
+              <Ionicons name="lock-closed" size={18} color={theme.accent} />
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="ml-2 font-bold text-xs uppercase"
+              >
                 Sign Up for Full Access
               </Text>
             </TouchableOpacity>
@@ -279,8 +318,13 @@ const GuestVideoPlayer = () => {
 
           {/* PLAYLIST HEADER */}
           <View className="px-5 py-4 flex-row items-center justify-between">
-            <Text className="text-white font-bold text-lg">Demo Content</Text>
-            <Text className="text-gray-500 text-xs">
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="font-bold text-lg"
+            >
+              Demo Content
+            </Text>
+            <Text style={{ color: theme.textMuted }} className="text-xs">
               {currentIndex + 1} / {playlist.length}
             </Text>
           </View>
@@ -299,9 +343,11 @@ const GuestVideoPlayer = () => {
               <MaterialCommunityIcons
                 name="playlist-remove"
                 size={60}
-                color="gray"
+                color={theme.textMuted}
               />
-              <Text className="text-gray-500 mt-2">No videos available.</Text>
+              <Text style={{ color: theme.textMuted }} className="mt-2">
+                No videos available.
+              </Text>
             </View>
           )}
         </ScrollView>

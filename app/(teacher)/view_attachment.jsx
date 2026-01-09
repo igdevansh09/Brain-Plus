@@ -13,10 +13,12 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import firestore from "@react-native-firebase/firestore";
 import Pdf from "react-native-pdf";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 const ViewAttachment = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
 
   // Robustly decode the URL passed from params (handle single/double-encoding)
   const decodeSafe = (u) => {
@@ -39,12 +41,6 @@ const ViewAttachment = () => {
   const titleParam = params.title || "Attachment";
   const typeParam = params.type;
 
-  // Debug logs (only in dev) to help diagnose routing/encoding issues
-  if (typeof __DEV__ !== "undefined" && __DEV__) {
-    console.log("ViewAttachment - received params:", params);
-    console.log("ViewAttachment - decoded rawUrl:", rawUrl);
-  }
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -52,7 +48,7 @@ const ViewAttachment = () => {
   const [fileTitle, setFileTitle] = useState(titleParam);
   const [fileTypeState, setFileTypeState] = useState(typeParam);
 
-  // Fallback type detection if 'type' param isn't reliable
+  // Fallback type detection
   const fileType =
     fileTypeState === "pdf" ||
     (urlToShow && urlToShow.toLowerCase().includes(".pdf"))
@@ -65,6 +61,7 @@ const ViewAttachment = () => {
     const fetchUrl = async () => {
       if (!params.docId) return;
       try {
+        // Teachers view homework (assignments) or materials (notes)
         const collectionsToTry = ["homework", "materials"];
         for (const col of collectionsToTry) {
           const doc = await firestore().collection(col).doc(params.docId).get();
@@ -72,6 +69,8 @@ const ViewAttachment = () => {
           const data = doc.data() || {};
 
           const idx = params.idx != null ? parseInt(params.idx, 10) : null;
+
+          // Check for new 'attachments' array structure
           if (
             Array.isArray(data.attachments) &&
             idx != null &&
@@ -86,6 +85,7 @@ const ViewAttachment = () => {
             return;
           }
 
+          // Check for Legacy structure (single link)
           if (data.link) {
             if (!cancelled) {
               setUrlToShow(data.link);
@@ -95,10 +95,6 @@ const ViewAttachment = () => {
             return;
           }
         }
-        console.warn(
-          "Document not found in homework or materials:",
-          params.docId
-        );
       } catch (err) {
         console.error("Error fetching document for attachment:", err);
       }
@@ -110,51 +106,74 @@ const ViewAttachment = () => {
     };
   }, [params.docId, params.idx, rawUrl, titleParam, typeParam]);
 
-  useEffect(() => {
-    console.log("ViewAttachment - urlToShow:", urlToShow);
-  }, [urlToShow]);
-
   const isInvalid = !rawUrl && !params.docId;
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.bgPrimary }]}
+      edges={["top", "bottom"]}
+    >
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={theme.bgSecondary}
+      />
 
       {/* HEADER */}
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.bgSecondary,
+            borderBottomColor: theme.border,
+          },
+        ]}
+      >
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle} numberOfLines={1}>
+        <Text
+          style={[styles.headerTitle, { color: theme.textPrimary }]}
+          numberOfLines={1}
+        >
           {fileTitle}
         </Text>
         <View style={{ width: 24 }} />
       </View>
 
       {/* CONTENT AREA */}
-      <View style={styles.content}>
+      <View style={[styles.content, { backgroundColor: theme.bgPrimary }]}>
         {isInvalid ? (
           <View style={styles.centerContainer}>
-            <Ionicons name="alert-circle-outline" size={48} color="#FF5252" />
-            <Text style={styles.errorText}>Invalid File URL</Text>
+            <Ionicons
+              name="alert-circle-outline"
+              size={48}
+              color={theme.error}
+            />
+            <Text style={[styles.errorText, { color: theme.error }]}>
+              Invalid File URL
+            </Text>
           </View>
         ) : error ? (
           <View style={styles.centerContainer}>
-            <Ionicons name="warning-outline" size={48} color="#FF5252" />
-            <Text style={styles.errorText}>Failed to load file</Text>
+            <Ionicons name="warning-outline" size={48} color={theme.error} />
+            <Text style={[styles.errorText, { color: theme.error }]}>
+              Failed to load file
+            </Text>
             <TouchableOpacity
               onPress={() => {
                 setError(false);
                 setLoading(true);
-                // Trigger re-render/re-fetch trick could go here
               }}
-              style={styles.retryButton}
+              style={[
+                styles.retryButton,
+                { backgroundColor: theme.bgTertiary },
+              ]}
             >
-              <Text style={styles.retryText}>Retry</Text>
+              <Text style={{ color: theme.textPrimary }}>Retry</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -176,7 +195,10 @@ const ViewAttachment = () => {
             {fileType === "pdf" && urlToShow && (
               <Pdf
                 source={{ uri: urlToShow, cache: true }}
-                style={styles.fullScreen}
+                style={[
+                  styles.fullScreen,
+                  { backgroundColor: theme.bgPrimary },
+                ]}
                 trustAllCerts={false}
                 onLoadComplete={() => setLoading(false)}
                 onError={(err) => {
@@ -188,8 +210,13 @@ const ViewAttachment = () => {
             )}
 
             {loading && (
-              <View style={styles.loadingOverlay}>
-                <ActivityIndicator size="large" color="#f49b33" />
+              <View
+                style={[
+                  styles.loadingOverlay,
+                  { backgroundColor: theme.blackSoft60 },
+                ]}
+              >
+                <ActivityIndicator size="large" color={theme.accent} />
               </View>
             )}
           </>
@@ -202,7 +229,6 @@ const ViewAttachment = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000",
   },
   header: {
     flexDirection: "row",
@@ -211,14 +237,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#333",
-    backgroundColor: "#111",
   },
   backButton: {
     padding: 4,
   },
   headerTitle: {
-    color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
     flex: 1,
@@ -227,7 +250,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    backgroundColor: "#000",
     position: "relative",
   },
   fullScreen: {
@@ -241,7 +263,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   errorText: {
-    color: "#FF5252",
     marginTop: 12,
     fontSize: 16,
     fontWeight: "500",
@@ -250,15 +271,10 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingVertical: 8,
     paddingHorizontal: 20,
-    backgroundColor: "#333",
     borderRadius: 8,
-  },
-  retryText: {
-    color: "#fff",
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "center",
     alignItems: "center",
   },

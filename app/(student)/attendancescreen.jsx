@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import dayjs from "dayjs";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // --- NATIVE SDK IMPORTS ---
 import auth from "@react-native-firebase/auth";
@@ -20,6 +21,7 @@ import firestore from "@react-native-firebase/firestore";
 
 const AttendanceCalendar = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [loading, setLoading] = useState(true);
 
   const [currentDate, setCurrentDate] = useState(dayjs());
@@ -32,18 +34,6 @@ const AttendanceCalendar = () => {
   const screenWidth = Dimensions.get("window").width;
   const padding = 32;
   const colWidth = (screenWidth - padding) / 7;
-
-  const colors = {
-    bg: "#282C34",
-    card: "#333842",
-    accent: "#f49b33",
-    text: "#FFFFFF",
-    subText: "#BBBBBB",
-    present: "#4CAF50",
-    absent: "#F44336",
-    today: "#29B6F6",
-    border: "#4C5361",
-  };
 
   // --- 1. FETCH DATA (NATIVE) ---
   const fetchAttendance = async () => {
@@ -168,22 +158,22 @@ const AttendanceCalendar = () => {
       }
 
       let bg = "transparent";
-      let textCol = colors.text;
+      let textCol = theme.textPrimary;
       let borderCol = "transparent";
       let borderWidth = 0;
 
       if (item.status === "Present") {
-        bg = colors.present;
+        bg = theme.present; // Dynamic Present Color
         textCol = "#FFF";
       } else if (item.status === "Absent") {
-        bg = colors.absent;
+        bg = theme.absent; // Dynamic Absent Color
         textCol = "#FFF";
       }
 
       if (item.fullDate === dayjs().format("YYYY-MM-DD")) {
-        borderCol = colors.today;
+        borderCol = theme.today; // Dynamic Today Border
         borderWidth = 2;
-        if (!item.status) textCol = colors.today;
+        if (!item.status) textCol = theme.today;
       }
 
       return (
@@ -221,34 +211,36 @@ const AttendanceCalendar = () => {
         </View>
       );
     },
-    [colWidth, colors, attendanceMap]
-  ); // Dependency on attendanceMap for updates
+    [colWidth, theme, attendanceMap]
+  );
 
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${colors.bg} justify-center items-center`}
+        style={{ backgroundColor: theme.bgPrimary }}
+        className="flex-1 justify-center items-center"
       >
-        <ActivityIndicator size="large" color={colors.accent} />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.bg }}
-    >
-      <StatusBar backgroundColor={colors.bg} barStyle="light-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        backgroundColor={theme.bgPrimary}
+        barStyle={isDark ? "light-content" : "dark-content"}
+      />
 
       <View className="px-4 pb-4 py-7 flex-row items-center">
         <Ionicons
           name="arrow-back"
           size={24}
-          color={colors.text}
+          color={theme.textPrimary}
           onPress={() => router.back()}
         />
         <Text
-          style={{ color: colors.text }}
+          style={{ color: theme.textPrimary }}
           className="text-2xl font-semibold ml-4"
         >
           Attendance
@@ -268,15 +260,18 @@ const AttendanceCalendar = () => {
                 onPress={() => setSelectedSubject(item)}
                 style={{
                   backgroundColor:
-                    selectedSubject === item ? colors.accent : colors.card,
-                  borderColor: colors.border,
+                    selectedSubject === item ? theme.accent : theme.bgSecondary,
+                  borderColor: theme.border,
                   borderWidth: selectedSubject === item ? 0 : 1,
                 }}
                 className="px-5 py-2 rounded-full mr-3 justify-center"
               >
                 <Text
                   style={{
-                    color: selectedSubject === item ? colors.bg : colors.text,
+                    color:
+                      selectedSubject === item
+                        ? theme.textDark
+                        : theme.textPrimary,
                     fontWeight: "bold",
                   }}
                 >
@@ -289,38 +284,43 @@ const AttendanceCalendar = () => {
 
         {/* Stats Card */}
         <View
-          style={{ backgroundColor: colors.card }}
-          className="p-5 rounded-2xl mb-6 border border-[#4C5361] shadow-lg"
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+            shadowColor: theme.shadow,
+          }}
+          className="p-5 rounded-2xl mb-6 border shadow-lg"
         >
           <View className="flex-row justify-between items-start">
             <View>
               <Text
-                style={{ color: colors.subText }}
+                style={{ color: theme.textSecondary }}
                 className="text-sm font-medium tracking-wider uppercase"
               >
                 Attendance Rate
               </Text>
               <Text
-                style={{ color: colors.accent }}
+                style={{ color: theme.accent }}
                 className="text-5xl font-bold mt-1"
               >
                 {percentage}
               </Text>
             </View>
 
-            <View className="bg-[#282C34] p-3 rounded-xl border border-[#4C5361]">
+            <View
+              style={{
+                backgroundColor: theme.bgTertiary,
+                borderColor: theme.border,
+              }}
+              className="p-3 rounded-xl border"
+            >
               <View className="flex-row items-center mb-1">
                 <View
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: colors.present,
-                    marginRight: 6,
-                  }}
+                  style={{ backgroundColor: theme.present }}
+                  className="w-2 h-2 rounded-full mr-2"
                 />
                 <Text
-                  style={{ color: colors.text }}
+                  style={{ color: theme.textPrimary }}
                   className="font-bold text-sm"
                 >
                   {stats.present} Present
@@ -328,16 +328,11 @@ const AttendanceCalendar = () => {
               </View>
               <View className="flex-row items-center mb-1">
                 <View
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: colors.absent,
-                    marginRight: 6,
-                  }}
+                  style={{ backgroundColor: theme.absent }}
+                  className="w-2 h-2 rounded-full mr-2"
                 />
                 <Text
-                  style={{ color: colors.text }}
+                  style={{ color: theme.textPrimary }}
                   className="font-bold text-sm"
                 >
                   {stats.total - stats.present} Absent
@@ -345,16 +340,11 @@ const AttendanceCalendar = () => {
               </View>
               <View className="flex-row items-center">
                 <View
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: colors.subText,
-                    marginRight: 6,
-                  }}
+                  style={{ backgroundColor: theme.textMuted }}
+                  className="w-2 h-2 rounded-full mr-2"
                 />
                 <Text
-                  style={{ color: colors.text }}
+                  style={{ color: theme.textPrimary }}
                   className="font-bold text-sm"
                 >
                   {stats.total} Total Classes
@@ -363,12 +353,15 @@ const AttendanceCalendar = () => {
             </View>
           </View>
 
-          <View className="mt-4 bg-[#282C34] h-2 rounded-full overflow-hidden w-full">
+          <View
+            style={{ backgroundColor: theme.bgTertiary }}
+            className="mt-4 h-2 rounded-full overflow-hidden w-full"
+          >
             <View
               style={{
                 width: percentage,
                 height: "100%",
-                backgroundColor: colors.accent,
+                backgroundColor: theme.accent,
               }}
             />
           </View>
@@ -376,25 +369,30 @@ const AttendanceCalendar = () => {
 
         {/* Calendar View */}
         <View
-          style={{ backgroundColor: colors.card }}
-          className="rounded-2xl border border-[#4C5361] overflow-hidden pb-4 shadow-sm"
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+          }}
+          className="rounded-2xl border overflow-hidden pb-4 shadow-sm"
         >
-          <View className="flex-row justify-between items-center p-4 border-b border-[#4C5361] mb-2 bg-[#3a404b]">
+          <View
+            style={{
+              borderColor: theme.border,
+              backgroundColor: theme.bgTertiary,
+            }}
+            className="flex-row justify-between items-center p-4 border-b mb-2"
+          >
             <TouchableOpacity onPress={() => changeMonth(-1)} className="p-2">
-              <Ionicons name="chevron-back" size={24} color={colors.accent} />
+              <Ionicons name="chevron-back" size={24} color={theme.accent} />
             </TouchableOpacity>
             <Text
-              style={{ color: colors.text }}
+              style={{ color: theme.textPrimary }}
               className="text-lg font-bold tracking-wide"
             >
               {currentDate.format("MMMM YYYY")}
             </Text>
             <TouchableOpacity onPress={() => changeMonth(1)} className="p-2">
-              <Ionicons
-                name="chevron-forward"
-                size={24}
-                color={colors.accent}
-              />
+              <Ionicons name="chevron-forward" size={24} color={theme.accent} />
             </TouchableOpacity>
           </View>
 
@@ -405,7 +403,7 @@ const AttendanceCalendar = () => {
                 style={{
                   width: colWidth,
                   textAlign: "center",
-                  color: colors.subText,
+                  color: theme.textSecondary,
                   fontSize: 12,
                   fontWeight: "600",
                 }}

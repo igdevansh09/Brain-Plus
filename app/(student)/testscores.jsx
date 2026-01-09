@@ -11,6 +11,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // --- NATIVE SDK IMPORTS ---
 import auth from "@react-native-firebase/auth";
@@ -18,25 +19,12 @@ import firestore from "@react-native-firebase/firestore";
 
 const TestScores = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [loading, setLoading] = useState(true);
   const [scores, setScores] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState("All");
 
-  // Theme Constants
-  const theme = {
-    bg: "bg-[#282C34]",
-    card: "bg-[#333842]",
-    accent: "text-[#f49b33]",
-    accentBg: "bg-[#f49b33]",
-    text: "text-white",
-    subText: "text-gray-400",
-    border: "border-[#4C5361]",
-    success: "#4CAF50",
-    warning: "#FFC107",
-    danger: "#FF5252",
-  };
-
-  // --- 1. DATA FETCHING (CORRECTED) ---
+  // --- 1. DATA FETCHING ---
   const fetchScores = async () => {
     try {
       const user = auth().currentUser;
@@ -58,7 +46,7 @@ const TestScores = () => {
 
       // B. Fetch Exams for this Class from 'exam_results'
       const snapshot = await firestore()
-        .collection("exam_results") // Correct Collection Name
+        .collection("exam_results")
         .where("classId", "==", studentClass)
         .get();
 
@@ -167,101 +155,160 @@ const TestScores = () => {
   const getGradeColor = (percentage) => {
     if (percentage >= 75) return theme.success;
     if (percentage >= 50) return theme.warning;
-    return theme.danger;
+    return theme.error;
   };
 
-  const renderItem = useCallback(({ item }) => {
-    const obt = parseFloat(item.marksObtained) || 0;
-    const tot = parseFloat(item.totalMarks) || 100;
-    const percentage = (obt / tot) * 100;
-    const color = getGradeColor(percentage);
+  const renderItem = useCallback(
+    ({ item }) => {
+      const obt = parseFloat(item.marksObtained) || 0;
+      const tot = parseFloat(item.totalMarks) || 100;
+      const percentage = (obt / tot) * 100;
+      const color = getGradeColor(percentage);
 
-    return (
-      <View
-        className={`${theme.card} rounded-2xl p-4 mb-4 border ${theme.border}`}
-      >
-        <View className="flex-row justify-between items-start mb-2">
-          <View>
-            <Text className={`${theme.text} font-bold text-lg`}>
-              {item.testName}
-            </Text>
-            <Text className={`${theme.subText} text-xs mt-1`}>
-              {item.subject} • {item.date}
-            </Text>
+      return (
+        <View
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+          }}
+          className="rounded-2xl p-4 mb-4 border"
+        >
+          <View className="flex-row justify-between items-start mb-2">
+            <View>
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="font-bold text-lg"
+              >
+                {item.testName}
+              </Text>
+              <Text
+                style={{ color: theme.textSecondary }}
+                className="text-xs mt-1"
+              >
+                {item.subject} • {item.date}
+              </Text>
+            </View>
+            <View className="items-end">
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="font-bold text-xl"
+              >
+                {obt}
+                <Text style={{ color: theme.textMuted }} className="text-sm">
+                  /{tot}
+                </Text>
+              </Text>
+              <Text style={{ color: color }} className="text-xs font-bold">
+                {percentage.toFixed(0)}%
+              </Text>
+            </View>
           </View>
-          <View className="items-end">
-            <Text className="text-white font-bold text-xl">
-              {obt}
-              <Text className="text-gray-500 text-sm">/{tot}</Text>
-            </Text>
-            <Text style={{ color: color }} className="text-xs font-bold">
-              {percentage.toFixed(0)}%
-            </Text>
-          </View>
-        </View>
 
-        {/* Progress Bar */}
-        <View className="h-2 bg-[#282C34] rounded-full overflow-hidden mt-2">
+          {/* Progress Bar */}
           <View
-            style={{
-              width: `${Math.min(percentage, 100)}%`,
-              backgroundColor: color,
-            }}
-            className="h-full rounded-full"
-          />
+            style={{ backgroundColor: theme.bgTertiary }}
+            className="h-2 rounded-full overflow-hidden mt-2"
+          >
+            <View
+              style={{
+                width: `${Math.min(percentage, 100)}%`,
+                backgroundColor: color,
+              }}
+              className="h-full rounded-full"
+            />
+          </View>
         </View>
-      </View>
-    );
-  }, []);
+      );
+    },
+    [theme]
+  );
 
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${theme.bg} justify-center items-center`}
+        style={{ backgroundColor: theme.bgPrimary }}
+        className="flex-1 justify-center items-center"
       >
-        <ActivityIndicator size="large" color="#f49b33" />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg}`}>
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        backgroundColor={theme.bgPrimary}
+        barStyle={isDark ? "light-content" : "dark-content"}
+      />
 
       {/* Header */}
       <View className="px-5 pt-3 pb-4 flex-row items-center">
         <TouchableOpacity
           onPress={() => router.back()}
-          className="bg-[#333842] p-2 rounded-full border border-[#4C5361] mr-4"
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+          }}
+          className="p-2 rounded-full border mr-4"
         >
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text className="text-white text-2xl font-bold">Test Scores</Text>
+        <Text
+          style={{ color: theme.textPrimary }}
+          className="text-2xl font-bold"
+        >
+          Test Scores
+        </Text>
       </View>
 
       <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
         {/* Performance Summary */}
         <View
-          className={`${theme.card} p-5 rounded-2xl border ${theme.border} mb-6 shadow-lg`}
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+            shadowColor: theme.shadow,
+          }}
+          className="p-5 rounded-2xl border mb-6 shadow-lg"
         >
-          <Text className="text-gray-400 text-xs font-bold uppercase mb-4 tracking-widest">
+          <Text
+            style={{ color: theme.textSecondary }}
+            className="text-xs font-bold uppercase mb-4 tracking-widest"
+          >
             Overall Performance
           </Text>
           <View className="flex-row justify-between items-center">
-            <View className="items-center flex-1 border-r border-[#4C5361]">
-              <Text className={`${theme.accent} text-3xl font-bold`}>
+            <View
+              style={{ borderColor: theme.border }}
+              className="items-center flex-1 border-r"
+            >
+              <Text
+                style={{ color: theme.accent }}
+                className="text-3xl font-bold"
+              >
                 {stats.average}%
               </Text>
-              <Text className="text-gray-400 text-xs mt-1">Average Score</Text>
+              <Text
+                style={{ color: theme.textSecondary }}
+                className="text-xs mt-1"
+              >
+                Average Score
+              </Text>
             </View>
             <View className="items-center flex-1">
               <Text
-                className="text-white text-xl font-bold text-center"
+                style={{ color: theme.textPrimary }}
+                className="text-xl font-bold text-center"
                 numberOfLines={1}
               >
                 {stats.bestSubject}
               </Text>
-              <Text className="text-gray-400 text-xs mt-1">Best Subject</Text>
+              <Text
+                style={{ color: theme.textSecondary }}
+                className="text-xs mt-1"
+              >
+                Best Subject
+              </Text>
             </View>
           </View>
         </View>
@@ -276,18 +323,22 @@ const TestScores = () => {
             renderItem={({ item }) => (
               <TouchableOpacity
                 onPress={() => setSelectedSubject(item)}
-                className={`px-5 py-2 rounded-full mr-3 border ${
-                  selectedSubject === item
-                    ? "bg-[#f49b33] border-[#f49b33]"
-                    : "bg-[#333842] border-[#4C5361]"
-                }`}
+                style={{
+                  backgroundColor:
+                    selectedSubject === item ? theme.accent : theme.bgSecondary,
+                  borderColor:
+                    selectedSubject === item ? theme.accent : theme.border,
+                }}
+                className="px-5 py-2 rounded-full mr-3 border"
               >
                 <Text
-                  className={`font-bold ${
-                    selectedSubject === item
-                      ? "text-[#282C34]"
-                      : "text-gray-400"
-                  }`}
+                  style={{
+                    color:
+                      selectedSubject === item
+                        ? theme.textDark
+                        : theme.textSecondary,
+                  }}
+                  className="font-bold"
                 >
                   {item}
                 </Text>
@@ -310,9 +361,12 @@ const TestScores = () => {
               <MaterialCommunityIcons
                 name="clipboard-text-off-outline"
                 size={60}
-                color="gray"
+                color={theme.textMuted}
               />
-              <Text className="text-gray-400 mt-3 font-medium">
+              <Text
+                style={{ color: theme.textMuted }}
+                className="mt-3 font-medium"
+              >
                 No test records found.
               </Text>
             </View>

@@ -22,11 +22,13 @@ import auth from "@react-native-firebase/auth";
 import logo from "../../assets/images/dinetimelogo.png";
 import validationSchema from "../../utils/adminSchema";
 import CustomToast from "../../components/CustomToast";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 const entryImg = require("../../assets/images/Frame.png");
 
 const AdminSignin = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get theme values
   const [loading, setLoading] = useState(false);
 
   const [toastVisible, setToastVisible] = useState(false);
@@ -80,8 +82,13 @@ const AdminSignin = () => {
   };
 
   return (
-    <SafeAreaView className="bg-[#282C34] flex-1">
-      <StatusBar barStyle="light-content" backgroundColor="#282C34" />
+    <SafeAreaView 
+      style={{ backgroundColor: theme.bgPrimary, flex: 1 }} // Dynamic Background
+    >
+      <StatusBar 
+        barStyle={isDark ? "light-content" : "dark-content"} 
+        backgroundColor={theme.bgPrimary} 
+      />
 
       <CustomToast
         visible={toastVisible}
@@ -92,9 +99,11 @@ const AdminSignin = () => {
 
       <View className="px-4 py-2 flex-row items-center">
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text className="text-white text-lg font-semibold ml-4">Back</Text>
+        <Text style={{ color: theme.textPrimary }} className="text-lg font-semibold ml-4">
+          Back
+        </Text>
       </View>
 
       <KeyboardAvoidingView
@@ -111,7 +120,10 @@ const AdminSignin = () => {
           >
             <View className="m-1 flex justify-center items-center">
               <Image source={logo} style={{ width: 300, height: 200 }} />
-              <Text className="text-lg text-center text-white font-bold mb-10">
+              <Text 
+                style={{ color: theme.textPrimary }} 
+                className="text-lg text-center font-bold mb-10"
+              >
                 Admin Login
               </Text>
 
@@ -130,48 +142,71 @@ const AdminSignin = () => {
                     touched,
                   }) => (
                     <View className="w-full">
-                      <Text className="text-[#f49b33] mt-2 mb-2">Email</Text>
+                      {/* Email Input */}
+                      <Text style={{ color: theme.accent }} className="mt-2 mb-2">
+                        Email
+                      </Text>
                       <TextInput
-                        className="h-12 border border-white text-white rounded px-3 mb-1"
+                        style={{ 
+                          borderColor: theme.border, 
+                          color: theme.textPrimary,
+                          backgroundColor: theme.bgSecondary 
+                        }}
+                        className="h-12 border rounded px-3 mb-1"
                         keyboardType="email-address"
                         autoCapitalize="none"
                         onChangeText={handleChange("email")}
                         value={values.email}
                         onBlur={handleBlur("email")}
                         placeholder="admin@example.com"
-                        placeholderTextColor="#666"
+                        placeholderTextColor={theme.textMuted}
                       />
                       {touched.email && errors.email && (
-                        <Text className="text-red-500 text-xs mb-3">
+                        <Text style={{ color: theme.error }} className="text-xs mb-3">
                           {errors.email}
                         </Text>
                       )}
 
-                      <Text className="text-[#f49b33] mt-2 mb-2">Password</Text>
+                      {/* Password Input */}
+                      <Text style={{ color: theme.accent }} className="mt-2 mb-2">
+                        Password
+                      </Text>
                       <TextInput
-                        className="h-12 border border-white text-white rounded px-3 mb-1"
+                        style={{ 
+                          borderColor: theme.border, 
+                          color: theme.textPrimary,
+                          backgroundColor: theme.bgSecondary 
+                        }}
+                        className="h-12 border rounded px-3 mb-1"
                         secureTextEntry
                         onChangeText={handleChange("password")}
                         value={values.password}
                         onBlur={handleBlur("password")}
                         placeholder="********"
-                        placeholderTextColor="#666"
+                        placeholderTextColor={theme.textMuted}
                       />
                       {touched.password && errors.password && (
-                        <Text className="text-red-500 text-xs mb-3">
+                        <Text style={{ color: theme.error }} className="text-xs mb-3">
                           {errors.password}
                         </Text>
                       )}
 
+                      {/* Submit Button */}
                       <TouchableOpacity
                         onPress={handleSubmit}
                         disabled={loading}
-                        className={`p-3 my-2 rounded-lg mt-8 ${loading ? "bg-gray-600" : "bg-[#f49b33]"}`}
+                        style={{ 
+                          backgroundColor: loading ? theme.gray600 : theme.accent 
+                        }}
+                        className="p-3 my-2 rounded-lg mt-8"
                       >
                         {loading ? (
-                          <ActivityIndicator color="#282C34" />
+                          <ActivityIndicator color={theme.bgPrimary} />
                         ) : (
-                          <Text className="text-lg font-semibold text-center text-black">
+                          <Text 
+                            style={{ color: theme.textDark }} 
+                            className="text-lg font-semibold text-center"
+                          >
                             Sign In
                           </Text>
                         )}

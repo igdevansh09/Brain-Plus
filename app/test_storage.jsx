@@ -1,12 +1,21 @@
 import { useState } from "react";
-import { View, Button, Image, Alert, Text } from "react-native";
+import {
+  View,
+  Image,
+  Alert,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import storage from "@react-native-firebase/storage";
 import auth from "@react-native-firebase/auth";
+import { useTheme } from "../context/ThemeContext"; // Import theme hook
 
 export default function TestStorage() {
   const [image, setImage] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const { theme } = useTheme(); // Get dynamic theme
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -44,13 +53,52 @@ export default function TestStorage() {
   };
 
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-      <Button title="Pick & Upload Image" onPress={pickImage} />
-      {uploading && <Text>Uploading...</Text>}
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: theme.bgPrimary, // Dynamic Background
+      }}
+    >
+      <TouchableOpacity
+        onPress={pickImage}
+        disabled={uploading}
+        style={{
+          backgroundColor: theme.accent,
+          paddingVertical: 12,
+          paddingHorizontal: 24,
+          borderRadius: 8,
+          opacity: uploading ? 0.6 : 1,
+        }}
+      >
+        <Text
+          style={{ color: theme.textDark, fontWeight: "bold", fontSize: 16 }}
+        >
+          {uploading ? "Uploading..." : "Pick & Upload Image"}
+        </Text>
+      </TouchableOpacity>
+
+      {uploading && (
+        <View style={{ marginTop: 20 }}>
+          <ActivityIndicator size="small" color={theme.accent} />
+          <Text style={{ color: theme.textPrimary, marginTop: 8 }}>
+            Uploading...
+          </Text>
+        </View>
+      )}
+
       {image && (
         <Image
           source={{ uri: image }}
-          style={{ width: 200, height: 200, marginTop: 20 }}
+          style={{
+            width: 200,
+            height: 200,
+            marginTop: 20,
+            borderRadius: 12,
+            borderWidth: 2,
+            borderColor: theme.border,
+          }}
         />
       )}
     </View>

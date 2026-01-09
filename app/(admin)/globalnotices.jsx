@@ -19,19 +19,11 @@ import firestore from "@react-native-firebase/firestore";
 
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
-
-const theme = {
-  bg: "bg-[#282C34]",
-  card: "bg-[#333842]",
-  accent: "text-[#f49b33]",
-  accentBg: "bg-[#f49b33]",
-  text: "text-white",
-  subText: "text-gray-400",
-  borderColor: "border-[#4C5361]",
-};
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 const ManageNotices = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [notices, setNotices] = useState([]);
 
   // Modal State
@@ -112,7 +104,12 @@ const ManageNotices = () => {
 
   const renderNotice = ({ item }) => (
     <View
-      className={`${theme.card} p-5 rounded-2xl mb-4 border ${theme.borderColor} shadow-sm`}
+      style={{
+        backgroundColor: theme.bgSecondary,
+        borderColor: theme.border,
+        shadowColor: theme.shadow,
+      }}
+      className="p-5 rounded-2xl mb-4 border shadow-sm"
     >
       <View className="flex-row justify-between items-start mb-2">
         <View className="flex-1 mr-3">
@@ -120,24 +117,48 @@ const ManageNotices = () => {
             <MaterialCommunityIcons
               name="bullhorn-variant"
               size={16}
-              color="#f49b33"
+              color={theme.accent}
               className="mr-2"
             />
-            <Text className="text-white font-bold text-lg">{item.title}</Text>
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="font-bold text-lg"
+            >
+              {item.title}
+            </Text>
           </View>
-          <Text className="text-gray-400 text-xs mb-3 italic">{item.date}</Text>
+          <Text
+            style={{ color: theme.textSecondary }}
+            className="text-xs mb-3 italic"
+          >
+            {item.date}
+          </Text>
         </View>
       </View>
 
-      <View className="bg-[#282C34] p-3 rounded-xl border border-[#4C5361]/50">
-        <Text className="text-gray-300 text-sm leading-5">{item.content}</Text>
+      <View
+        style={{
+          backgroundColor: theme.bgTertiary || theme.bgPrimary,
+          borderColor: theme.borderSoft || theme.border,
+        }}
+        className="p-3 rounded-xl border"
+      >
+        <Text
+          style={{ color: theme.textSecondary }}
+          className="text-sm leading-5"
+        >
+          {item.content}
+        </Text>
       </View>
     </View>
   );
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg}`}>
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        backgroundColor={theme.bgPrimary}
+        barStyle={isDark ? "light-content" : "dark-content"}
+      />
 
       <CustomAlert
         visible={alert.visible}
@@ -160,24 +181,41 @@ const ManageNotices = () => {
         <View className="flex-row items-center">
           <TouchableOpacity
             onPress={() => router.back()}
-            className="bg-[#333842] p-2 rounded-full border border-[#4C5361] mr-3"
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.border,
+            }}
+            className="p-2 rounded-full border mr-3"
           >
-            <Ionicons name="arrow-back" size={22} color="white" />
+            <Ionicons name="arrow-back" size={22} color={theme.textPrimary} />
           </TouchableOpacity>
-          <Text className="text-white text-2xl font-bold">Global Notices</Text>
+          <Text
+            style={{ color: theme.textPrimary }}
+            className="text-2xl font-bold"
+          >
+            Global Notices
+          </Text>
         </View>
 
         <TouchableOpacity
           onPress={() => setIsAdding(true)}
-          className="bg-[#333842] p-2 rounded-full border border-[#f49b33]"
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.accent,
+          }}
+          className="p-2 rounded-full border"
         >
-          <Ionicons name="add" size={24} color="#f49b33" />
+          <Ionicons name="add" size={24} color={theme.accent} />
         </TouchableOpacity>
       </View>
 
       {/* --- LIST --- */}
       {loading ? (
-        <ActivityIndicator size="large" color="#f49b33" className="mt-10" />
+        <ActivityIndicator
+          size="large"
+          color={theme.accent}
+          className="mt-10"
+        />
       ) : (
         <FlatList
           data={notices}
@@ -189,12 +227,15 @@ const ManageNotices = () => {
               <MaterialCommunityIcons
                 name="bullhorn-outline"
                 size={80}
-                color="gray"
+                color={theme.textMuted}
               />
-              <Text className="text-white text-center mt-4 text-lg">
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="text-center mt-4 text-lg"
+              >
                 No notices posted yet.
               </Text>
-              <Text className="text-gray-500 text-sm">
+              <Text style={{ color: theme.textSecondary }} className="text-sm">
                 Tap + to create one.
               </Text>
             </View>
@@ -204,52 +245,87 @@ const ManageNotices = () => {
 
       {/* --- CREATE MODAL --- */}
       <Modal visible={isAdding} animationType="slide" transparent>
-        <View className="flex-1 bg-black/80 justify-end">
-          <View className="bg-[#333842] rounded-t-3xl border-t border-[#f49b33] p-6 h-[70%]">
+        <View
+          style={{ backgroundColor: theme.blackSoft80 }}
+          className="flex-1 justify-end"
+        >
+          <View
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.accent,
+            }}
+            className="rounded-t-3xl border-t p-6 h-[70%]"
+          >
             <View className="flex-row justify-between items-center mb-6">
-              <Text className="text-white text-xl font-bold">
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="text-xl font-bold"
+              >
                 New Announcement
               </Text>
               <TouchableOpacity onPress={() => setIsAdding(false)}>
-                <Ionicons name="close" size={24} color="gray" />
+                <Ionicons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text className="text-gray-400 text-xs font-bold uppercase mb-2">
+              <Text
+                style={{ color: theme.textMuted }}
+                className="text-xs font-bold uppercase mb-2"
+              >
                 Title
               </Text>
               <TextInput
                 value={newTitle}
                 onChangeText={setNewTitle}
                 placeholder="e.g. Holiday Announcement"
-                placeholderTextColor="#555"
-                className="bg-[#282C34] text-white p-4 rounded-xl border border-[#4C5361] mb-5 font-bold"
+                placeholderTextColor={theme.placeholder}
+                style={{
+                  backgroundColor: theme.bgPrimary,
+                  color: theme.textPrimary,
+                  borderColor: theme.border,
+                }}
+                className="p-4 rounded-xl border mb-5 font-bold"
               />
 
-              <Text className="text-gray-400 text-xs font-bold uppercase mb-2">
+              <Text
+                style={{ color: theme.textMuted }}
+                className="text-xs font-bold uppercase mb-2"
+              >
                 Message Content
               </Text>
               <TextInput
                 value={newContent}
                 onChangeText={setNewContent}
                 placeholder="Type your message here..."
-                placeholderTextColor="#555"
+                placeholderTextColor={theme.placeholder}
                 multiline
                 numberOfLines={6}
-                className="bg-[#282C34] text-white p-4 rounded-xl border border-[#4C5361] mb-8 h-40"
-                style={{ textAlignVertical: "top" }}
+                style={{
+                  backgroundColor: theme.bgPrimary,
+                  color: theme.textPrimary,
+                  borderColor: theme.border,
+                  textAlignVertical: "top",
+                }}
+                className="p-4 rounded-xl border mb-8 h-40"
               />
 
               <TouchableOpacity
                 onPress={handleAddNotice}
                 disabled={posting}
-                className="bg-[#f49b33] p-4 rounded-xl items-center shadow-lg"
+                style={{
+                  backgroundColor: theme.accent,
+                  shadowColor: theme.shadow,
+                }}
+                className="p-4 rounded-xl items-center shadow-lg"
               >
                 {posting ? (
-                  <ActivityIndicator color="#282C34" />
+                  <ActivityIndicator color={theme.textDark} />
                 ) : (
-                  <Text className="text-[#282C34] font-bold text-lg">
+                  <Text
+                    style={{ color: theme.textDark }}
+                    className="font-bold text-lg"
+                  >
                     Post Notice
                   </Text>
                 )}

@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // NATIVE SDK
 import auth from "@react-native-firebase/auth";
@@ -22,21 +23,11 @@ dayjs.extend(relativeTime);
 
 const StudentHomework = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [homework, setHomework] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState("All");
-
-  const theme = {
-    bg: "bg-[#282C34]",
-    card: "bg-[#333842]",
-    cardHighlight: "bg-[#3E4451]",
-    accent: "text-[#f49b33]",
-    accentBg: "bg-[#f49b33]",
-    border: "border-[#4C5361]",
-    text: "text-white",
-    subText: "text-gray-400",
-  };
 
   const fetchHomework = async () => {
     try {
@@ -105,35 +96,52 @@ const StudentHomework = () => {
         ? [{ name: item.attachmentName, url: item.link, type: item.fileType }]
         : []);
 
+    // Dynamic Strip Color based on Subject
+    const getStripColor = (subj) => {
+      if (subj === "Maths") return theme.info || "#29B6F6";
+      if (subj === "Science") return theme.success || "#66BB6A";
+      return theme.accent;
+    };
+
     return (
       <View
-        className={`${theme.card} w-[92%] self-center rounded-2xl mb-4 border ${theme.border} shadow-sm overflow-hidden flex-row`}
+        style={{
+          backgroundColor: theme.bgSecondary,
+          borderColor: theme.border,
+          shadowColor: theme.shadow,
+        }}
+        className="w-[92%] self-center rounded-2xl mb-4 border shadow-sm overflow-hidden flex-row"
       >
         {/* 1. Left Color Strip */}
         <View
-          className={`w-1.5 h-full ${
-            item.subject === "Maths"
-              ? "bg-blue-500"
-              : item.subject === "Science"
-                ? "bg-green-500"
-                : "bg-[#f49b33]"
-          }`}
+          style={{ backgroundColor: getStripColor(item.subject) }}
+          className="w-1.5 h-full"
         />
 
-        {/* 2. Main Content Area (Row Layout) */}
+        {/* 2. Main Content Area */}
         <View className="flex-1 p-4 flex-row items-center justify-between">
           {/* LEFT SIDE: Description & Info */}
           <View className="flex-1 mr-3">
             {/* Header: Subject & Date */}
             <View className="flex-row items-center mb-1">
               <View
-                className={`${theme.cardHighlight} px-2 py-0.5 rounded mr-2 border border-[#4C5361]`}
+                style={{
+                  backgroundColor: theme.bgTertiary,
+                  borderColor: theme.border,
+                }}
+                className="px-2 py-0.5 rounded mr-2 border"
               >
-                <Text className="text-gray-300 text-[9px] font-bold uppercase tracking-wider">
+                <Text
+                  style={{ color: theme.textMuted }}
+                  className="text-[9px] font-bold uppercase tracking-wider"
+                >
                   {item.subject}
                 </Text>
               </View>
-              <Text className="text-gray-500 text-[10px] font-medium">
+              <Text
+                style={{ color: theme.textSecondary }}
+                className="text-[10px] font-medium"
+              >
                 {item.createdAt?.toDate
                   ? dayjs(item.createdAt.toDate()).fromNow()
                   : "Recently"}
@@ -141,14 +149,18 @@ const StudentHomework = () => {
             </View>
 
             {/* Title */}
-            <Text className="text-white font-bold text-base mb-1 leading-tight">
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="font-bold text-base mb-1 leading-tight"
+            >
               {item.title}
             </Text>
 
             {/* Description (Truncated) */}
             {item.description ? (
               <Text
-                className="text-gray-400 text-xs leading-relaxed mb-2"
+                style={{ color: theme.textSecondary }}
+                className="text-xs leading-relaxed mb-2"
                 numberOfLines={2}
               >
                 {item.description}
@@ -167,9 +179,13 @@ const StudentHomework = () => {
                   displayAttachments[0].type
                 )
               }
-              className="bg-[#282C34] h-11 w-11 rounded-xl border border-[#f49b33]/50 items-center justify-center shadow-lg active:bg-[#f49b33]/20"
+              style={{
+                backgroundColor: theme.bgPrimary,
+                borderColor: theme.border,
+              }}
+              className="h-11 w-11 rounded-xl border items-center justify-center shadow-lg"
             >
-              <Ionicons name="open-outline" size={20} color="#f49b33" />
+              <Ionicons name="open-outline" size={20} color={theme.accent} />
             </TouchableOpacity>
           )}
         </View>
@@ -180,27 +196,40 @@ const StudentHomework = () => {
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${theme.bg} justify-center items-center`}
+        style={{ backgroundColor: theme.bgPrimary }}
+        className="flex-1 justify-center items-center"
       >
-        <ActivityIndicator size="large" color="#f49b33" />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg}`}>
-      <StatusBar barStyle="light-content" backgroundColor="#282C34" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        backgroundColor={theme.bgPrimary}
+        barStyle={isDark ? "light-content" : "dark-content"}
+      />
 
       {/* Header */}
       <View className="px-5 pt-3 pb-2">
         <View className="flex-row items-center justify-between mb-5">
           <TouchableOpacity
             onPress={() => router.back()}
-            className="w-9 h-9 rounded-full bg-[#333842] border border-[#4C5361] items-center justify-center"
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.border,
+            }}
+            className="w-9 h-9 rounded-full border items-center justify-center"
           >
-            <Ionicons name="arrow-back" size={24} color="white" />
+            <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
           </TouchableOpacity>
-          <Text className="text-white text-xl font-bold">Homework</Text>
+          <Text
+            style={{ color: theme.textPrimary }}
+            className="text-xl font-bold"
+          >
+            Homework
+          </Text>
           <View className="w-9" />
         </View>
 
@@ -211,21 +240,26 @@ const StudentHomework = () => {
             data={uniqueSubjects}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingRight: 20 }}
+            keyExtractor={(item) => item}
             renderItem={({ item }) => (
               <TouchableOpacity
                 onPress={() => setSelectedSubject(item)}
-                className={`mr-2 px-4 py-2 rounded-xl border ${
-                  selectedSubject === item
-                    ? "bg-[#f49b33] border-[#f49b33]"
-                    : "bg-[#333842] border-[#4C5361]"
-                }`}
+                style={{
+                  backgroundColor:
+                    selectedSubject === item ? theme.accent : theme.bgSecondary,
+                  borderColor:
+                    selectedSubject === item ? theme.accent : theme.border,
+                }}
+                className="mr-2 px-4 py-2 rounded-xl border"
               >
                 <Text
-                  className={`font-bold text-[11px] ${
-                    selectedSubject === item
-                      ? "text-[#282C34]"
-                      : "text-gray-400"
-                  }`}
+                  style={{
+                    color:
+                      selectedSubject === item
+                        ? theme.textDark
+                        : theme.textSecondary,
+                  }}
+                  className="font-bold text-[11px]"
                 >
                   {item}
                 </Text>
@@ -248,24 +282,36 @@ const StudentHomework = () => {
               setRefreshing(true);
               fetchHomework();
             }}
-            tintColor="#f49b33"
-            colors={["#f49b33"]}
-            progressBackgroundColor="#333842"
+            tintColor={theme.accent}
+            colors={[theme.accent]}
+            progressBackgroundColor={theme.bgSecondary}
           />
         }
         ListEmptyComponent={() => (
           <View className="items-center justify-center py-20">
-            <View className="w-20 h-20 rounded-full bg-[#333842] items-center justify-center mb-4 border border-[#4C5361]">
+            <View
+              style={{
+                backgroundColor: theme.bgSecondary,
+                borderColor: theme.border,
+              }}
+              className="w-20 h-20 rounded-full items-center justify-center mb-4 border"
+            >
               <MaterialCommunityIcons
                 name="book-open-page-variant-outline"
                 size={32}
-                color="#f49b33"
+                color={theme.accent}
               />
             </View>
-            <Text className="text-white font-bold text-base">
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="font-bold text-base"
+            >
               No Assignments
             </Text>
-            <Text className="text-gray-500 text-xs mt-2 text-center px-10">
+            <Text
+              style={{ color: theme.textSecondary }}
+              className="text-xs mt-2 text-center px-10"
+            >
               {selectedSubject === "All"
                 ? "You're all caught up!"
                 : `No homework for ${selectedSubject}.`}

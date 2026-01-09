@@ -17,6 +17,7 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // NATIVE SDK
 import auth from "@react-native-firebase/auth";
@@ -28,6 +29,7 @@ import CustomAlert from "../../components/CustomAlert";
 
 const TeacherNotesUploader = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
@@ -61,15 +63,6 @@ const TeacherNotesUploader = () => {
 
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
-
-  const theme = {
-    bg: "bg-[#282C34]",
-    card: "bg-[#333842]",
-    accent: "text-[#f49b33]",
-    text: "text-white",
-    subText: "text-gray-400",
-    borderColor: "border-[#4C5361]",
-  };
 
   // --- 1. INITIAL FETCH ---
   useEffect(() => {
@@ -214,7 +207,7 @@ const TeacherNotesUploader = () => {
       const result = await DocumentPicker.getDocumentAsync({
         type: "application/pdf",
         copyToCacheDirectory: true,
-        multiple: true, // ALLOW MULTIPLE PDFS
+        multiple: true,
       });
 
       if (!result.canceled) {
@@ -264,8 +257,6 @@ const TeacherNotesUploader = () => {
       }
 
       // 2. Prepare Data (Backward Compatible)
-      // We store the full array in 'attachments'
-      // We store the FIRST file in 'link'/'attachmentName' for old app versions
       const docData = {
         title: title.trim(),
         description: description.trim(),
@@ -312,7 +303,6 @@ const TeacherNotesUploader = () => {
       onConfirm: async () => {
         setAlertConfig((prev) => ({ ...prev, visible: false }));
         try {
-          // JUST DELETE THE DOC.
           await firestore().collection("materials").doc(id).delete();
           showToast("Deleted successfully", "success");
         } catch (e) {
@@ -337,7 +327,6 @@ const TeacherNotesUploader = () => {
 
   // --- RENDER HISTORY ITEM ---
   const renderItem = ({ item }) => {
-    // Merge legacy single attachment into the array for display if 'attachments' is missing
     const displayAttachments =
       item.attachments ||
       (item.link
@@ -346,37 +335,61 @@ const TeacherNotesUploader = () => {
 
     return (
       <View
-        className={`${theme.card} p-4 rounded-2xl mb-4 border ${theme.borderColor} shadow-sm`}
+        style={{
+          backgroundColor: theme.bgSecondary,
+          borderColor: theme.border,
+          shadowColor: theme.shadow,
+        }}
+        className="p-4 rounded-2xl mb-4 border shadow-sm"
       >
         <View className="flex-row justify-between items-start">
           <View className="flex-1 mr-2">
-            <Text className="text-white font-bold text-lg mb-1">
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="font-bold text-lg mb-1"
+            >
               {item.title}
             </Text>
             <View className="flex-row flex-wrap mb-2">
-              <View className="bg-[#f49b33]/20 px-2 py-0.5 rounded mr-2 mb-1">
-                <Text className="text-[#f49b33] text-[10px] font-bold">
+              <View
+                style={{ backgroundColor: theme.accentSoft20 }}
+                className="px-2 py-0.5 rounded mr-2 mb-1"
+              >
+                <Text
+                  style={{ color: theme.accent }}
+                  className="text-[10px] font-bold"
+                >
                   {item.classId}
                 </Text>
               </View>
-              <View className="bg-blue-500/20 px-2 py-0.5 rounded mb-1">
-                <Text className="text-blue-400 text-[10px] font-bold">
+              <View
+                style={{ backgroundColor: theme.infoSoft }}
+                className="px-2 py-0.5 rounded mb-1"
+              >
+                <Text
+                  style={{ color: theme.info }}
+                  className="text-[10px] font-bold"
+                >
                   {item.subject}
                 </Text>
               </View>
             </View>
             {item.description ? (
-              <Text className="text-gray-400 text-sm mb-2">
+              <Text
+                style={{ color: theme.textSecondary }}
+                className="text-sm mb-2"
+              >
                 {item.description}
               </Text>
             ) : null}
           </View>
 
           <TouchableOpacity
-            onPress={() => handleDelete(item.id)} // <--- Pass ID only
-            className="p-2 mb-2 bg-red-500/10 rounded-lg"
+            onPress={() => handleDelete(item.id)}
+            style={{ backgroundColor: theme.errorSoft }}
+            className="p-2 mb-2 rounded-lg"
           >
-            <Ionicons name="trash-outline" size={18} color="#ef4444" />
+            <Ionicons name="trash-outline" size={18} color={theme.error} />
           </TouchableOpacity>
         </View>
 
@@ -385,7 +398,8 @@ const TeacherNotesUploader = () => {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            className="mt-2 border-t border-[#4C5361]/50 pt-3"
+            style={{ borderTopColor: theme.accentSoft20 }}
+            className="mt-2 border-t pt-3"
           >
             {displayAttachments.map((file, idx) => (
               <TouchableOpacity
@@ -393,16 +407,21 @@ const TeacherNotesUploader = () => {
                 onPress={() =>
                   openAttachment(item.id, idx, file.name, file.type)
                 }
-                className="bg-[#282C34] px-3 py-2 rounded-lg border border-[#4C5361] flex-row items-center mr-2"
+                style={{
+                  backgroundColor: theme.bgTertiary,
+                  borderColor: theme.border,
+                }}
+                className="px-3 py-2 rounded-lg border flex-row items-center mr-2"
               >
                 <Ionicons
                   name={file.type === "pdf" ? "document-text" : "image"}
                   size={16}
-                  color="#f49b33"
+                  color={theme.accent}
                   className="mr-2"
                 />
                 <Text
-                  className="text-gray-400 text-xs max-w-[120px]"
+                  style={{ color: theme.textMuted }}
+                  className="text-xs max-w-[120px]"
                   numberOfLines={1}
                 >
                   {file.name}
@@ -413,7 +432,7 @@ const TeacherNotesUploader = () => {
         )}
 
         <View className="mt-2 items-end">
-          <Text className="text-gray-600 text-[10px]">
+          <Text style={{ color: theme.textMuted }} className="text-[10px]">
             {formatDate(item.createdAt)}
           </Text>
         </View>
@@ -424,16 +443,20 @@ const TeacherNotesUploader = () => {
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${theme.bg} justify-center items-center`}
+        style={{ backgroundColor: theme.bgPrimary }}
+        className="flex-1 justify-center items-center"
       >
-        <ActivityIndicator size="large" color="#f49b33" />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg}`}>
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={theme.bgPrimary}
+      />
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
@@ -454,11 +477,20 @@ const TeacherNotesUploader = () => {
       <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => router.back()}
-          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+          }}
+          className="p-2 rounded-full border"
         >
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text className="text-white text-xl font-bold">Upload Notes</Text>
+        <Text
+          style={{ color: theme.textPrimary }}
+          className="text-xl font-bold"
+        >
+          Upload Notes
+        </Text>
         <View className="w-10" />
       </View>
 
@@ -472,7 +504,10 @@ const TeacherNotesUploader = () => {
         >
           {/* --- SELECTORS --- */}
           <View className="mb-4">
-            <Text className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1">
+            <Text
+              style={{ color: theme.textSecondary }}
+              className="text-xs font-bold uppercase mb-2 ml-1"
+            >
               Select Class
             </Text>
             <ScrollView
@@ -485,17 +520,34 @@ const TeacherNotesUploader = () => {
                   <TouchableOpacity
                     key={cls}
                     onPress={() => handleClassChange(cls)}
-                    className={`mr-3 px-5 py-2 rounded-xl border ${selectedClass === cls ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-[#4C5361]"}`}
+                    style={{
+                      backgroundColor:
+                        selectedClass === cls
+                          ? theme.accent
+                          : theme.bgSecondary,
+                      borderColor:
+                        selectedClass === cls ? theme.accent : theme.border,
+                    }}
+                    className="mr-3 px-5 py-2 rounded-xl border"
                   >
                     <Text
-                      className={`font-bold ${selectedClass === cls ? "text-[#282C34]" : "text-gray-400"}`}
+                      style={{
+                        color:
+                          selectedClass === cls
+                            ? theme.textDark
+                            : theme.textMuted,
+                        fontWeight: "bold",
+                      }}
                     >
                       {cls}
                     </Text>
                   </TouchableOpacity>
                 ))
               ) : (
-                <Text className="text-gray-500 italic ml-1">
+                <Text
+                  style={{ color: theme.textMuted }}
+                  className="italic ml-1"
+                >
                   No classes found.
                 </Text>
               )}
@@ -503,7 +555,10 @@ const TeacherNotesUploader = () => {
 
             {selectedClass && (
               <>
-                <Text className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1">
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-xs font-bold uppercase mb-2 ml-1"
+                >
                   Select Subject
                 </Text>
                 <ScrollView
@@ -515,10 +570,24 @@ const TeacherNotesUploader = () => {
                     <TouchableOpacity
                       key={sub}
                       onPress={() => setSelectedSubject(sub)}
-                      className={`mr-3 px-5 py-2 rounded-xl border ${selectedSubject === sub ? "bg-blue-600 border-blue-600" : "bg-[#333842] border-[#4C5361]"}`}
+                      style={{
+                        backgroundColor:
+                          selectedSubject === sub
+                            ? theme.info
+                            : theme.bgSecondary,
+                        borderColor:
+                          selectedSubject === sub ? theme.info : theme.border,
+                      }}
+                      className="mr-3 px-5 py-2 rounded-xl border"
                     >
                       <Text
-                        className={`font-bold ${selectedSubject === sub ? "text-white" : "text-gray-400"}`}
+                        style={{
+                          color:
+                            selectedSubject === sub
+                              ? theme.white
+                              : theme.textMuted,
+                          fontWeight: "bold",
+                        }}
                       >
                         {sub}
                       </Text>
@@ -531,70 +600,120 @@ const TeacherNotesUploader = () => {
 
           {/* --- COMPOSER CARD --- */}
           <View
-            className={`${theme.card} p-4 rounded-3xl border ${theme.borderColor} mb-6`}
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.border,
+              shadowColor: theme.shadow,
+            }}
+            className="p-4 rounded-3xl border mb-6 shadow-lg"
           >
-            <Text className="text-[#f49b33] text-xs font-bold uppercase tracking-widest mb-3">
+            <Text
+              style={{ color: theme.accent }}
+              className="text-xs font-bold uppercase tracking-widest mb-3"
+            >
               New Material
             </Text>
 
             <TextInput
               placeholder="Title (e.g. History Ch-2 Notes)"
-              placeholderTextColor="#666"
+              placeholderTextColor={theme.placeholder}
               value={title}
               onChangeText={setTitle}
-              className="bg-[#282C34] text-white p-3 rounded-xl border border-[#4C5361] mb-3 font-bold"
+              style={{
+                backgroundColor: theme.bgTertiary,
+                borderColor: theme.border,
+                color: theme.textPrimary,
+              }}
+              className="p-3 rounded-xl border mb-3 font-bold"
             />
 
             <TextInput
               placeholder="Description (Optional)"
-              placeholderTextColor="#666"
+              placeholderTextColor={theme.placeholder}
               value={description}
               onChangeText={setDescription}
               multiline
               numberOfLines={3}
-              style={{ textAlignVertical: "top" }}
-              className="bg-[#282C34] text-white p-3 rounded-xl border border-[#4C5361] mb-4 text-sm"
+              style={{
+                textAlignVertical: "top",
+                backgroundColor: theme.bgTertiary,
+                borderColor: theme.border,
+                color: theme.textPrimary,
+              }}
+              className="p-3 rounded-xl border mb-4 text-sm"
             />
 
-            {/* ATTACHMENT BUTTONS (LARGE & DISTINCT) */}
+            {/* ATTACHMENT BUTTONS */}
             <View className="flex-row justify-between mb-4 mt-2">
               <TouchableOpacity
                 onPress={() => pickImage(true)}
-                className="flex-1 bg-[#282C34] py-4 rounded-xl border border-[#4C5361] items-center mr-2 active:bg-[#f49b33]/10"
+                style={{
+                  backgroundColor: theme.bgTertiary,
+                  borderColor: theme.border,
+                }}
+                className="flex-1 py-4 rounded-xl border items-center mr-2"
               >
-                <Ionicons name="camera" size={24} color="#f49b33" />
-                <Text className="text-white font-bold text-xs mt-1">
+                <Ionicons name="camera" size={24} color={theme.accent} />
+                <Text
+                  style={{ color: theme.textPrimary }}
+                  className="font-bold text-xs mt-1"
+                >
                   Camera
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => pickImage(false)}
-                className="flex-1 bg-[#282C34] py-4 rounded-xl border border-[#4C5361] items-center mr-2 active:bg-[#29B6F6]/10"
+                style={{
+                  backgroundColor: theme.bgTertiary,
+                  borderColor: theme.border,
+                }}
+                className="flex-1 py-4 rounded-xl border items-center mr-2"
               >
-                <Ionicons name="images" size={24} color="#29B6F6" />
-                <Text className="text-white font-bold text-xs mt-1">
+                <Ionicons name="images" size={24} color={theme.info} />
+                <Text
+                  style={{ color: theme.textPrimary }}
+                  className="font-bold text-xs mt-1"
+                >
                   Gallery
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={pickDocument}
-                className="flex-1 bg-[#282C34] py-4 rounded-xl border border-[#4C5361] items-center active:bg-[#EF5350]/10"
+                style={{
+                  backgroundColor: theme.bgTertiary,
+                  borderColor: theme.border,
+                }}
+                className="flex-1 py-4 rounded-xl border items-center"
               >
-                <Ionicons name="document-text" size={24} color="#EF5350" />
-                <Text className="text-white font-bold text-xs mt-1">PDF</Text>
+                <Ionicons name="document-text" size={24} color={theme.error} />
+                <Text
+                  style={{ color: theme.textPrimary }}
+                  className="font-bold text-xs mt-1"
+                >
+                  PDF
+                </Text>
               </TouchableOpacity>
             </View>
 
-            {/* SELECTED FILES PREVIEW (SCROLLABLE CHIPS) */}
+            {/* SELECTED FILES PREVIEW */}
             {attachments.length > 0 && (
               <View className="mb-4">
-                <Text className="text-gray-400 text-[10px] uppercase mb-2 ml-1">
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-[10px] uppercase mb-2 ml-1"
+                >
                   Selected Files
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   {attachments.map((file, idx) => (
                     <View key={idx} className="mr-3 relative pt-2 pr-2">
-                      <View className="bg-[#282C34] p-3 rounded-xl border border-[#4C5361] items-center w-20 h-20 justify-center">
+                      <View
+                        style={{
+                          backgroundColor: theme.bgTertiary,
+                          borderColor: theme.border,
+                        }}
+                        className="p-3 rounded-xl border items-center w-20 h-20 justify-center"
+                      >
                         {file.type === "image" ? (
                           <Image
                             source={{ uri: file.uri }}
@@ -604,19 +723,20 @@ const TeacherNotesUploader = () => {
                           <Ionicons
                             name="document-text"
                             size={24}
-                            color="#f49b33"
+                            color={theme.accent}
                             className="mb-1"
                           />
                         )}
                         <Text
-                          className="text-gray-400 text-[8px] text-center"
+                          style={{ color: theme.textMuted }}
+                          className="text-[8px] text-center"
                           numberOfLines={2}
                         >
                           {file.name}
                         </Text>
                       </View>
 
-                      {/* Close Button with HitSlop */}
+                      {/* Close Button */}
                       <TouchableOpacity
                         onPress={() => removeAttachment(idx)}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -625,8 +745,9 @@ const TeacherNotesUploader = () => {
                           top: 0,
                           right: 0,
                           zIndex: 10,
+                          backgroundColor: theme.error,
                         }}
-                        className="bg-red-500 rounded-full p-1 shadow-sm"
+                        className="rounded-full p-1 shadow-sm"
                       >
                         <Ionicons name="close" size={10} color="white" />
                       </TouchableOpacity>
@@ -639,19 +760,23 @@ const TeacherNotesUploader = () => {
             <TouchableOpacity
               onPress={handleUpload}
               disabled={uploading}
-              className="bg-[#f49b33] py-4 rounded-xl flex-row justify-center items-center shadow-lg mt-2"
+              style={{ backgroundColor: theme.accent }}
+              className="py-4 rounded-xl flex-row justify-center items-center shadow-lg mt-2"
             >
               {uploading ? (
-                <ActivityIndicator color="#282C34" size="small" />
+                <ActivityIndicator color={theme.textDark} size="small" />
               ) : (
                 <>
                   <Ionicons
                     name="cloud-upload"
                     size={20}
-                    color="#282C34"
+                    color={theme.textDark}
                     className="mr-2"
                   />
-                  <Text className="text-[#282C34] font-bold text-lg">
+                  <Text
+                    style={{ color: theme.textDark }}
+                    className="font-bold text-lg"
+                  >
                     Upload Material
                   </Text>
                 </>
@@ -664,10 +789,13 @@ const TeacherNotesUploader = () => {
             <MaterialCommunityIcons
               name="history"
               size={20}
-              color="#f49b33"
+              color={theme.accent}
               className="mr-2"
             />
-            <Text className="text-white font-bold text-lg">
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="font-bold text-lg"
+            >
               Uploaded Resources
             </Text>
           </View>
@@ -683,9 +811,9 @@ const TeacherNotesUploader = () => {
                 <MaterialCommunityIcons
                   name="folder-open-outline"
                   size={60}
-                  color="gray"
+                  color={theme.textMuted}
                 />
-                <Text className="text-gray-400 mt-2">
+                <Text style={{ color: theme.textMuted }} className="mt-2">
                   No materials uploaded yet.
                 </Text>
               </View>

@@ -28,11 +28,13 @@ import * as ImagePicker from "expo-image-picker";
 import CustomAlert from "../../components/CustomAlert";
 import CustomAlert2 from "../../components/CustomAlert2";
 import CustomToast from "../../components/CustomToast";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 const { height } = Dimensions.get("window");
 
 const StudentDashboard = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [studentData, setStudentData] = useState(null);
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -92,17 +94,7 @@ const StudentDashboard = () => {
     }
   }, [profileModalVisible]);
 
-  const theme = {
-    bg: "bg-[#282C34]",
-    card: "bg-[#333842]",
-    accent: "text-[#f49b33]",
-    accentBg: "bg-[#f49b33]",
-    text: "text-white",
-    subText: "text-gray-400",
-    borderColor: "border-[#4C5361]",
-  };
-
-  // --- DATA FETCHING (FIXED) ---
+  // --- DATA FETCHING ---
   const fetchData = async () => {
     try {
       const user = auth().currentUser;
@@ -146,14 +138,13 @@ const StudentDashboard = () => {
 
         let combined = [...globalList, ...classList];
 
-        // *** FIX: Enrich ALL notices with author images ***
+        // Enrich ALL notices with author images
         if (combined.length > 0) {
           const enriched = await Promise.all(
             combined.map(async (item) => {
               try {
                 // Check if it's an admin notice (tag === 'Global' and no teacherId)
                 if (item.tag === "Global" && !item.teacherId) {
-                  // Fetch admin data - get first admin user
                   const adminSnap = await firestore()
                     .collection("users")
                     .where("role", "==", "admin")
@@ -280,7 +271,6 @@ const StudentDashboard = () => {
     setLogoutAlertVisible(false);
     try {
       await auth().signOut();
-      // Let the central routing in app/_layout.jsx handle navigation after sign-out.
       showToast("Signed out", "success");
     } catch (e) {
       showToast(e.message, "error");
@@ -318,16 +308,20 @@ const StudentDashboard = () => {
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${theme.bg} justify-center items-center`}
+        style={{ backgroundColor: theme.bgPrimary }}
+        className="flex-1 justify-center items-center"
       >
-        <ActivityIndicator size="large" color="#f49b33" />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg}`}>
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        backgroundColor={theme.bgPrimary}
+        barStyle={isDark ? "light-content" : "dark-content"}
+      />
 
       <CustomToast
         visible={toast.visible}
@@ -354,15 +348,17 @@ const StudentDashboard = () => {
         onClose={() => setReadOnlyVisible(false)}
       />
 
-      {/* Profile Modal - Keep existing implementation */}
+      {/* Profile Modal */}
       <Modal
         visible={profileModalVisible}
         animationType="slide"
         transparent={true}
         onRequestClose={() => setProfileModalVisible(false)}
       >
-        {/* Keep your existing profile modal code */}
-        <View className="flex-1 justify-end bg-black/60">
+        <View
+          style={{ backgroundColor: theme.blackSoft60 }}
+          className="flex-1 justify-end"
+        >
           <TouchableOpacity
             className="flex-1"
             onPress={() => setProfileModalVisible(false)}
@@ -378,17 +374,21 @@ const StudentDashboard = () => {
                   }),
                 },
               ],
+              backgroundColor: theme.bgPrimary,
             }}
-            className="bg-[#282C34] w-full h-[85%] rounded-t-3xl overflow-hidden shadow-2xl relative"
+            className="w-full h-[85%] rounded-t-3xl overflow-hidden shadow-2xl relative"
           >
             <View
               {...panResponder.panHandlers}
-              className="h-32 bg-[#f49b33]/20 w-full relative"
+              style={{ backgroundColor: theme.accentSoft20 }}
+              className="h-32 w-full relative"
             >
               <View className="absolute top-3 left-0 right-0 items-center z-30">
-                <View className="w-12 h-1.5 bg-white/30 rounded-full" />
+                <View
+                  style={{ backgroundColor: theme.white }}
+                  className="w-12 h-1.5 opacity-30 rounded-full"
+                />
               </View>
-              <View className="absolute top-0 left-0 w-full h-full bg-black/20" />
             </View>
 
             <View className="px-6 -mt-16 mb-4 flex-row justify-between items-end">
@@ -397,7 +397,13 @@ const StudentDashboard = () => {
                 disabled={uploading}
                 className="relative"
               >
-                <View className="w-32 h-32 rounded-full border-4 border-[#282C34] bg-[#333842] items-center justify-center overflow-hidden">
+                <View
+                  style={{
+                    borderColor: theme.bgPrimary,
+                    backgroundColor: theme.bgSecondary,
+                  }}
+                  className="w-32 h-32 rounded-full border-4 items-center justify-center overflow-hidden"
+                >
                   {studentData?.profileImage ? (
                     <Image
                       source={{ uri: studentData.profileImage }}
@@ -405,24 +411,42 @@ const StudentDashboard = () => {
                       resizeMode="cover"
                     />
                   ) : (
-                    <Text className="text-[#f49b33] font-bold text-5xl">
+                    <Text
+                      style={{ color: theme.accent }}
+                      className="font-bold text-5xl"
+                    >
                       {studentData?.name
                         ? studentData.name.charAt(0).toUpperCase()
                         : "S"}
                     </Text>
                   )}
                 </View>
-                <View className="absolute bottom-1 right-1 bg-[#f49b33] p-2 rounded-full border-2 border-[#282C34]">
+                <View
+                  style={{
+                    backgroundColor: theme.accent,
+                    borderColor: theme.bgPrimary,
+                  }}
+                  className="absolute bottom-1 right-1 p-2 rounded-full border-2"
+                >
                   {uploading ? (
-                    <ActivityIndicator size="small" color="#282C34" />
+                    <ActivityIndicator size="small" color={theme.textDark} />
                   ) : (
-                    <Ionicons name="camera" size={16} color="#282C34" />
+                    <Ionicons name="camera" size={16} color={theme.textDark} />
                   )}
                 </View>
               </TouchableOpacity>
 
-              <View className="bg-green-500/20 px-4 py-2 rounded-full border border-green-500/30 mb-4">
-                <Text className="text-green-400 font-bold text-xs uppercase tracking-wide">
+              <View
+                style={{
+                  backgroundColor: theme.successSoft,
+                  borderColor: theme.success,
+                }}
+                className="px-4 py-2 rounded-full border mb-4"
+              >
+                <Text
+                  style={{ color: theme.successBright }}
+                  className="font-bold text-xs uppercase tracking-wide"
+                >
                   ● Active Student
                 </Text>
               </View>
@@ -430,34 +454,67 @@ const StudentDashboard = () => {
 
             <ScrollView className="flex-1 px-6">
               <View className="mb-6">
-                <Text className="text-white text-3xl font-bold">
+                <Text
+                  style={{ color: theme.textPrimary }}
+                  className="text-3xl font-bold"
+                >
                   {studentData?.name || "Student Name"}
                 </Text>
-                <Text className="text-[#f49b33] text-sm mt-1">
+                <Text style={{ color: theme.accent }} className="text-sm mt-1">
                   {studentData?.phone || "No phone linked"}
                 </Text>
               </View>
 
               <View className="flex-row justify-between mb-8">
-                <View className="bg-[#333842] p-4 rounded-2xl flex-1 mr-3 border border-[#4C5361] items-center">
-                  <Text className="text-gray-400 text-xs font-bold uppercase mb-1">
+                <View
+                  style={{
+                    backgroundColor: theme.bgSecondary,
+                    borderColor: theme.border,
+                  }}
+                  className="p-4 rounded-2xl flex-1 mr-3 border items-center"
+                >
+                  <Text
+                    style={{ color: theme.textMuted }}
+                    className="text-xs font-bold uppercase mb-1"
+                  >
                     Standard
                   </Text>
-                  <Text className="text-white text-xl font-bold">
+                  <Text
+                    style={{ color: theme.textPrimary }}
+                    className="text-xl font-bold"
+                  >
                     {studentData?.standard || "N/A"}
                   </Text>
                 </View>
-                <View className="bg-[#333842] p-4 rounded-2xl flex-1 ml-3 border border-[#4C5361] items-center">
-                  <Text className="text-gray-400 text-xs font-bold uppercase mb-1">
+                <View
+                  style={{
+                    backgroundColor: theme.bgSecondary,
+                    borderColor: theme.border,
+                  }}
+                  className="p-4 rounded-2xl flex-1 ml-3 border items-center"
+                >
+                  <Text
+                    style={{ color: theme.textMuted }}
+                    className="text-xs font-bold uppercase mb-1"
+                  >
                     Stream
                   </Text>
-                  <Text className="text-[#f49b33] text-xl font-bold">
+                  <Text
+                    style={{ color: theme.accent }}
+                    className="text-xl font-bold"
+                  >
                     {studentData?.stream || "N/A"}
                   </Text>
                 </View>
               </View>
 
-              <Text className="text-gray-300 font-bold text-lg mb-4 border-b border-[#4C5361] pb-2">
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  borderColor: theme.border,
+                }}
+                className="font-bold text-lg mb-4 border-b pb-2"
+              >
                 Enrolled Subjects
               </Text>
 
@@ -467,13 +524,26 @@ const StudentDashboard = () => {
                   studentData.enrolledSubjects.map((subject, index) => (
                     <View
                       key={index}
-                      className="flex-row items-center bg-[#333842] p-4 rounded-xl mb-3 border border-[#4C5361]"
+                      style={{
+                        backgroundColor: theme.bgSecondary,
+                        borderColor: theme.border,
+                      }}
+                      className="flex-row items-center p-4 rounded-xl mb-3 border"
                     >
-                      <View className="bg-[#f49b33]/20 w-12 h-12 rounded-full items-center justify-center mr-4 border border-[#f49b33]/30">
-                        <Ionicons name="book" size={22} color="#f49b33" />
+                      <View
+                        style={{
+                          backgroundColor: theme.accentSoft20,
+                          borderColor: theme.accentSoft30,
+                        }}
+                        className="w-12 h-12 rounded-full items-center justify-center mr-4 border"
+                      >
+                        <Ionicons name="book" size={22} color={theme.accent} />
                       </View>
                       <View>
-                        <Text className="text-white font-bold text-lg">
+                        <Text
+                          style={{ color: theme.textPrimary }}
+                          className="font-bold text-lg"
+                        >
                           {subject}
                         </Text>
                       </View>
@@ -481,7 +551,7 @@ const StudentDashboard = () => {
                   ))
                 ) : (
                   <View className="items-center py-6">
-                    <Text className="text-gray-500 italic">
+                    <Text style={{ color: theme.textMuted }} className="italic">
                       No subjects enrolled yet.
                     </Text>
                   </View>
@@ -499,14 +569,19 @@ const StudentDashboard = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#f49b33"
+            tintColor={theme.accent}
+            colors={[theme.accent]}
           />
         }
       >
         <View className="flex-row items-center mb-5">
           <TouchableOpacity onPress={() => setProfileModalVisible(true)}>
             <View
-              className={`w-14 h-14 rounded-full mr-3 items-center justify-center border-2 border-[#f49b33] ${theme.card} overflow-hidden`}
+              style={{
+                borderColor: theme.accent,
+                backgroundColor: theme.bgSecondary,
+              }}
+              className="w-14 h-14 rounded-full mr-3 items-center justify-center border-2 overflow-hidden"
             >
               {studentData?.profileImage ? (
                 <Image
@@ -514,23 +589,32 @@ const StudentDashboard = () => {
                   className="w-full h-full"
                 />
               ) : (
-                <Text className="text-white text-lg font-bold">
+                <Text
+                  style={{ color: theme.textPrimary }}
+                  className="text-lg font-bold"
+                >
                   {studentData?.name ? studentData.name.charAt(0) : "S"}
                 </Text>
               )}
             </View>
           </TouchableOpacity>
           <View className="flex-1">
-            <Text className={`${theme.text} text-2xl font-bold`}>
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="text-2xl font-bold"
+            >
               {studentData?.name || "Student"}
             </Text>
           </View>
           <TouchableOpacity onPress={() => setLogoutAlertVisible(true)}>
-            <Ionicons name="log-out-outline" size={26} color="#f49b33" />
+            <Ionicons name="log-out-outline" size={26} color={theme.accent} />
           </TouchableOpacity>
         </View>
 
-        <Text className={`${theme.accent} text-2xl font-bold mb-5`}>
+        <Text
+          style={{ color: theme.accent }}
+          className="text-2xl font-bold mb-5"
+        >
           Welcome Back!
         </Text>
 
@@ -538,32 +622,48 @@ const StudentDashboard = () => {
 
         {/* Fee Card */}
         <View className="mb-5">
-          <Text className={`${theme.accent} text-lg font-semibold mb-2`}>
+          <Text
+            style={{ color: theme.accent }}
+            className="text-lg font-semibold mb-2"
+          >
             Total Pending Fee
           </Text>
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => router.push("/studentfees")}
-            className={`flex-row justify-between items-center ${theme.card} rounded-xl p-4 border border-1 border-[#f49b33]`}
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.accent,
+            }}
+            className="flex-row justify-between items-center rounded-xl p-4 border"
           >
             <View>
-              <Text className={theme.subText}>Due Amount</Text>
-              <Text className={`${theme.text} text-2xl font-bold mt-1`}>
+              <Text style={{ color: theme.textSecondary }}>Due Amount</Text>
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="text-2xl font-bold mt-1"
+              >
                 ₹{totalDue}
               </Text>
             </View>
             <TouchableOpacity
               onPress={() => router.push("/studentfees")}
-              className={`${theme.accentBg} rounded-lg px-4 py-2`}
+              style={{ backgroundColor: theme.accent }}
+              className="rounded-lg px-4 py-2"
             >
-              <Text className="text-[#282C34] font-bold">Fee History</Text>
+              <Text style={{ color: theme.textDark }} className="font-bold">
+                Fee History
+              </Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </View>
 
         {/* Quick Access */}
         <View className="mb-5">
-          <Text className={`${theme.accent} text-lg font-semibold mb-2`}>
+          <Text
+            style={{ color: theme.accent }}
+            className="text-lg font-semibold mb-2"
+          >
             Quick Access
           </Text>
           <View className="flex-row flex-wrap justify-between">
@@ -572,10 +672,17 @@ const StudentDashboard = () => {
                 key={item.id}
                 onPress={() => router.push(item.route)}
                 activeOpacity={0.8}
-                className={`w-[30%] ${theme.card} rounded-xl py-5 items-center mb-3`}
+                style={{
+                  backgroundColor: theme.bgSecondary,
+                  shadowColor: theme.shadow,
+                }}
+                className="w-[30%] rounded-xl py-5 items-center mb-3 shadow-sm"
               >
-                <Ionicons name={item.icon} size={26} color="#f49b33" />
-                <Text className={`${theme.text} mt-2 text-xs text-center`}>
+                <Ionicons name={item.icon} size={26} color={theme.accent} />
+                <Text
+                  style={{ color: theme.textPrimary }}
+                  className="mt-2 text-xs text-center"
+                >
                   {item.name}
                 </Text>
               </TouchableOpacity>
@@ -585,11 +692,16 @@ const StudentDashboard = () => {
 
         {/* Notices */}
         <View className="mb-8">
-          <Text className={`${theme.accent} text-lg font-semibold mb-2`}>
+          <Text
+            style={{ color: theme.accent }}
+            className="text-lg font-semibold mb-2"
+          >
             Coaching/Class Updates
           </Text>
           {notices.length === 0 ? (
-            <Text className="text-gray-500 italic">No new notices.</Text>
+            <Text style={{ color: theme.textMuted }} className="italic">
+              No new notices.
+            </Text>
           ) : (
             notices.map((item) => {
               const isGlobal = item.tag === "Global";
@@ -602,11 +714,21 @@ const StudentDashboard = () => {
                   key={item.id}
                   onPress={() => handlePress(item)}
                   activeOpacity={0.8}
-                  className={`${theme.card} rounded-lg p-4 mb-3 border border-[#4C5361]`}
+                  style={{
+                    backgroundColor: theme.bgSecondary,
+                    borderColor: theme.border,
+                  }}
+                  className="rounded-lg p-4 mb-3 border"
                 >
                   <View className="flex-row justify-between items-start mb-1">
                     <View className="flex-row items-start flex-1 mr-2">
-                      <View className="w-10 h-10 rounded-full overflow-hidden mr-3 items-center justify-center bg-[#444]">
+                      <View
+                        style={{
+                          backgroundColor: theme.blackSoft60,
+                          borderColor: theme.accentSoft30,
+                        }}
+                        className="w-10 h-10 rounded-full overflow-hidden mr-3 items-center justify-center border"
+                      >
                         {item.authorImage ? (
                           <Image
                             source={{ uri: item.authorImage }}
@@ -614,7 +736,10 @@ const StudentDashboard = () => {
                             resizeMode="cover"
                           />
                         ) : (
-                          <Text className="text-white font-bold">
+                          <Text
+                            style={{ color: theme.textDark }}
+                            className="font-bold"
+                          >
                             {item.author
                               ? item.author.charAt(0).toUpperCase()
                               : "A"}
@@ -624,31 +749,45 @@ const StudentDashboard = () => {
 
                       <View className="flex-1">
                         <Text
-                          className={`${theme.text} text-base font-semibold`}
+                          style={{ color: theme.textPrimary }}
+                          className="text-base font-semibold"
                         >
                           {item.title || "Notice"}
                         </Text>
                         <View className="flex-row mt-1 flex-wrap items-center">
                           <Text
                             className="text-xs font-bold mr-2"
-                            style={{ color: isGlobal ? "#4CAF50" : "#29B6F6" }}
+                            style={{
+                              color: isGlobal
+                                ? theme.successBright
+                                : theme.infoBright,
+                            }}
                           >
                             {isGlobal ? "Global Notice" : "Class Notice"}
                           </Text>
-                          <Text className="text-xs text-gray-400 mr-2">
+                          <Text
+                            style={{ color: theme.textMuted }}
+                            className="text-xs mr-2"
+                          >
                             By: {item.author}
                           </Text>
                         </View>
 
                         {!isGlobal && (
-                          <Text className="text-xs text-[#f49b33] font-bold mt-1">
+                          <Text
+                            style={{ color: theme.accent }}
+                            className="text-xs font-bold mt-1"
+                          >
                             {targetText}
                           </Text>
                         )}
                       </View>
                     </View>
 
-                    <Text className={`${theme.subText} text-xs`}>
+                    <Text
+                      style={{ color: theme.textSecondary }}
+                      className="text-xs"
+                    >
                       {item.date}
                     </Text>
                   </View>

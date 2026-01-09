@@ -7,15 +7,15 @@ import {
   FlatList,
   ActivityIndicator,
   ScrollView,
-  Platform,
   Image,
-  Modal, // <--- Added Modal
+  Modal,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // NATIVE SDK
 import auth from "@react-native-firebase/auth";
@@ -26,18 +26,6 @@ import CustomAlert from "../../components/CustomAlert";
 
 dayjs.extend(customParseFormat);
 
-// --- THEME ---
-const theme = {
-  bg: "bg-[#282C34]",
-  card: "bg-[#333842]",
-  accent: "text-[#f49b33]",
-  text: "text-white",
-  subText: "text-gray-400",
-  green: "#4CAF50",
-  red: "#F44336",
-  borderColor: "border-[#4C5361]",
-};
-
 // --- HELPER: CUSTOM CALENDAR COMPONENT ---
 const CustomCalendar = ({
   selectedDate,
@@ -45,13 +33,13 @@ const CustomCalendar = ({
   markedDates = [], // Array of "DD/MM/YYYY" strings
   onClose,
 }) => {
+  const { theme } = useTheme(); // Get dynamic theme values
   const [currentMonth, setCurrentMonth] = useState(dayjs(selectedDate));
 
   const generateDays = () => {
     const startOfMonth = currentMonth.startOf("month");
-    const endOfMonth = currentMonth.endOf("month");
-    const startDay = startOfMonth.day();
     const daysInMonth = currentMonth.daysInMonth();
+    const startDay = startOfMonth.day();
 
     const days = [];
     for (let i = 0; i < startDay; i++) days.push(null);
@@ -67,16 +55,29 @@ const CustomCalendar = ({
   };
 
   return (
-    <View className="flex-1 justify-center items-center bg-black/80 p-6">
+    <View
+      style={{ backgroundColor: theme.blackSoft80 }}
+      className="flex-1 justify-center items-center p-6"
+    >
       <View
-        className={`${theme.card} w-full rounded-2xl p-4 border ${theme.borderColor}`}
+        style={{
+          backgroundColor: theme.bgSecondary,
+          borderColor: theme.border,
+        }}
+        className="w-full rounded-2xl p-4 border"
       >
         {/* Header */}
-        <View className="flex-row justify-between items-center mb-4 border-b border-[#4C5361] pb-4">
+        <View
+          style={{ borderColor: theme.border }}
+          className="flex-row justify-between items-center mb-4 border-b pb-4"
+        >
           <TouchableOpacity onPress={() => changeMonth(-1)} className="p-2">
-            <Ionicons name="chevron-back" size={24} color="#f49b33" />
+            <Ionicons name="chevron-back" size={24} color={theme.accent} />
           </TouchableOpacity>
-          <Text className="text-white font-bold text-lg">
+          <Text
+            style={{ color: theme.textPrimary }}
+            className="font-bold text-lg"
+          >
             {currentMonth.format("MMMM YYYY")}
           </Text>
           <TouchableOpacity
@@ -89,8 +90,8 @@ const CustomCalendar = ({
               size={24}
               color={
                 currentMonth.add(1, "month").isAfter(dayjs())
-                  ? "#555"
-                  : "#f49b33"
+                  ? theme.textMuted
+                  : theme.accent
               }
             />
           </TouchableOpacity>
@@ -101,7 +102,8 @@ const CustomCalendar = ({
           {weekDays.map((d) => (
             <Text
               key={d}
-              className="text-gray-500 w-[14%] text-center text-xs font-bold"
+              style={{ color: theme.textSecondary }}
+              className="w-[14%] text-center text-xs font-bold"
             >
               {d}
             </Text>
@@ -127,28 +129,36 @@ const CustomCalendar = ({
                 className="w-[14%] h-10 justify-center items-center relative mb-1"
               >
                 <View
-                  className={`w-8 h-8 rounded-full justify-center items-center ${
-                    isSelected
-                      ? "bg-[#f49b33]"
+                  style={{
+                    backgroundColor: isSelected
+                      ? theme.accent
                       : isMarked
-                        ? "bg-[#333842] border border-green-500/50"
-                        : "bg-transparent"
-                  }`}
+                        ? theme.bgTertiary
+                        : "transparent",
+                    borderColor:
+                      isMarked && !isSelected ? theme.success : "transparent",
+                    borderWidth: isMarked && !isSelected ? 1 : 0,
+                  }}
+                  className="w-8 h-8 rounded-full justify-center items-center"
                 >
                   <Text
-                    className={`text-xs font-bold ${
-                      isSelected
-                        ? "text-[#282C34]"
+                    style={{
+                      color: isSelected
+                        ? theme.textDark
                         : isFuture
-                          ? "text-gray-600"
-                          : "text-white"
-                    }`}
+                          ? theme.textMuted
+                          : theme.textPrimary,
+                    }}
+                    className="text-xs font-bold"
                   >
                     {date.date()}
                   </Text>
                 </View>
                 {isMarked && !isSelected && (
-                  <View className="absolute bottom-0 w-1 h-1 bg-green-500 rounded-full" />
+                  <View
+                    style={{ backgroundColor: theme.success }}
+                    className="absolute bottom-0 w-1 h-1 rounded-full"
+                  />
                 )}
               </TouchableOpacity>
             );
@@ -158,21 +168,43 @@ const CustomCalendar = ({
         {/* Legend */}
         <View className="flex-row justify-center items-center mb-4 gap-4">
           <View className="flex-row items-center">
-            <View className="w-2 h-2 rounded-full bg-green-500 mr-2" />
-            <Text className="text-gray-400 text-[10px]">Recorded</Text>
+            <View
+              style={{ backgroundColor: theme.success }}
+              className="w-2 h-2 rounded-full mr-2"
+            />
+            <Text
+              style={{ color: theme.textSecondary }}
+              className="text-[10px]"
+            >
+              Recorded
+            </Text>
           </View>
           <View className="flex-row items-center">
-            <View className="w-2 h-2 rounded-full bg-[#f49b33] mr-2" />
-            <Text className="text-gray-400 text-[10px]">Selected</Text>
+            <View
+              style={{ backgroundColor: theme.accent }}
+              className="w-2 h-2 rounded-full mr-2"
+            />
+            <Text
+              style={{ color: theme.textSecondary }}
+              className="text-[10px]"
+            >
+              Selected
+            </Text>
           </View>
         </View>
 
         {/* Close Button */}
         <TouchableOpacity
           onPress={onClose}
-          className="bg-[#282C34] py-3 rounded-xl border border-[#4C5361] items-center"
+          style={{
+            backgroundColor: theme.bgTertiary,
+            borderColor: theme.border,
+          }}
+          className="py-3 rounded-xl border items-center"
         >
-          <Text className="text-red-400 font-bold">Close Calendar</Text>
+          <Text style={{ color: theme.errorBright }} className="font-bold">
+            Close Calendar
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -182,6 +214,7 @@ const CustomCalendar = ({
 // --- MAIN SCREEN ---
 const TeacherAttendance = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [loading, setLoading] = useState(true);
   const [fetchingStudents, setFetchingStudents] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -448,15 +481,21 @@ const TeacherAttendance = () => {
       <TouchableOpacity
         onPress={() => toggleAttendance(item.id)}
         activeOpacity={isLocked ? 1 : 0.7}
-        className={`${theme.card} p-3 rounded-xl mb-3 flex-row justify-between items-center border ${
-          isPresent ? "border-green-500/30" : "border-red-500/50 bg-red-500/5"
+        style={{
+          backgroundColor: theme.bgSecondary,
+          borderColor: isPresent ? theme.successSoft : theme.errorSoft,
+        }}
+        className={`p-3 rounded-xl mb-3 flex-row justify-between items-center border ${
+          isPresent ? "" : "bg-red-500/5"
         }`}
       >
         <View className="flex-row items-center flex-1">
           <View
-            className={`w-10 h-10 rounded-full items-center justify-center mr-3 overflow-hidden border ${
-              isPresent ? "border-[#f49b33]" : "border-red-400"
-            } bg-[#282C34]`}
+            style={{
+              borderColor: isPresent ? theme.accent : theme.error,
+              backgroundColor: theme.bgTertiary,
+            }}
+            className="w-10 h-10 rounded-full items-center justify-center mr-3 overflow-hidden border"
           >
             {item.profileImage ? (
               <Image
@@ -465,7 +504,8 @@ const TeacherAttendance = () => {
               />
             ) : (
               <Text
-                className={`font-bold ${isPresent ? "text-[#f49b33]" : "text-red-400"}`}
+                style={{ color: isPresent ? theme.accent : theme.error }}
+                className="font-bold"
               >
                 {item.name.charAt(0)}
               </Text>
@@ -473,7 +513,10 @@ const TeacherAttendance = () => {
           </View>
           <View>
             <Text
-              className={`font-bold text-base ${isPresent ? "text-white" : "text-red-300"}`}
+              style={{
+                color: isPresent ? theme.textPrimary : theme.errorBright,
+              }}
+              className="font-bold text-base"
             >
               {item.name}
             </Text>
@@ -481,16 +524,17 @@ const TeacherAttendance = () => {
         </View>
 
         <View
-          className={`px-4 py-2 rounded-lg border ${
-            isPresent
-              ? "bg-green-500/10 border-green-500/50"
-              : "bg-red-500/10 border-red-500/50"
-          }`}
+          style={{
+            backgroundColor: isPresent ? theme.successSoft : theme.errorSoft,
+            borderColor: isPresent ? theme.success : theme.error,
+          }}
+          className="px-4 py-2 rounded-lg border border-opacity-50"
         >
           <Text
-            className={`font-bold text-xs ${
-              isPresent ? "text-green-400" : "text-red-400"
-            }`}
+            style={{
+              color: isPresent ? theme.successBright : theme.errorBright,
+            }}
+            className="font-bold text-xs"
           >
             {status.toUpperCase()}
           </Text>
@@ -502,16 +546,20 @@ const TeacherAttendance = () => {
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${theme.bg} justify-center items-center`}
+        style={{ backgroundColor: theme.bgPrimary }}
+        className="flex-1 justify-center items-center"
       >
-        <ActivityIndicator size="large" color="#f49b33" />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg}`}>
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={theme.bgPrimary}
+      />
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
@@ -547,11 +595,20 @@ const TeacherAttendance = () => {
       <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => router.back()}
-          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+          }}
+          className="p-2 rounded-full border"
         >
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text className="text-white text-xl font-bold">Attendance</Text>
+        <Text
+          style={{ color: theme.textPrimary }}
+          className="text-xl font-bold"
+        >
+          Attendance
+        </Text>
         <View className="w-10" />
       </View>
 
@@ -561,15 +618,28 @@ const TeacherAttendance = () => {
       >
         {/* TOP CARD: DATE & CLASS */}
         <View
-          className={`${theme.card} p-4 rounded-2xl border ${theme.borderColor} mb-6`}
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+          }}
+          className="p-4 rounded-2xl border mb-6"
         >
           <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-gray-400 text-xs font-bold uppercase tracking-widest">
+            <Text
+              style={{ color: theme.textSecondary }}
+              className="text-xs font-bold uppercase tracking-widest"
+            >
               Session Details
             </Text>
             {isLocked && (
-              <View className="bg-green-500/20 px-2 py-1 rounded">
-                <Text className="text-green-400 text-[10px] font-bold uppercase">
+              <View
+                style={{ backgroundColor: theme.successSoft }}
+                className="px-2 py-1 rounded"
+              >
+                <Text
+                  style={{ color: theme.successBright }}
+                  className="text-[10px] font-bold uppercase"
+                >
                   RECORDED
                 </Text>
               </View>
@@ -579,18 +649,25 @@ const TeacherAttendance = () => {
           {/* DATE BUTTON (Triggers Modal) */}
           <TouchableOpacity
             onPress={() => setCalendarVisible(true)}
-            className="flex-row items-center bg-[#282C34] p-3 rounded-xl border border-[#4C5361] mb-4"
+            style={{
+              backgroundColor: theme.bgTertiary,
+              borderColor: theme.border,
+            }}
+            className="flex-row items-center p-3 rounded-xl border mb-4"
           >
             <Ionicons
               name="calendar-outline"
               size={18}
-              color="#f49b33"
+              color={theme.accent}
               className="mr-2"
             />
-            <Text className="text-white font-semibold flex-1">
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="font-semibold flex-1"
+            >
               {getFormattedDate(currentDate)}
             </Text>
-            <Ionicons name="chevron-down" size={16} color="gray" />
+            <Ionicons name="chevron-down" size={16} color={theme.textMuted} />
           </TouchableOpacity>
 
           {/* CLASS SELECTOR */}
@@ -603,10 +680,22 @@ const TeacherAttendance = () => {
               <TouchableOpacity
                 key={cls}
                 onPress={() => handleClassChange(cls)}
-                className={`mr-3 px-5 py-2 rounded-xl border ${selectedClass === cls ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-[#4C5361]"}`}
+                style={{
+                  backgroundColor:
+                    selectedClass === cls ? theme.accent : theme.bgTertiary,
+                  borderColor:
+                    selectedClass === cls ? theme.accent : theme.border,
+                }}
+                className="mr-3 px-5 py-2 rounded-xl border"
               >
                 <Text
-                  className={`font-bold ${selectedClass === cls ? "text-[#282C34]" : "text-gray-400"}`}
+                  style={{
+                    color:
+                      selectedClass === cls
+                        ? theme.textDark
+                        : theme.textSecondary,
+                  }}
+                  className="font-bold"
                 >
                   {cls}
                 </Text>
@@ -620,10 +709,22 @@ const TeacherAttendance = () => {
                 <TouchableOpacity
                   key={sub}
                   onPress={() => setSelectedSubject(sub)}
-                  className={`mr-3 px-5 py-2 rounded-xl border ${selectedSubject === sub ? "bg-blue-500 border-blue-500" : "bg-[#333842] border-[#4C5361]"}`}
+                  style={{
+                    backgroundColor:
+                      selectedSubject === sub ? theme.info : theme.bgTertiary,
+                    borderColor:
+                      selectedSubject === sub ? theme.info : theme.border,
+                  }}
+                  className="mr-3 px-5 py-2 rounded-xl border"
                 >
                   <Text
-                    className={`font-bold ${selectedSubject === sub ? "text-white" : "text-gray-400"}`}
+                    style={{
+                      color:
+                        selectedSubject === sub
+                          ? theme.white
+                          : theme.textSecondary,
+                    }}
+                    className="font-bold"
                   >
                     {sub}
                   </Text>
@@ -634,15 +735,23 @@ const TeacherAttendance = () => {
         </View>
 
         {/* STUDENTS LIST */}
-        <View className="flex-row justify-between items-end mb-2 border-b border-[#4C5361]/50 pb-2 mx-1">
-          <Text className="text-white font-bold text-lg">Class Register</Text>
-          <Text className="text-gray-400 text-xs">
+        <View
+          style={{ borderColor: theme.border }}
+          className="flex-row justify-between items-end mb-2 border-b pb-2 mx-1"
+        >
+          <Text
+            style={{ color: theme.textPrimary }}
+            className="font-bold text-lg"
+          >
+            Class Register
+          </Text>
+          <Text style={{ color: theme.textSecondary }} className="text-xs">
             Total: {students.length}
           </Text>
         </View>
 
         {fetchingStudents ? (
-          <ActivityIndicator color="#f49b33" className="mt-10" />
+          <ActivityIndicator color={theme.accent} className="mt-10" />
         ) : (
           <FlatList
             data={students}
@@ -654,9 +763,11 @@ const TeacherAttendance = () => {
                 <MaterialCommunityIcons
                   name="account-off"
                   size={50}
-                  color="gray"
+                  color={theme.textMuted}
                 />
-                <Text className="text-gray-400 mt-2">No students found.</Text>
+                <Text style={{ color: theme.textMuted }} className="mt-2">
+                  No students found.
+                </Text>
               </View>
             )}
           />
@@ -670,28 +781,41 @@ const TeacherAttendance = () => {
           {isLocked ? (
             <TouchableOpacity
               onPress={handleUnlock}
-              className="bg-gray-700 py-4 rounded-2xl flex-row justify-center items-center border border-gray-500 shadow-lg"
+              style={{
+                backgroundColor: theme.bgSecondary,
+                borderColor: theme.border,
+              }}
+              className="py-4 rounded-2xl flex-row justify-center items-center border shadow-lg"
             >
               <Ionicons
                 name="lock-open"
                 size={20}
-                color="#fff"
+                color={theme.textPrimary}
                 className="mr-2"
               />
-              <Text className="text-white font-bold ml-2">Unlock & Edit</Text>
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="font-bold ml-2"
+              >
+                Unlock & Edit
+              </Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
               onPress={handleSubmit}
               disabled={submitting}
-              className="bg-[#f49b33] py-4 rounded-2xl flex-row justify-center items-center shadow-lg"
+              style={{ backgroundColor: theme.accent }}
+              className="py-4 rounded-2xl flex-row justify-center items-center shadow-lg"
             >
               {submitting ? (
-                <ActivityIndicator color="#282C34" />
+                <ActivityIndicator color={theme.textDark} />
               ) : (
                 <>
-                  <Ionicons name="save" size={20} color="#282C34" />
-                  <Text className="text-[#282C34] font-bold text-lg ml-2">
+                  <Ionicons name="save" size={20} color={theme.textDark} />
+                  <Text
+                    style={{ color: theme.textDark }}
+                    className="font-bold text-lg ml-2"
+                  >
                     Submit Attendance
                   </Text>
                 </>

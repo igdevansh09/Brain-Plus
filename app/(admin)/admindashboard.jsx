@@ -22,20 +22,12 @@ import storage from "@react-native-firebase/storage";
 
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
-
-// --- THEME ---
-const theme = {
-  bg: "bg-[#282C34]",
-  card: "bg-[#333842]",
-  accent: "text-[#f49b33]",
-  accentBg: "bg-[#f49b33]",
-  text: "text-white",
-  subText: "text-gray-400",
-  borderColor: "border-[#4C5361]",
-};
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 const AdminDashboard = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
+
   const [adminData, setAdminData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,7 +38,7 @@ const AdminDashboard = () => {
   const [activeTeacherCount, setActiveTeacherCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
 
-  // NEW: Granular Pending States
+  // Granular Pending States
   const [pendingStudentCount, setPendingStudentCount] = useState(0);
   const [pendingTeacherCount, setPendingTeacherCount] = useState(0);
 
@@ -118,7 +110,6 @@ const AdminDashboard = () => {
 
   // --- LISTENERS ---
   useEffect(() => {
-    // Fetch existing user data on mount and keep listening for auth changes.
     const current = auth().currentUser;
     if (current) fetchUserData(current.uid);
 
@@ -126,8 +117,6 @@ const AdminDashboard = () => {
       if (user) {
         await fetchUserData(user.uid);
       }
-      // NOTE: Do not redirect here. Root layout centralizes auth-based routing
-      // to avoid multiple components issuing simultaneous navigation.
     });
 
     // 1. Students Listener
@@ -148,7 +137,7 @@ const AdminDashboard = () => {
         if (snapshot) setActiveTeacherCount(snapshot.size);
       });
 
-    // 3. Pending Listener (UPDATED to split counts)
+    // 3. Pending Listener
     const unsubPending = firestore()
       .collection("users")
       .where("verified", "==", false)
@@ -249,33 +238,53 @@ const AdminDashboard = () => {
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${theme.bg} justify-center items-center`}
+        style={{ backgroundColor: theme.bgPrimary }}
+        className="flex-1 justify-center items-center"
       >
-        <ActivityIndicator size="large" color="#f49b33" />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   const renderAvatar = (size = "small") => {
-    const sizeClasses = size === "large" ? "w-24 h-24" : "w-12 h-12";
-    const textClasses = size === "large" ? "text-4xl" : "text-xl";
-    const containerClasses = `${sizeClasses} rounded-full border-2 border-[#f49b33] overflow-hidden items-center justify-center bg-[#f49b33]`;
+    const sizeStyle =
+      size === "large" ? { width: 96, height: 96 } : { width: 48, height: 48 };
+    const textSize = size === "large" ? "text-4xl" : "text-xl";
 
     if (adminData?.profileImage) {
       return (
         <Image
           source={{ uri: adminData.profileImage }}
-          className={containerClasses}
-          style={{
-            width: size === "large" ? 96 : 48,
-            height: size === "large" ? 96 : 48,
-          }}
+          style={[
+            sizeStyle,
+            {
+              borderColor: theme.accent,
+              backgroundColor: theme.accent,
+              borderWidth: 2,
+              borderRadius: 999,
+            },
+          ]}
         />
       );
     }
     return (
-      <View className={containerClasses}>
-        <Text className={`text-[#282C34] font-bold ${textClasses}`}>
+      <View
+        style={[
+          sizeStyle,
+          {
+            backgroundColor: theme.accent,
+            borderColor: theme.accent,
+            borderWidth: 2,
+            borderRadius: 999,
+            alignItems: "center",
+            justifyContent: "center",
+          },
+        ]}
+      >
+        <Text
+          style={{ color: theme.textDark }}
+          className={`font-bold ${textSize}`}
+        >
           {adminData?.name ? adminData.name.charAt(0).toUpperCase() : "A"}
         </Text>
       </View>
@@ -283,8 +292,11 @@ const AdminDashboard = () => {
   };
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg}`}>
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+    <SafeAreaView style={{ backgroundColor: theme.bgPrimary, flex: 1 }}>
+      <StatusBar
+        backgroundColor={theme.bgPrimary}
+        barStyle={isDark ? "light-content" : "dark-content"}
+      />
 
       <CustomToast
         visible={toastVisible}
@@ -310,15 +322,23 @@ const AdminDashboard = () => {
         transparent={true}
         onRequestClose={() => setProfileModalVisible(false)}
       >
-        <View className="flex-1 justify-center items-center bg-black/80 p-4">
+        <View
+          style={{ backgroundColor: theme.blackSoft80 }}
+          className="flex-1 justify-center items-center p-4"
+        >
           <View
-            className={`${theme.card} w-[85%] rounded-2xl p-6 border ${theme.borderColor} relative`}
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.border,
+            }}
+            className="w-[85%] rounded-2xl p-6 border relative"
           >
             <TouchableOpacity
               onPress={() => setProfileModalVisible(false)}
-              className="absolute top-4 right-4 z-10 bg-[#282C34] p-1 rounded-full"
+              style={{ backgroundColor: theme.bgTertiary }}
+              className="absolute top-4 right-4 z-10 p-1 rounded-full"
             >
-              <Ionicons name="close" size={20} color="gray" />
+              <Ionicons name="close" size={20} color={theme.textSecondary} />
             </TouchableOpacity>
 
             <View className="items-center mb-6 mt-2">
@@ -328,41 +348,67 @@ const AdminDashboard = () => {
                 className="relative mb-3"
               >
                 {renderAvatar("large")}
-                <View className="absolute bottom-0 right-0 bg-[#f49b33] rounded-full p-2 border-2 border-[#333842]">
+                <View
+                  style={{
+                    backgroundColor: theme.accent,
+                    borderColor: theme.bgSecondary,
+                  }}
+                  className="absolute bottom-0 right-0 rounded-full p-2 border-2"
+                >
                   {uploading ? (
-                    <ActivityIndicator size="small" color="#282C34" />
+                    <ActivityIndicator size="small" color={theme.textDark} />
                   ) : (
-                    <Ionicons name="camera" size={18} color="#282C34" />
+                    <Ionicons name="camera" size={18} color={theme.textDark} />
                   )}
                 </View>
               </TouchableOpacity>
 
-              <Text className={`${theme.text} text-2xl font-bold`}>
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="text-2xl font-bold"
+              >
                 {adminData?.name || "Administrator"}
               </Text>
-              <Text className={`${theme.subText} text-sm uppercase mt-1`}>
+              <Text
+                style={{ color: theme.textSecondary }}
+                className="text-sm uppercase mt-1"
+              >
                 Tap photo to update
               </Text>
             </View>
 
-            <View className="mb-6 bg-[#282C34] p-4 rounded-xl border border-[#4C5361]">
+            <View
+              style={{
+                backgroundColor: theme.bgPrimary,
+                borderColor: theme.border,
+              }}
+              className="mb-6 p-4 rounded-xl border"
+            >
               <View className="mb-3">
                 <Text
-                  className={`${theme.accent} text-xs uppercase font-bold mb-1`}
+                  style={{ color: theme.accent }}
+                  className="text-xs uppercase font-bold mb-1"
                 >
                   Email
                 </Text>
-                <Text className={`${theme.text} text-base`}>
+                <Text
+                  style={{ color: theme.textPrimary }}
+                  className="text-base"
+                >
                   {adminData?.email}
                 </Text>
               </View>
               <View>
                 <Text
-                  className={`${theme.accent} text-xs uppercase font-bold mb-1`}
+                  style={{ color: theme.accent }}
+                  className="text-xs uppercase font-bold mb-1"
                 >
                   Password
                 </Text>
-                <Text className={`${theme.text} text-base`}>
+                <Text
+                  style={{ color: theme.textPrimary }}
+                  className="text-base"
+                >
                   AdminPassword123!
                 </Text>
               </View>
@@ -377,7 +423,8 @@ const AdminDashboard = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#f49b33"
+            tintColor={theme.accent}
+            colors={[theme.accent]}
           />
         }
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -389,7 +436,10 @@ const AdminDashboard = () => {
               {renderAvatar("small")}
             </TouchableOpacity>
             <View className="ml-4">
-              <Text className={`${theme.text} text-2xl font-bold`}>
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="text-2xl font-bold"
+              >
                 {adminData?.name || "Admin"}
               </Text>
             </View>
@@ -398,39 +448,63 @@ const AdminDashboard = () => {
             onPress={() => setLogoutAlertVisible(true)}
             className="p-2"
           >
-            <Ionicons name="log-out-outline" size={26} color="#f49b33" />
+            <Ionicons name="log-out-outline" size={26} color={theme.accent} />
           </TouchableOpacity>
         </View>
 
         {/* --- 2. HERO STATS --- */}
         <View className="flex-row gap-4 mb-8">
           <View
-            className={`flex-1 ${theme.card} p-5 rounded-2xl border ${theme.borderColor} items-center shadow-lg`}
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.border,
+              shadowColor: theme.shadow,
+            }}
+            className="flex-1 p-5 rounded-2xl border items-center shadow-lg"
           >
-            <View className="bg-[#f49b33]/10 p-3 rounded-full mb-3">
-              <Ionicons name="people" size={28} color="#f49b33" />
+            <View
+              style={{ backgroundColor: theme.accentSoft10 }}
+              className="p-3 rounded-full mb-3"
+            >
+              <Ionicons name="people" size={28} color={theme.accent} />
             </View>
-            <Text className="text-white text-3xl font-bold mb-1">
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="text-3xl font-bold mb-1"
+            >
               {activeStudentCount}
             </Text>
             <Text
-              className={`${theme.subText} text-xs font-semibold uppercase tracking-wider`}
+              style={{ color: theme.textSecondary }}
+              className="text-xs font-semibold uppercase tracking-wider"
             >
               Active Students
             </Text>
           </View>
 
           <View
-            className={`flex-1 ${theme.card} p-5 rounded-2xl border ${theme.borderColor} items-center shadow-lg`}
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.border,
+              shadowColor: theme.shadow,
+            }}
+            className="flex-1 p-5 rounded-2xl border items-center shadow-lg"
           >
-            <View className="bg-[#f49b33]/10 p-3 rounded-full mb-3">
-              <Ionicons name="school" size={28} color="#f49b33" />
+            <View
+              style={{ backgroundColor: theme.accentSoft10 }}
+              className="p-3 rounded-full mb-3"
+            >
+              <Ionicons name="school" size={28} color={theme.accent} />
             </View>
-            <Text className="text-white text-3xl font-bold mb-1">
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="text-3xl font-bold mb-1"
+            >
               {activeTeacherCount}
             </Text>
             <Text
-              className={`${theme.subText} text-xs font-semibold uppercase tracking-wider`}
+              style={{ color: theme.textSecondary }}
+              className="text-xs font-semibold uppercase tracking-wider"
             >
               Active Teachers
             </Text>
@@ -438,7 +512,10 @@ const AdminDashboard = () => {
         </View>
 
         {/* --- 4. ACTION GRID --- */}
-        <Text className={`${theme.accent} text-lg font-bold mb-4 ml-1`}>
+        <Text
+          style={{ color: theme.accent }}
+          className="text-lg font-bold mb-4 ml-1"
+        >
           Administration
         </Text>
 
@@ -454,18 +531,30 @@ const AdminDashboard = () => {
                 key={item.id}
                 onPress={() => item.route && router.push(item.route)}
                 activeOpacity={0.7}
-                className={`w-[48%] ${theme.card} rounded-2xl p-6 items-center mb-4 border ${theme.borderColor} shadow-sm relative`}
+                style={{
+                  backgroundColor: theme.bgSecondary,
+                  borderColor: theme.border,
+                  shadowColor: theme.shadow,
+                }}
+                className="w-[48%] rounded-2xl p-6 items-center mb-4 border shadow-sm relative"
               >
-                <Ionicons name={item.icon} size={32} color="#f49b33" />
+                <Ionicons name={item.icon} size={32} color={theme.accent} />
                 <Text
-                  className={`${theme.text} mt-3 text-sm font-semibold text-center`}
+                  style={{ color: theme.textPrimary }}
+                  className="mt-3 text-sm font-semibold text-center"
                 >
                   {item.name}
                 </Text>
 
                 {/* --- NOTIFICATION BADGE --- */}
                 {badgeCount > 0 && (
-                  <View className="absolute top-3 right-3 bg-red-600 rounded-full min-w-[22px] h-[22px] items-center justify-center border border-[#333842] px-1">
+                  <View
+                    style={{
+                      backgroundColor: theme.error,
+                      borderColor: theme.bgSecondary,
+                    }}
+                    className="absolute top-3 right-3 rounded-full min-w-[22px] h-[22px] items-center justify-center border px-1"
+                  >
                     <Text className="text-white text-[10px] font-bold">
                       {badgeCount > 99 ? "99+" : badgeCount}
                     </Text>

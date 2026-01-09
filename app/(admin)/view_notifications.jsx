@@ -14,18 +14,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import firestore from "@react-native-firebase/firestore";
-
-const theme = {
-  bg: "bg-[#282C34]",
-  card: "bg-[#333842]",
-  accent: "text-[#f49b33]",
-  text: "text-white",
-  subText: "text-gray-400",
-  borderColor: "border-[#4C5361]",
-};
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 const AdminViewNotifications = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [combinedNotices, setCombinedNotices] = useState([]);
   const [filteredNotices, setFilteredNotices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -170,7 +163,7 @@ const AdminViewNotifications = () => {
     setShowModal(true);
   };
 
-  // --- RENDER CARD (Matches Student Dashboard) ---
+  // --- RENDER CARD ---
   const renderItem = ({ item }) => {
     const isGlobal = item.sourceType === "Global";
     const targetText = isGlobal
@@ -181,12 +174,23 @@ const AdminViewNotifications = () => {
       <TouchableOpacity
         onPress={() => handlePress(item)}
         activeOpacity={0.8}
-        className={`${theme.card} rounded-lg p-4 mb-3 border ${theme.borderColor}`}
+        style={{
+          backgroundColor: theme.bgSecondary,
+          borderColor: theme.border,
+          shadowColor: theme.shadow,
+        }}
+        className="rounded-lg p-4 mb-3 border shadow-sm"
       >
         <View className="flex-row justify-between items-start mb-1">
           <View className="flex-row items-start flex-1 mr-2">
             {/* Avatar / Icon */}
-            <View className="w-10 h-10 rounded-full overflow-hidden mr-3 items-center justify-center bg-[#444] border border-[#f49b33]/30">
+            <View
+              style={{
+                backgroundColor: theme.accentSoft20,
+                borderColor: theme.accentSoft30,
+              }}
+              className="w-10 h-10 rounded-full overflow-hidden mr-3 items-center justify-center border"
+            >
               {item.authorImage ? (
                 <Image
                   source={{ uri: item.authorImage }}
@@ -200,7 +204,10 @@ const AdminViewNotifications = () => {
                   resizeMode="cover"
                 />
               ) : (
-                <Text className="text-white font-bold text-lg">
+                <Text
+                  style={{ color: theme.accent }}
+                  className="font-bold text-lg"
+                >
                   {item.author ? item.author.charAt(0).toUpperCase() : "T"}
                 </Text>
               )}
@@ -209,7 +216,8 @@ const AdminViewNotifications = () => {
             {/* Content */}
             <View className="flex-1">
               <Text
-                className={`${theme.text} text-base font-semibold`}
+                style={{ color: theme.textPrimary }}
+                className="text-base font-semibold"
                 numberOfLines={1}
               >
                 {item.title || "Notice"}
@@ -218,17 +226,25 @@ const AdminViewNotifications = () => {
               <View className="flex-row mt-1 flex-wrap items-center">
                 <Text
                   className="text-xs font-bold mr-2"
-                  style={{ color: isGlobal ? "#4CAF50" : "#29B6F6" }}
+                  style={{
+                    color: isGlobal ? theme.successBright : theme.infoBright,
+                  }}
                 >
                   {isGlobal ? "Global Notice" : "Class Notice"}
                 </Text>
-                <Text className="text-xs text-gray-400 mr-2">
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-xs mr-2"
+                >
                   By: {item.author}
                 </Text>
               </View>
 
               {!isGlobal && (
-                <Text className="text-xs text-[#f49b33] font-bold mt-1">
+                <Text
+                  style={{ color: theme.accent }}
+                  className="text-xs font-bold mt-1"
+                >
                   {targetText}
                 </Text>
               )}
@@ -236,26 +252,38 @@ const AdminViewNotifications = () => {
           </View>
 
           {/* Date */}
-          <Text className={`${theme.subText} text-xs`}>{item.date}</Text>
+          <Text style={{ color: theme.textMuted }} className="text-xs">
+            {item.date}
+          </Text>
         </View>
       </TouchableOpacity>
     );
   };
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg}`}>
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        backgroundColor={theme.bgPrimary}
+        barStyle={isDark ? "light-content" : "dark-content"}
+      />
 
       {/* HEADER */}
       <View className="px-5 py-4 flex-row items-center justify-between">
         <View className="flex-row items-center">
           <TouchableOpacity
             onPress={() => router.back()}
-            className={`${theme.card} p-2 rounded-full border ${theme.borderColor} mr-4`}
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.border,
+            }}
+            className="p-2 rounded-full border mr-4"
           >
-            <Ionicons name="arrow-back" size={22} color="white" />
+            <Ionicons name="arrow-back" size={22} color={theme.textPrimary} />
           </TouchableOpacity>
-          <Text className="text-white text-xl font-bold">
+          <Text
+            style={{ color: theme.textPrimary }}
+            className="text-xl font-bold"
+          >
             Notifications Log
           </Text>
         </View>
@@ -263,7 +291,11 @@ const AdminViewNotifications = () => {
 
       {/* LIST */}
       {loading ? (
-        <ActivityIndicator size="large" color="#f49b33" className="mt-10" />
+        <ActivityIndicator
+          size="large"
+          color={theme.accent}
+          className="mt-10"
+        />
       ) : (
         <FlatList
           data={filteredNotices}
@@ -275,9 +307,9 @@ const AdminViewNotifications = () => {
               <MaterialCommunityIcons
                 name="bell-sleep-outline"
                 size={60}
-                color="gray"
+                color={theme.textMuted}
               />
-              <Text className="text-gray-400 mt-4">
+              <Text style={{ color: theme.textMuted }} className="mt-4">
                 No notifications found.
               </Text>
             </View>
@@ -292,45 +324,81 @@ const AdminViewNotifications = () => {
         transparent
         onRequestClose={() => setShowModal(false)}
       >
-        <View className="flex-1 bg-black/80 justify-center items-center p-5">
+        <View
+          style={{ backgroundColor: theme.blackSoft80 }}
+          className="flex-1 justify-center items-center p-5"
+        >
           <View
-            className={`${theme.card} w-full max-h-[70%] rounded-2xl p-6 border ${theme.borderColor}`}
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.border,
+            }}
+            className="w-full max-h-[70%] rounded-2xl p-6 border"
           >
             {selectedNotice && (
               <>
                 <View
-                  className={`flex-row justify-between items-center mb-4 border-b ${theme.borderColor} pb-4`}
+                  style={{ borderColor: theme.border }}
+                  className="flex-row justify-between items-center mb-4 border-b pb-4"
                 >
                   <Text
-                    className={`${theme.accent} text-xl font-bold flex-1 mr-2`}
+                    style={{ color: theme.accent }}
+                    className="text-xl font-bold flex-1 mr-2"
                   >
                     {selectedNotice.title}
                   </Text>
                   <TouchableOpacity onPress={() => setShowModal(false)}>
-                    <Ionicons name="close-circle" size={28} color="white" />
+                    <Ionicons
+                      name="close-circle"
+                      size={28}
+                      color={theme.textPrimary}
+                    />
                   </TouchableOpacity>
                 </View>
 
                 <ScrollView>
-                  <Text className="text-white text-base leading-6">
+                  <Text
+                    style={{ color: theme.textPrimary }}
+                    className="text-base leading-6"
+                  >
                     {selectedNotice.content ||
                       selectedNotice.message ||
                       "No content."}
                   </Text>
 
                   <View
-                    className={`mt-6 pt-4 border-t ${theme.borderColor}/50`}
+                    style={{ borderColor: theme.borderSoft }}
+                    className="mt-6 pt-4 border-t"
                   >
                     <View className="flex-row justify-between mb-2">
-                      <Text className="text-gray-500 text-xs">Posted on:</Text>
-                      <Text className="text-gray-300 text-xs font-bold">
+                      <Text
+                        style={{ color: theme.textSecondary }}
+                        className="text-xs"
+                      >
+                        Posted on:
+                      </Text>
+                      <Text
+                        style={{ color: theme.textMuted }}
+                        className="text-xs font-bold"
+                      >
                         {selectedNotice.date}
                       </Text>
                     </View>
                     <View className="flex-row justify-between">
-                      <Text className="text-gray-500 text-xs">Type:</Text>
                       <Text
-                        className={`text-xs font-bold ${selectedNotice.sourceType === "Global" ? "text-green-400" : "text-blue-400"}`}
+                        style={{ color: theme.textSecondary }}
+                        className="text-xs"
+                      >
+                        Type:
+                      </Text>
+                      <Text
+                        className="text-xs font-bold"
+                        style={{
+                          color:
+                            selectedNotice.sourceType === "Global"
+                              ? theme.successBright
+                              : theme.infoBright,
+                        }}
                       >
                         {selectedNotice.sourceType} Notice
                       </Text>

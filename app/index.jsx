@@ -8,35 +8,69 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import logo from "../assets/images/dinetimelogo.png"; 
-const entryImg = require("../assets/images/Frame.png"); 
+import { useTheme } from "../context/ThemeContext"; // Import the hook
+import logo from "../assets/images/dinetimelogo.png";
+const entryImg = require("../assets/images/Frame.png");
 
 export default function Index() {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get theme values
+
   return (
-    <SafeAreaView className={`bg-[#282C34]`}>
+    // Updated background color to theme.bgPrimary
+    <SafeAreaView style={{ backgroundColor: theme.bgPrimary, flex: 1 }}>
       <ScrollView contentContainerStyle={{ height: "100%" }}>
         <View className="m-2 flex justify-center items-center">
           <Image source={logo} style={{ width: 300, height: 300 }} />
           <View className="w-3/4">
             <TouchableOpacity
               onPress={() => router.push("/login_options")}
-              className="p-2 py-4 my-2 bg-[#f49b33] text-black rounded-lg "
+              // Updated background color
+              style={{ backgroundColor: theme.accent }}
+              className="p-2 py-4 my-2 rounded-lg"
             >
-              <Text className="text-lg font-semibold text-center">Sign in</Text>
+              {/* Updated text color. Using theme.textDark for contrast on accent color */}
+              <Text
+                style={{ color: theme.textDark }}
+                className="text-lg font-semibold text-center"
+              >
+                Sign in
+              </Text>
             </TouchableOpacity>
 
             <View className="flex-row items-center my-4">
-              <View className="flex-1 h-px bg-[#f49b33]" />
-              <Text className="mx-4 font-semibold text-white">or</Text>
-              <View className="flex-1 h-px bg-[#f49b33]" />
+              {/* Updated divider color */}
+              <View
+                className="flex-1 h-px"
+                style={{ backgroundColor: theme.accent }}
+              />
+              {/* Updated 'or' text color */}
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="mx-4 font-semibold"
+              >
+                or
+              </Text>
+              <View
+                className="flex-1 h-px"
+                style={{ backgroundColor: theme.accent }}
+              />
             </View>
 
             <TouchableOpacity
               onPress={() => router.push("/(guest)/guest_dashboard")}
-              className="p-2 my-2 py-4 bg-[#282C34] border border-[#f49b33] rounded-lg max-w-fit "
+              // Updated background and border colors
+              style={{
+                backgroundColor: theme.bgPrimary,
+                borderColor: theme.accent,
+              }}
+              className="p-2 my-2 py-4 border rounded-lg max-w-fit"
             >
-              <Text className="text-lg font-semibold text-[#f49b33] text-center">
+              {/* Updated Guest User text color */}
+              <Text
+                style={{ color: theme.accent }}
+                className="text-lg font-semibold text-center"
+              >
                 Guest User
               </Text>
             </TouchableOpacity>
@@ -49,7 +83,11 @@ export default function Index() {
             resizeMode="contain"
           />
         </View>
-        <StatusBar barStyle={"light-content"} backgroundColor={"#282C34"} />
+        {/* Updated StatusBar to auto-switch based on theme */}
+        <StatusBar
+          barStyle={isDark ? "light-content" : "dark-content"}
+          backgroundColor={theme.bgPrimary}
+        />
       </ScrollView>
     </SafeAreaView>
   );

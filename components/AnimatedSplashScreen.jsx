@@ -1,7 +1,9 @@
 import React, { useEffect, useRef } from "react";
 import { View, Animated, Image, Text, Dimensions } from "react-native";
+import { useTheme } from "../context/ThemeContext"; // Import Theme Hook
 
 const AnimatedSplashScreen = () => {
+  const { theme } = useTheme(); // Get theme values
   const fadeAnim = useRef(new Animated.Value(0)).current; // Start invisible
   const scaleAnim = useRef(new Animated.Value(0.3)).current; // Start small
   const textAnim = useRef(new Animated.Value(0)).current; // Text opacity
@@ -31,7 +33,10 @@ const AnimatedSplashScreen = () => {
   }, []);
 
   return (
-    <View className="flex-1 bg-[#282C34] justify-center items-center">
+    <View
+      className="flex-1 justify-center items-center"
+      style={{ backgroundColor: theme.bgPrimary }} // Dynamic Background
+    >
       <Animated.View
         style={{
           opacity: fadeAnim,
@@ -54,17 +59,23 @@ const AnimatedSplashScreen = () => {
 
       {/* TEXT (Welcome Message) */}
       <Animated.View style={{ opacity: textAnim, alignItems: "center" }}>
-        <Text className="text-[#f49b33] text-3xl font-bold tracking-wider">
+        <Text
+          className="text-3xl font-bold tracking-wider"
+          style={{ color: theme.accent }} // Dynamic Accent
+        >
           Brain Plus
         </Text>
-        <Text className="text-gray-400 text-lg tracking-[5px] uppercase mt-2">
+        <Text
+          className="text-lg tracking-[5px] uppercase mt-2"
+          style={{ color: theme.textSecondary }} // Dynamic Secondary Text
+        >
           Academy
         </Text>
 
         {/* Optional: Subtle Loading Indicator at bottom */}
         <View className="mt-10">
           {/* You can remove this ActivityIndicator if you want a clean look */}
-          {/* <ActivityIndicator size="small" color="#f49b33" /> */}
+          {/* <ActivityIndicator size="small" color={theme.accent} /> */}
         </View>
       </Animated.View>
     </View>

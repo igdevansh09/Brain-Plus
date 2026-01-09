@@ -14,24 +14,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import firestore from "@react-native-firebase/firestore";
-import functions from "@react-native-firebase/functions"; // Added functions
+import functions from "@react-native-firebase/functions";
 import CustomToast from "../../components/CustomToast";
 import CustomAlert from "../../components/CustomAlert";
-
-const theme = {
-  bg: "bg-[#282C34]",
-  card: "bg-[#333842]",
-  accent: "text-[#f49b33]",
-  accentBg: "bg-[#f49b33]",
-  text: "text-white",
-  subText: "text-gray-400",
-  borderColor: "border-[#4C5361]",
-  success: "#4CAF50",
-  warning: "#FFC107",
-};
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // --- FEE CARD COMPONENT (Handles Avatar Fetching) ---
 const FeeCard = ({ item, onUpdateStatus }) => {
+  const { theme } = useTheme(); // Get dynamic theme values
   const [studentImg, setStudentImg] = useState(null);
 
   useEffect(() => {
@@ -64,14 +54,39 @@ const FeeCard = ({ item, onUpdateStatus }) => {
 
   const isVerifying = item.status === "Verifying";
 
+  // Dynamic Status Badge Colors
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "Paid":
+        return { bg: theme.successSoft, text: theme.successBright };
+      case "Verifying":
+        return { bg: theme.infoSoft, text: theme.infoBright };
+      default:
+        return { bg: theme.warningSoft, text: theme.warningAlt };
+    }
+  };
+
+  const statusColors = getStatusColor(item.status);
+
   return (
     <View
-      className={`${theme.card} p-4 rounded-2xl mb-4 border ${isVerifying ? "border-blue-500" : theme.borderColor} shadow-sm`}
+      style={{
+        backgroundColor: theme.bgSecondary,
+        borderColor: isVerifying ? theme.info : theme.border,
+        shadowColor: theme.shadow,
+      }}
+      className="p-4 rounded-2xl mb-4 border shadow-sm"
     >
       <View className="flex-row items-center justify-between mb-3">
         <View className="flex-row items-center flex-1">
           {/* AVATAR SECTION */}
-          <View className="w-10 h-10 rounded-full bg-[#f49b33]/20 items-center justify-center mr-3 border border-[#f49b33]/30 overflow-hidden">
+          <View
+            style={{
+              backgroundColor: theme.accentSoft20,
+              borderColor: theme.accentSoft30,
+            }}
+            className="w-10 h-10 rounded-full items-center justify-center mr-3 border overflow-hidden"
+          >
             {studentImg ? (
               <Image
                 source={{ uri: studentImg }}
@@ -79,42 +94,56 @@ const FeeCard = ({ item, onUpdateStatus }) => {
                 resizeMode="cover"
               />
             ) : (
-              <Text className="text-[#f49b33] font-bold">
+              <Text style={{ color: theme.accent }} className="font-bold">
                 {item.studentName ? item.studentName.charAt(0) : "S"}
               </Text>
             )}
           </View>
 
           <View>
-            <Text className="text-white font-bold text-base" numberOfLines={1}>
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="font-bold text-base"
+              numberOfLines={1}
+            >
               {item.studentName}
             </Text>
-            <Text className="text-gray-400 text-xs">
+            <Text style={{ color: theme.textSecondary }} className="text-xs">
               Class {item.studentClass} • {item.date}
             </Text>
           </View>
         </View>
         <View
-          className={`px-3 py-1 rounded-full ${item.status === "Paid" ? "bg-green-500/20" : isVerifying ? "bg-blue-500/20" : "bg-yellow-500/20"}`}
+          style={{ backgroundColor: statusColors.bg }}
+          className="px-3 py-1 rounded-full"
         >
           <Text
-            className={`text-[10px] font-bold ${item.status === "Paid" ? "text-green-400" : isVerifying ? "text-blue-400" : "text-yellow-400"}`}
+            style={{ color: statusColors.text }}
+            className="text-[10px] font-bold"
           >
             {item.status.toUpperCase()}
           </Text>
         </View>
       </View>
 
-      <Text className="text-gray-300 text-sm mb-2 italic">{item.title}</Text>
+      <Text style={{ color: theme.textMuted }} className="text-sm mb-2 italic">
+        {item.title}
+      </Text>
 
-      <View className="flex-row justify-between items-center pt-3 border-t border-[#4C5361]/30">
-        <Text className="text-[#f49b33] text-xl font-bold">₹{item.amount}</Text>
+      <View
+        style={{ borderColor: theme.border }}
+        className="flex-row justify-between items-center pt-3 border-t"
+      >
+        <Text style={{ color: theme.accent }} className="text-xl font-bold">
+          ₹{item.amount}
+        </Text>
 
         <View className="flex-row items-center gap-2">
           {item.status !== "Paid" && (
             <TouchableOpacity
               onPress={handleCallStudent}
-              className="bg-blue-600 w-10 h-9 rounded-xl items-center justify-center"
+              style={{ backgroundColor: theme.callBlue }}
+              className="w-10 h-9 rounded-xl items-center justify-center"
             >
               <Ionicons name="call" size={18} color="white" />
             </TouchableOpacity>
@@ -124,13 +153,15 @@ const FeeCard = ({ item, onUpdateStatus }) => {
             <>
               <TouchableOpacity
                 onPress={() => onUpdateStatus(item.id, "Paid")}
-                className="bg-green-600 w-10 h-9 rounded-xl items-center justify-center"
+                style={{ backgroundColor: theme.approveGreen }}
+                className="w-10 h-9 rounded-xl items-center justify-center"
               >
                 <Ionicons name="checkmark" size={18} color="white" />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => onUpdateStatus(item.id, "Pending")}
-                className="bg-red-600 w-10 h-9 rounded-xl items-center justify-center"
+                style={{ backgroundColor: theme.error }}
+                className="w-10 h-9 rounded-xl items-center justify-center"
               >
                 <Ionicons name="close" size={18} color="white" />
               </TouchableOpacity>
@@ -138,7 +169,8 @@ const FeeCard = ({ item, onUpdateStatus }) => {
           ) : item.status === "Pending" ? (
             <TouchableOpacity
               onPress={() => onUpdateStatus(item.id, "Paid")}
-              className="bg-green-600 px-4 py-2 rounded-xl flex-row items-center h-9"
+              style={{ backgroundColor: theme.approveGreen }}
+              className="px-4 py-2 rounded-xl flex-row items-center h-9"
             >
               <Ionicons
                 name="card-outline"
@@ -157,11 +189,12 @@ const FeeCard = ({ item, onUpdateStatus }) => {
 
 const FeeReports = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [fees, setFees] = useState([]);
   const [filteredFees, setFilteredFees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedClassFilter, setSelectedClassFilter] = useState("All");
-  const [generating, setGenerating] = useState(false); // Loading state for thunderbolt button
+  const [generating, setGenerating] = useState(false);
 
   const [toast, setToast] = useState({
     visible: false,
@@ -265,7 +298,6 @@ const FeeReports = () => {
     }
   };
 
-  // --- GENERATE FEES HANDLER ---
   const handleGenerateFees = () => {
     setGenerateConfirm({
       visible: true,
@@ -290,8 +322,11 @@ const FeeReports = () => {
   };
 
   return (
-    <SafeAreaView className={`flex-1 ${theme.bg}`}>
-      <StatusBar backgroundColor="#282C34" barStyle="light-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        backgroundColor={theme.bgPrimary}
+        barStyle={isDark ? "light-content" : "dark-content"}
+      />
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
@@ -304,53 +339,86 @@ const FeeReports = () => {
         <View className="flex-row items-center">
           <TouchableOpacity
             onPress={() => router.back()}
-            className="bg-[#333842] p-2 rounded-full border border-[#4C5361] mr-4"
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.border,
+            }}
+            className="p-2 rounded-full border mr-4"
           >
-            <Ionicons name="arrow-back" size={22} color="white" />
+            <Ionicons name="arrow-back" size={22} color={theme.textPrimary} />
           </TouchableOpacity>
-          <Text className="text-white text-2xl font-bold">Fee Ledger</Text>
+          <Text
+            style={{ color: theme.textPrimary }}
+            className="text-2xl font-bold"
+          >
+            Fee Ledger
+          </Text>
         </View>
 
         {/* THUNDERBOLT BUTTON */}
         <TouchableOpacity
           onPress={handleGenerateFees}
           disabled={generating}
-          className={`p-2 rounded-full border border-[#4C5361] ${generating ? "bg-gray-600" : "bg-[#f49b33]/20"}`}
+          style={{
+            backgroundColor: generating ? theme.bgTertiary : theme.accentSoft20,
+            borderColor: theme.border,
+          }}
+          className="p-2 rounded-full border"
         >
           {generating ? (
-            <ActivityIndicator size="small" color="#f49b33" />
+            <ActivityIndicator size="small" color={theme.accent} />
           ) : (
-            <Ionicons name="flash" size={24} color="#f49b33" />
+            <Ionicons name="flash" size={24} color={theme.accent} />
           )}
         </TouchableOpacity>
       </View>
 
       <View className="px-5 mb-6">
         <View
-          className={`${theme.card} p-5 rounded-3xl border ${theme.borderColor} shadow-lg relative overflow-hidden`}
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+            shadowColor: theme.shadow,
+          }}
+          className="p-5 rounded-3xl border shadow-lg relative overflow-hidden"
         >
           <View className="flex-row justify-between items-end mb-4">
             <View>
-              <Text className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">
+              <Text
+                style={{ color: theme.textSecondary }}
+                className="text-xs font-bold uppercase tracking-widest mb-1"
+              >
                 Total Collected
               </Text>
-              <Text className="text-white text-4xl font-black">
+              <Text
+                style={{ color: theme.textPrimary }}
+                className="text-4xl font-black"
+              >
                 ₹{totalCollected}
               </Text>
             </View>
             <View className="items-end">
-              <Text className="text-gray-400 text-[10px] mb-1">
+              <Text
+                style={{ color: theme.textSecondary }}
+                className="text-[10px] mb-1"
+              >
                 Expected: ₹{totalExpected}
               </Text>
-              <Text className={`${theme.accent} font-bold`}>
+              <Text style={{ color: theme.accent }} className="font-bold">
                 {Math.round(collectionRate)}% Paid
               </Text>
             </View>
           </View>
-          <View className="h-2 w-full bg-[#282C34] rounded-full overflow-hidden">
+          <View
+            style={{ backgroundColor: theme.bgPrimary }}
+            className="h-2 w-full rounded-full overflow-hidden"
+          >
             <View
-              style={{ width: `${collectionRate}%` }}
-              className="h-full bg-[#f49b33]"
+              style={{
+                width: `${collectionRate}%`,
+                backgroundColor: theme.accent,
+              }}
+              className="h-full"
             />
           </View>
         </View>
@@ -362,10 +430,24 @@ const FeeReports = () => {
             <TouchableOpacity
               key={cls}
               onPress={() => setSelectedClassFilter(cls)}
-              className={`mr-2 px-5 py-2 rounded-2xl border ${selectedClassFilter === cls ? "bg-[#f49b33] border-[#f49b33]" : "bg-[#333842] border-[#4C5361]"}`}
+              style={{
+                backgroundColor:
+                  selectedClassFilter === cls
+                    ? theme.accent
+                    : theme.bgSecondary,
+                borderColor:
+                  selectedClassFilter === cls ? theme.accent : theme.border,
+              }}
+              className="mr-2 px-5 py-2 rounded-2xl border"
             >
               <Text
-                className={`${selectedClassFilter === cls ? "text-[#282C34] font-bold" : "text-gray-400"}`}
+                style={{
+                  color:
+                    selectedClassFilter === cls
+                      ? theme.textDark
+                      : theme.textSecondary,
+                  fontWeight: selectedClassFilter === cls ? "bold" : "normal",
+                }}
               >
                 {cls}
               </Text>
@@ -375,7 +457,11 @@ const FeeReports = () => {
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#f49b33" className="mt-10" />
+        <ActivityIndicator
+          size="large"
+          color={theme.accent}
+          className="mt-10"
+        />
       ) : (
         <FlatList
           data={filteredFees}
@@ -386,8 +472,15 @@ const FeeReports = () => {
           contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
           ListEmptyComponent={
             <View className="mt-20 items-center opacity-30">
-              <MaterialCommunityIcons name="receipt" size={80} color="gray" />
-              <Text className="text-white text-center mt-4">
+              <MaterialCommunityIcons
+                name="receipt"
+                size={80}
+                color={theme.textMuted}
+              />
+              <Text
+                style={{ color: theme.textMuted }}
+                className="text-center mt-4"
+              >
                 No records found.
               </Text>
             </View>

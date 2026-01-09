@@ -22,6 +22,7 @@ import firestore from "@react-native-firebase/firestore";
 
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // --- SELECTION CONSTANTS ---
 const ALL_CLASSES = [
@@ -63,6 +64,7 @@ const SUB_HIGHER_ALL = [
 const ManageContent = () => {
   const router = useRouter();
   const scrollRef = useRef();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
 
   const [activeTab, setActiveTab] = useState("banners");
 
@@ -109,16 +111,6 @@ const ManageContent = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  const colors = {
-    BG: "#282C34",
-    CARD: "#333842",
-    ACCENT: "#f49b33",
-    TEXT: "#FFFFFF",
-    SUB_TEXT: "#BBBBBB",
-    DELETE: "#F44336",
-    SUCCESS: "#4CAF50",
-  };
-
   // --- 0. INITIAL FETCH ---
   useEffect(() => {
     fetchBanners();
@@ -129,7 +121,6 @@ const ManageContent = () => {
       .orderBy("createdAt", "desc")
       .onSnapshot(
         (snapshot) => {
-          // --- FIX: CHECK IF SNAPSHOT EXISTS ---
           if (snapshot && snapshot.docs) {
             const list = snapshot.docs.map((doc) => ({
               id: doc.id,
@@ -155,7 +146,6 @@ const ManageContent = () => {
         .orderBy("createdAt", "desc")
         .get();
 
-      // --- FIX: CHECK IF SNAP EXISTS ---
       if (snap && snap.docs) {
         const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         setBanners(list);
@@ -443,10 +433,13 @@ const ManageContent = () => {
   // --- RENDER ---
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.BG }}
+      style={{ flex: 1, backgroundColor: theme.bgPrimary }}
       className="pt-2"
     >
-      <StatusBar backgroundColor={colors.BG} barStyle="light-content" />
+      <StatusBar
+        backgroundColor={theme.bgPrimary}
+        barStyle={isDark ? "light-content" : "dark-content"}
+      />
 
       <CustomAlert
         visible={alertVisible}
@@ -468,13 +461,20 @@ const ManageContent = () => {
       <View className="px-4 py-4 flex-row items-center justify-between">
         <View className="flex-row items-center">
           <TouchableOpacity onPress={() => router.back()} className="mr-3">
-            <Ionicons name="arrow-back" size={24} color="white" />
+            <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
           </TouchableOpacity>
-          <Text className="text-white text-xl font-bold">Manage Content</Text>
+          <Text
+            style={{ color: theme.textPrimary }}
+            className="text-xl font-bold"
+          >
+            Manage Content
+          </Text>
         </View>
         {isEditing && activeTab === "courses" && (
           <TouchableOpacity onPress={resetForm}>
-            <Text className="text-[#f49b33] font-bold">Cancel Edit</Text>
+            <Text style={{ color: theme.accent }} className="font-bold">
+              Cancel Edit
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -483,20 +483,36 @@ const ManageContent = () => {
       <View className="flex-row px-4 mb-4">
         <TouchableOpacity
           onPress={() => setActiveTab("banners")}
-          className={`flex-1 py-3 border-b-2 ${activeTab === "banners" ? "border-[#f49b33]" : "border-transparent"}`}
+          style={{
+            borderColor: activeTab === "banners" ? theme.accent : "transparent",
+            borderBottomWidth: 2,
+          }}
+          className="flex-1 py-3"
         >
           <Text
-            className={`text-center font-bold ${activeTab === "banners" ? "text-[#f49b33]" : "text-gray-500"}`}
+            style={{
+              color:
+                activeTab === "banners" ? theme.accent : theme.textSecondary,
+            }}
+            className="text-center font-bold"
           >
             Banners
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setActiveTab("courses")}
-          className={`flex-1 py-3 border-b-2 ${activeTab === "courses" ? "border-[#f49b33]" : "border-transparent"}`}
+          style={{
+            borderColor: activeTab === "courses" ? theme.accent : "transparent",
+            borderBottomWidth: 2,
+          }}
+          className="flex-1 py-3"
         >
           <Text
-            className={`text-center font-bold ${activeTab === "courses" ? "text-[#f49b33]" : "text-gray-500"}`}
+            style={{
+              color:
+                activeTab === "courses" ? theme.accent : theme.textSecondary,
+            }}
+            className="text-center font-bold"
           >
             Courses
           </Text>
@@ -507,14 +523,26 @@ const ManageContent = () => {
       {activeTab === "banners" ? (
         <ScrollView className="flex-1 px-4">
           <View
-            className={`p-4 rounded-xl border border-[#4C5361] mb-6`}
-            style={{ backgroundColor: colors.CARD }}
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.border,
+            }}
+            className="p-4 rounded-xl border mb-6"
           >
-            <Text className="text-white font-bold mb-3">Add New Banner</Text>
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="font-bold mb-3"
+            >
+              Add New Banner
+            </Text>
 
             <TouchableOpacity
               onPress={pickBannerImage}
-              className="h-40 bg-[#282C34] rounded-lg border border-dashed border-gray-500 items-center justify-center mb-4 overflow-hidden"
+              style={{
+                backgroundColor: theme.bgTertiary,
+                borderColor: theme.textMuted,
+              }}
+              className="h-40 rounded-lg border border-dashed items-center justify-center mb-4 overflow-hidden"
             >
               {bannerImage ? (
                 <Image
@@ -524,8 +552,12 @@ const ManageContent = () => {
                 />
               ) : (
                 <View className="items-center">
-                  <Ionicons name="image-outline" size={40} color="gray" />
-                  <Text className="text-gray-500 mt-2">
+                  <Ionicons
+                    name="image-outline"
+                    size={40}
+                    color={theme.textMuted}
+                  />
+                  <Text style={{ color: theme.textMuted }} className="mt-2">
                     Tap to select image
                   </Text>
                 </View>
@@ -535,29 +567,42 @@ const ManageContent = () => {
             <TouchableOpacity
               onPress={handleUploadBanner}
               disabled={uploadingBanner}
-              className={`py-3 rounded-lg items-center ${uploadingBanner ? "opacity-50" : ""}`}
-              style={{ backgroundColor: colors.ACCENT }}
+              style={{
+                backgroundColor: theme.accent,
+                opacity: uploadingBanner ? 0.5 : 1,
+              }}
+              className="py-3 rounded-lg items-center"
             >
               {uploadingBanner ? (
-                <ActivityIndicator color="#282C34" />
+                <ActivityIndicator color={theme.textDark} />
               ) : (
-                <Text className="text-[#282C34] font-bold">Upload Banner</Text>
+                <Text style={{ color: theme.textDark }} className="font-bold">
+                  Upload Banner
+                </Text>
               )}
             </TouchableOpacity>
           </View>
 
-          <Text className="text-[#f49b33] font-bold text-lg mb-3">
+          <Text
+            style={{ color: theme.accent }}
+            className="font-bold text-lg mb-3"
+          >
             Current Banners
           </Text>
           {banners.length === 0 && (
-            <Text className="text-gray-500 italic">No banners active.</Text>
+            <Text style={{ color: theme.textMuted }} className="italic">
+              No banners active.
+            </Text>
           )}
 
           {banners.map((item) => (
             <View
               key={item.id}
-              className={`mb-4 rounded-xl overflow-hidden border border-[#4C5361]`}
-              style={{ backgroundColor: colors.CARD }}
+              style={{
+                backgroundColor: theme.bgSecondary,
+                borderColor: theme.border,
+              }}
+              className="mb-4 rounded-xl overflow-hidden border"
             >
               <Image
                 source={{ uri: item.imageUrl }}
@@ -565,7 +610,10 @@ const ManageContent = () => {
                 resizeMode="cover"
               />
               <View className="p-3 flex-row justify-between items-center">
-                <Text className="text-gray-400 text-xs">
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-xs"
+                >
                   Uploaded:{" "}
                   {item.createdAt?.toDate
                     ? item.createdAt.toDate().toLocaleDateString()
@@ -573,9 +621,14 @@ const ManageContent = () => {
                 </Text>
                 <TouchableOpacity
                   onPress={() => handleDeleteBanner(item.id, item.imageUrl)}
-                  className="bg-red-500/10 p-2 rounded-lg"
+                  style={{ backgroundColor: theme.errorSoft }}
+                  className="p-2 rounded-lg"
                 >
-                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                  <Ionicons
+                    name="trash-outline"
+                    size={20}
+                    color={theme.error}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -587,11 +640,14 @@ const ManageContent = () => {
         <ScrollView className="flex-1 px-4" ref={scrollRef}>
           {/* --- FORM CARD --- */}
           <View
-            className="p-4 rounded-2xl mb-6 border border-[#4C5361]"
-            style={{ backgroundColor: colors.CARD }}
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.border,
+            }}
+            className="p-4 rounded-2xl mb-6 border"
           >
             <Text
-              style={{ color: colors.ACCENT }}
+              style={{ color: theme.accent }}
               className="font-bold mb-3 uppercase text-xs tracking-widest"
             >
               {isEditing ? `Editing: ${title}` : "Create New Course"}
@@ -602,13 +658,24 @@ const ManageContent = () => {
               {/* CLASS SELECTOR */}
               <TouchableOpacity
                 onPress={() => setModalType("class")}
-                className="flex-1 bg-[#282C34] p-3 rounded-xl border border-[#4C5361] mr-2 justify-center"
+                style={{
+                  backgroundColor: theme.bgTertiary,
+                  borderColor: theme.border,
+                }}
+                className="flex-1 p-3 rounded-xl border mr-2 justify-center"
               >
-                <Text className="text-gray-400 text-[10px] uppercase font-bold">
+                <Text
+                  style={{ color: theme.textMuted }}
+                  className="text-[10px] uppercase font-bold"
+                >
                   Class / Target
                 </Text>
                 <Text
-                  className={`font-bold text-base ${selectedClass ? "text-white" : "text-gray-500"}`}
+                  style={{
+                    color: selectedClass ? theme.textPrimary : theme.textMuted,
+                    fontWeight: "bold",
+                  }}
+                  className="text-base"
                 >
                   {selectedClass || "Select..."}
                 </Text>
@@ -622,13 +689,27 @@ const ManageContent = () => {
                     setModalType("subject");
                 }}
                 disabled={availableSubjects.length === 0}
-                className={`flex-1 bg-[#282C34] p-3 rounded-xl border border-[#4C5361] ml-2 justify-center ${availableSubjects.length === 0 ? "opacity-50" : ""}`}
+                style={{
+                  backgroundColor: theme.bgTertiary,
+                  borderColor: theme.border,
+                  opacity: availableSubjects.length === 0 ? 0.5 : 1,
+                }}
+                className="flex-1 p-3 rounded-xl border ml-2 justify-center"
               >
-                <Text className="text-gray-400 text-[10px] uppercase font-bold">
+                <Text
+                  style={{ color: theme.textMuted }}
+                  className="text-[10px] uppercase font-bold"
+                >
                   Subject
                 </Text>
                 <Text
-                  className={`font-bold text-base ${selectedSubject ? "text-white" : "text-gray-500"}`}
+                  style={{
+                    color: selectedSubject
+                      ? theme.textPrimary
+                      : theme.textMuted,
+                    fontWeight: "bold",
+                  }}
+                  className="text-base"
                 >
                   {selectedSubject ||
                     (selectedClass === "CS" ? "N/A" : "Select...")}
@@ -639,23 +720,36 @@ const ManageContent = () => {
             {/* TEXT INPUTS */}
             <TextInput
               placeholder="Course Title"
-              placeholderTextColor={colors.SUB_TEXT}
+              placeholderTextColor={theme.placeholder}
               value={title}
               onChangeText={setTitle}
-              className="p-4 rounded-xl border mb-3 bg-[#282C34] text-white border-[#4C5361] font-bold"
+              style={{
+                backgroundColor: theme.bgTertiary,
+                borderColor: theme.border,
+                color: theme.textPrimary,
+              }}
+              className="p-4 rounded-xl border mb-3 font-bold"
             />
             <TextInput
               placeholder="Description (Optional)"
-              placeholderTextColor={colors.SUB_TEXT}
+              placeholderTextColor={theme.placeholder}
               value={description}
               onChangeText={setDescription}
-              className="p-4 rounded-xl border mb-4 bg-[#282C34] text-white border-[#4C5361]"
+              style={{
+                backgroundColor: theme.bgTertiary,
+                borderColor: theme.border,
+                color: theme.textPrimary,
+              }}
+              className="p-4 rounded-xl border mb-4"
             />
 
             {/* VIDEO ADDER */}
-            <View className="h-[1px] bg-[#4C5361] mb-4 opacity-50" />
+            <View
+              style={{ backgroundColor: theme.border }}
+              className="h-[1px] mb-4 opacity-50"
+            />
             <Text
-              style={{ color: colors.ACCENT }}
+              style={{ color: theme.accent }}
               className="font-bold mb-2 text-xs uppercase tracking-widest"
             >
               Playlist Content
@@ -664,20 +758,26 @@ const ManageContent = () => {
             <View className="flex-row mb-4">
               <TextInput
                 placeholder="Paste YouTube Link"
-                placeholderTextColor={colors.SUB_TEXT}
+                placeholderTextColor={theme.placeholder}
                 value={currentVideoLink}
                 onChangeText={setCurrentVideoLink}
-                className="flex-1 p-3 rounded-l-xl border bg-[#282C34] text-white border-[#4C5361]"
+                style={{
+                  backgroundColor: theme.bgTertiary,
+                  borderColor: theme.border,
+                  color: theme.textPrimary,
+                }}
+                className="flex-1 p-3 rounded-l-xl border"
               />
               <TouchableOpacity
                 onPress={handleAddVideo}
                 disabled={fetchingVideo}
-                className="bg-[#f49b33] px-4 justify-center rounded-r-xl"
+                style={{ backgroundColor: theme.accent }}
+                className="px-4 justify-center rounded-r-xl"
               >
                 {fetchingVideo ? (
-                  <ActivityIndicator color="#282C34" />
+                  <ActivityIndicator color={theme.textDark} />
                 ) : (
-                  <Ionicons name="add" size={28} color="#282C34" />
+                  <Ionicons name="add" size={28} color={theme.textDark} />
                 )}
               </TouchableOpacity>
             </View>
@@ -686,19 +786,30 @@ const ManageContent = () => {
             {playlist.map((vid, index) => (
               <View
                 key={index}
-                className="flex-row items-center bg-[#282C34] p-3 rounded-xl mb-2 border border-[#4C5361]"
+                style={{
+                  backgroundColor: theme.bgTertiary,
+                  borderColor: theme.border,
+                }}
+                className="flex-row items-center p-3 rounded-xl mb-2 border"
               >
-                <Text className="text-[#f49b33] font-bold mr-3">
+                <Text
+                  style={{ color: theme.accent }}
+                  className="font-bold mr-3"
+                >
                   {index + 1}
                 </Text>
                 <View className="flex-1">
                   <Text
-                    className="text-white text-sm font-semibold"
+                    style={{ color: theme.textPrimary }}
+                    className="text-sm font-semibold"
                     numberOfLines={1}
                   >
                     {vid.title}
                   </Text>
-                  <Text className="text-gray-500 text-[10px]">
+                  <Text
+                    style={{ color: theme.textMuted }}
+                    className="text-[10px]"
+                  >
                     ID: {vid.videoId}
                   </Text>
                 </View>
@@ -713,7 +824,7 @@ const ManageContent = () => {
                     <Ionicons
                       name="chevron-up"
                       size={20}
-                      color={index === 0 ? "#444" : "#ccc"}
+                      color={index === 0 ? theme.textDim : theme.textSecondary}
                     />
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -724,14 +835,18 @@ const ManageContent = () => {
                     <Ionicons
                       name="chevron-down"
                       size={20}
-                      color={index === playlist.length - 1 ? "#444" : "#ccc"}
+                      color={
+                        index === playlist.length - 1
+                          ? theme.textDim
+                          : theme.textSecondary
+                      }
                     />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => removeVideo(index)}>
                     <Ionicons
                       name="trash-outline"
                       size={20}
-                      color={colors.DELETE}
+                      color={theme.error}
                     />
                   </TouchableOpacity>
                 </View>
@@ -742,13 +857,15 @@ const ManageContent = () => {
             <TouchableOpacity
               onPress={handleSaveOrUpdate}
               disabled={uploading}
-              className={`py-4 rounded-xl items-center mt-4 ${isEditing ? "bg-blue-600" : "bg-[#f49b33]"}`}
+              style={{ backgroundColor: isEditing ? theme.info : theme.accent }}
+              className="py-4 rounded-xl items-center mt-4"
             >
               {uploading ? (
-                <ActivityIndicator color="white" />
+                <ActivityIndicator color={theme.textDark} />
               ) : (
                 <Text
-                  className={`${isEditing ? "text-white" : "text-[#282C34]"} font-bold text-lg`}
+                  style={{ color: theme.textDark }}
+                  className="font-bold text-lg"
                 >
                   {isEditing ? "Update Course" : "Save Course"}
                 </Text>
@@ -758,10 +875,13 @@ const ManageContent = () => {
 
           {/* --- LIBRARY LIST --- */}
           <View className="flex-row justify-between items-end mb-2">
-            <Text className="text-gray-400 font-bold uppercase tracking-widest text-xs">
+            <Text
+              style={{ color: theme.textMuted }}
+              className="font-bold uppercase tracking-widest text-xs"
+            >
               Course Library
             </Text>
-            <Text className="text-[#f49b33] text-xs">
+            <Text style={{ color: theme.accent }} className="text-xs">
               {contentList.length} Items
             </Text>
           </View>
@@ -771,7 +891,15 @@ const ManageContent = () => {
               key={item.id}
               onPress={() => handleEditClick(item)}
               activeOpacity={0.7}
-              className={`p-3 rounded-2xl mb-4 border flex-row ${editingId === item.id ? "border-[#f49b33] bg-[#f49b33]/10" : "border-[#4C5361] bg-[#333842]"}`}
+              style={{
+                backgroundColor:
+                  editingId === item.id
+                    ? theme.accentSoft10
+                    : theme.bgSecondary,
+                borderColor:
+                  editingId === item.id ? theme.accent : theme.border,
+              }}
+              className="p-3 rounded-2xl mb-4 border flex-row"
             >
               <Image
                 source={{
@@ -782,16 +910,23 @@ const ManageContent = () => {
               />
               <View className="flex-1 justify-center">
                 <Text
-                  className="text-white font-bold text-base"
+                  style={{ color: theme.textPrimary }}
+                  className="font-bold text-base"
                   numberOfLines={1}
                 >
                   {item.title}
                 </Text>
-                <Text className="text-gray-400 text-xs">
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-xs"
+                >
                   {item.target} • {item.playlist?.length || 0} Videos
                 </Text>
                 {editingId === item.id && (
-                  <Text className="text-[#f49b33] text-[10px] font-bold mt-1">
+                  <Text
+                    style={{ color: theme.accent }}
+                    className="text-[10px] font-bold mt-1"
+                  >
                     ● EDITING NOW
                   </Text>
                 )}
@@ -802,11 +937,7 @@ const ManageContent = () => {
                 className="justify-center px-2"
                 hitSlop={10}
               >
-                <Ionicons
-                  name="trash-outline"
-                  size={22}
-                  color={colors.DELETE}
-                />
+                <Ionicons name="trash-outline" size={22} color={theme.error} />
               </TouchableOpacity>
             </TouchableOpacity>
           ))}
@@ -821,14 +952,29 @@ const ManageContent = () => {
         animationType="fade"
         onRequestClose={() => setModalType(null)}
       >
-        <View className="flex-1 bg-black/80 justify-center p-6">
-          <View className="bg-[#333842] rounded-2xl max-h-[70%] border border-[#f49b33]">
-            <View className="p-4 border-b border-[#4C5361] flex-row justify-between items-center">
-              <Text className="text-[#f49b33] font-bold text-lg capitalize">
+        <View
+          style={{ backgroundColor: theme.blackSoft80 }}
+          className="flex-1 justify-center p-6"
+        >
+          <View
+            style={{
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.accent,
+            }}
+            className="rounded-2xl max-h-[70%] border"
+          >
+            <View
+              style={{ borderColor: theme.border }}
+              className="p-4 border-b flex-row justify-between items-center"
+            >
+              <Text
+                style={{ color: theme.accent }}
+                className="font-bold text-lg capitalize"
+              >
                 Select {modalType}
               </Text>
               <TouchableOpacity onPress={() => setModalType(null)}>
-                <Ionicons name="close" size={24} color="gray" />
+                <Ionicons name="close" size={24} color={theme.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -842,9 +988,15 @@ const ManageContent = () => {
                     else setSelectedSubject(item);
                     setModalType(null);
                   }}
-                  className="p-4 border-b border-[#4C5361] items-center active:bg-[#f49b33]/20"
+                  style={{ borderColor: theme.border }}
+                  className="p-4 border-b items-center"
                 >
-                  <Text className="text-white font-bold text-lg">{item}</Text>
+                  <Text
+                    style={{ color: theme.textPrimary }}
+                    className="font-bold text-lg"
+                  >
+                    {item}
+                  </Text>
                 </TouchableOpacity>
               )}
             />

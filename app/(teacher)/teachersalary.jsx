@@ -10,27 +10,19 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
-// --- NATIVE SDK IMPORTS (FIXED) ---
+// --- NATIVE SDK IMPORTS ---
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 
 const TeacherSalary = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingSalaries, setPendingSalaries] = useState([]);
   const [salaryHistory, setSalaryHistory] = useState([]);
-
-  const colors = {
-    bg: "#282C34",
-    card: "#333842",
-    accent: "#f49b33",
-    text: "#FFFFFF",
-    subText: "#BBBBBB",
-    unpaidRed: "#F44336",
-    paidGreen: "#4CAF50",
-  };
 
   const fetchSalaries = async () => {
     try {
@@ -85,25 +77,31 @@ const TeacherSalary = () => {
   const renderHistoryItem = ({ item }) => (
     <View
       key={item.id}
-      style={{ backgroundColor: colors.card }}
-      className="p-4 rounded-xl mb-3 border border-[#4C5361]"
+      style={{
+        backgroundColor: theme.bgSecondary,
+        borderColor: theme.border,
+      }}
+      className="p-4 rounded-xl mb-3 border"
     >
       <View className="flex-row justify-between mb-2">
         <View>
           <Text
-            style={{ color: colors.text }}
+            style={{ color: theme.textPrimary }}
             className="text-base font-semibold"
           >
             {item.title}
           </Text>
-          <Text style={{ color: colors.subText, fontSize: 12 }}>
+          <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
             Received:{" "}
             {item.paidAt
               ? new Date(item.paidAt).toLocaleDateString()
               : item.date}
           </Text>
         </View>
-        <Text style={{ color: colors.paidGreen }} className="text-lg font-bold">
+        <Text
+          style={{ color: theme.successBright }}
+          className="text-lg font-bold"
+        >
           ₹{item.amount}
         </Text>
       </View>
@@ -113,28 +111,32 @@ const TeacherSalary = () => {
   if (loading) {
     return (
       <SafeAreaView
-        className={`flex-1 ${colors.bg} justify-center items-center`}
+        style={{ backgroundColor: theme.bgPrimary }}
+        className="flex-1 justify-center items-center"
       >
-        <ActivityIndicator size="large" color={colors.accent} />
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.bg }}
+      style={{ flex: 1, backgroundColor: theme.bgPrimary }}
       className="pt-8"
     >
-      <StatusBar backgroundColor={colors.bg} barStyle="light-content" />
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={theme.bgPrimary}
+      />
       <View className="px-4 pb-4 py-7 flex-row items-center">
         <Ionicons
           name="arrow-back"
           size={24}
-          color={colors.text}
+          color={theme.textPrimary}
           onPress={() => router.back()}
         />
         <Text
-          style={{ color: colors.text }}
+          style={{ color: theme.textPrimary }}
           className="text-2xl font-semibold ml-4"
         >
           My Salary
@@ -147,14 +149,15 @@ const TeacherSalary = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.accent}
+            tintColor={theme.accent}
+            colors={[theme.accent]}
           />
         }
       >
         {/* Pending Section */}
         <View className="mb-6">
           <Text
-            style={{ color: colors.accent }}
+            style={{ color: theme.accent }}
             className="text-xl font-semibold mb-3"
           >
             Pending Payments
@@ -164,33 +167,36 @@ const TeacherSalary = () => {
               <View
                 key={item.id}
                 style={{
-                  backgroundColor: colors.card,
-                  borderColor: colors.unpaidRed,
+                  backgroundColor: theme.bgSecondary,
+                  borderColor: theme.error,
                 }}
                 className="p-4 rounded-xl mb-3 border"
               >
                 <View className="flex-row justify-between items-center">
                   <Text
-                    style={{ color: colors.text }}
+                    style={{ color: theme.textPrimary }}
                     className="text-lg font-semibold"
                   >
                     {item.title}
                   </Text>
                   <Text
-                    style={{ color: colors.unpaidRed }}
+                    style={{ color: theme.errorBright }}
                     className="text-2xl font-bold"
                   >
                     ₹{item.amount}
                   </Text>
                 </View>
-                <Text style={{ color: colors.subText, fontSize: 12 }}>
+                <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
                   Generated: {item.date}
                 </Text>
               </View>
             ))
           ) : (
-            <View className="p-5 items-center justify-center bg-[#333842] rounded-xl">
-              <Text style={{ color: colors.text }}>No pending dues.</Text>
+            <View
+              style={{ backgroundColor: theme.bgSecondary }}
+              className="p-5 items-center justify-center rounded-xl"
+            >
+              <Text style={{ color: theme.textMuted }}>No pending dues.</Text>
             </View>
           )}
         </View>
@@ -198,7 +204,7 @@ const TeacherSalary = () => {
         {/* History Section */}
         <View className="mb-8">
           <Text
-            style={{ color: colors.accent }}
+            style={{ color: theme.accent }}
             className="text-xl font-semibold mb-3"
           >
             Payment History
@@ -207,7 +213,7 @@ const TeacherSalary = () => {
             salaryHistory.map((item) => renderHistoryItem({ item }))
           ) : (
             <Text
-              style={{ color: colors.subText }}
+              style={{ color: theme.textMuted }}
               className="text-center italic"
             >
               No history found.

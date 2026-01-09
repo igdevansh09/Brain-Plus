@@ -1,10 +1,18 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Text, View, StyleSheet, Dimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useRef } from "react";
+import { Animated, Text, View, StyleSheet, Dimensions } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../context/ThemeContext"; // Import Theme Hook
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
-const CustomToast = ({ visible, message, type = 'success', onHide, duration = 3000 }) => {
+const CustomToast = ({
+  visible,
+  message,
+  type = "success",
+  onHide,
+  duration = 3000,
+}) => {
+  const { theme } = useTheme(); // Get dynamic theme
   const translateY = useRef(new Animated.Value(-100)).current;
 
   useEffect(() => {
@@ -41,16 +49,31 @@ const CustomToast = ({ visible, message, type = 'success', onHide, duration = 30
 
   const getToastStyle = () => {
     switch (type) {
-      case 'success':
-        return { backgroundColor: '#10B981', icon: 'checkmark-circle' };
-      case 'error':
-        return { backgroundColor: '#EF4444', icon: 'close-circle' };
-      case 'info':
-        return { backgroundColor: '#3B82F6', icon: 'information-circle' };
-      case 'warning':
-        return { backgroundColor: '#F59E0B', icon: 'warning' };
+      case "success":
+        return {
+          backgroundColor: theme.successBright || "#10B981",
+          icon: "checkmark-circle",
+        };
+      case "error":
+        return {
+          backgroundColor: theme.errorBright || "#EF4444",
+          icon: "close-circle",
+        };
+      case "info":
+        return {
+          backgroundColor: theme.infoBright || "#3B82F6",
+          icon: "information-circle",
+        };
+      case "warning":
+        return {
+          backgroundColor: theme.warningAlt || "#F59E0B",
+          icon: "warning",
+        };
       default:
-        return { backgroundColor: '#10B981', icon: 'checkmark-circle' };
+        return {
+          backgroundColor: theme.successBright || "#10B981",
+          icon: "checkmark-circle",
+        };
     }
   };
 
@@ -63,6 +86,7 @@ const CustomToast = ({ visible, message, type = 'success', onHide, duration = 30
         {
           backgroundColor: toastStyle.backgroundColor,
           transform: [{ translateY }],
+          shadowColor: theme.shadow || "#000", // Dynamic shadow
         },
       ]}
     >
@@ -74,15 +98,14 @@ const CustomToast = ({ visible, message, type = 'success', onHide, duration = 30
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
+    position: "absolute",
     top: 50,
     left: 20,
     right: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 16,
     borderRadius: 12,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -90,9 +113,9 @@ const styles = StyleSheet.create({
     zIndex: 99999,
   },
   message: {
-    color: 'white',
+    color: "white",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     marginLeft: 12,
     flex: 1,
   },

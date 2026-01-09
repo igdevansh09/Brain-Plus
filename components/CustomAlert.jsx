@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useTheme } from "../context/ThemeContext"; // Import Theme Hook
 
 const CustomAlert = ({
   visible,
@@ -9,18 +10,9 @@ const CustomAlert = ({
   onConfirm,
   confirmText = "Confirm",
   cancelText = "Cancel",
-  type = "default", 
+  type = "default",
 }) => {
-  const colors = {
-    bg: "#282C34",
-    card: "#333842",
-    accent: "#f49b33",
-    text: "#FFFFFF",
-    subText: "#BBBBBB",
-    success: "#4CAF50",
-    error: "#F44336",
-    warning: "#FF9800",
-  };
+  const { theme } = useTheme(); // Get dynamic theme
 
   const getIconName = () => {
     switch (type) {
@@ -36,13 +28,13 @@ const CustomAlert = ({
   const getIconColor = () => {
     switch (type) {
       case "success":
-        return colors.success;
+        return theme.success;
       case "error":
-        return colors.error;
+        return theme.error;
       case "warning":
-        return colors.warning;
+        return theme.warning;
       default:
-        return colors.accent;
+        return theme.accent;
     }
   };
 
@@ -53,15 +45,31 @@ const CustomAlert = ({
       visible={visible}
       onRequestClose={onCancel}
     >
-      <View style={styles.centeredView}>
-        <View style={[styles.modalView, { backgroundColor: colors.card }]}>
+      <View
+        style={[
+          styles.centeredView,
+          { backgroundColor: theme.blackSoft75 || "rgba(0,0,0,0.75)" },
+        ]}
+      >
+        <View
+          style={[
+            styles.modalView,
+            {
+              backgroundColor: theme.bgSecondary,
+              borderColor: theme.accent,
+              shadowColor: theme.shadow,
+            },
+          ]}
+        >
           <View style={styles.iconContainer}>
             <Ionicons name={getIconName()} size={48} color={getIconColor()} />
           </View>
 
-          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+          <Text style={[styles.title, { color: theme.textPrimary }]}>
+            {title}
+          </Text>
 
-          <Text style={[styles.message, { color: colors.subText }]}>
+          <Text style={[styles.message, { color: theme.textSecondary }]}>
             {message}
           </Text>
 
@@ -71,10 +79,15 @@ const CustomAlert = ({
               style={[
                 styles.button,
                 styles.cancelButton,
-                { borderColor: colors.subText },
+                {
+                  borderColor: theme.textSecondary,
+                  backgroundColor: theme.bgTertiary || "rgba(0,0,0,0.05)",
+                },
               ]}
             >
-              <Text style={[styles.cancelButtonText, { color: colors.text }]}>
+              <Text
+                style={[styles.cancelButtonText, { color: theme.textPrimary }]}
+              >
                 {cancelText}
               </Text>
             </TouchableOpacity>
@@ -84,10 +97,20 @@ const CustomAlert = ({
               style={[
                 styles.button,
                 styles.confirmButton,
-                { backgroundColor: getIconColor() },
+                {
+                  backgroundColor: getIconColor(),
+                  shadowColor: getIconColor(),
+                },
               ]}
             >
-              <Text style={styles.confirmButtonText}>{confirmText}</Text>
+              <Text
+                style={[
+                  styles.confirmButtonText,
+                  { color: type === "warning" ? "#000" : "#fff" }, // Adjust text color for visibility
+                ]}
+              >
+                {confirmText}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -101,7 +124,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
   },
   modalView: {
     width: "85%",
@@ -109,8 +131,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: "#f49b33",
-    shadowColor: "#000",
     shadowOffset: {
       width: 0,
       height: 4,
@@ -151,7 +171,6 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     borderWidth: 1.5,
-    backgroundColor: "rgba(187, 187, 187, 0.1)",
   },
   cancelButtonText: {
     fontSize: 16,
@@ -159,7 +178,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   confirmButton: {
-    shadowColor: "#f49b33",
     shadowOffset: {
       width: 0,
       height: 2,
@@ -171,7 +189,6 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#282C34",
     letterSpacing: 0.2,
   },
 });

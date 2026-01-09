@@ -12,6 +12,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import dayjs from "dayjs";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
 
 // NATIVE SDK
 import auth from "@react-native-firebase/auth";
@@ -19,17 +20,11 @@ import firestore from "@react-native-firebase/firestore";
 
 const StudentNotes = () => {
   const router = useRouter();
+  const { theme, isDark } = useTheme(); // Get dynamic theme values
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notes, setNotes] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState("All");
-
-  const theme = {
-    bg: "bg-[#282C34]",
-    card: "bg-[#333842]",
-    accent: "text-[#f49b33]",
-    border: "border-[#4C5361]",
-  };
 
   const fetchNotes = async () => {
     try {
@@ -94,45 +89,66 @@ const StudentNotes = () => {
         ? [{ name: item.attachmentName, url: item.link, type: item.fileType }]
         : []);
 
+    // Dynamic Color Strip based on Subject
+    const getStripColor = (subj) => {
+      if (subj === "Maths") return theme.info || "#29B6F6";
+      if (subj === "Science") return theme.success || "#66BB6A";
+      return theme.accent;
+    };
+
     return (
       <View
-        className={`${theme.card} w-[92%] self-center rounded-2xl mb-4 border ${theme.border} shadow-sm overflow-hidden flex-row`}
+        style={{
+          backgroundColor: theme.bgSecondary,
+          borderColor: theme.border,
+          shadowColor: theme.shadow,
+        }}
+        className="w-[92%] self-center rounded-2xl mb-4 border shadow-sm overflow-hidden flex-row"
       >
         {/* Left color strip */}
         <View
-          className={`w-1.5 h-full ${
-            item.subject === "Maths"
-              ? "bg-blue-500"
-              : item.subject === "Science"
-                ? "bg-green-500"
-                : "bg-[#f49b33]"
-          }`}
+          style={{ backgroundColor: getStripColor(item.subject) }}
+          className="w-1.5 h-full"
         />
 
         <View className="flex-1 p-4 flex-row items-center justify-between">
           <View className="flex-1 mr-3">
             <View className="flex-row items-center mb-1">
               <View
-                className={`${theme.card} px-2 py-0.5 rounded mr-2 border border-[#4C5361]`}
+                style={{
+                  backgroundColor: theme.bgTertiary,
+                  borderColor: theme.border,
+                }}
+                className="px-2 py-0.5 rounded mr-2 border"
               >
-                <Text className="text-gray-300 text-[9px] font-bold uppercase tracking-wider">
+                <Text
+                  style={{ color: theme.textMuted }}
+                  className="text-[9px] font-bold uppercase tracking-wider"
+                >
                   {item.subject}
                 </Text>
               </View>
-              <Text className="text-gray-500 text-[10px] font-medium">
+              <Text
+                style={{ color: theme.textSecondary }}
+                className="text-[10px] font-medium"
+              >
                 {item.createdAt?.toDate
                   ? dayjs(item.createdAt.toDate()).fromNow()
                   : "Recently"}
               </Text>
             </View>
 
-            <Text className="text-white font-bold text-base mb-1 leading-tight">
+            <Text
+              style={{ color: theme.textPrimary }}
+              className="font-bold text-base mb-1 leading-tight"
+            >
               {item.title}
             </Text>
 
             {item.description ? (
               <Text
-                className="text-gray-400 text-xs leading-relaxed mb-2"
+                style={{ color: theme.textSecondary }}
+                className="text-xs leading-relaxed mb-2"
                 numberOfLines={2}
               >
                 {item.description}
@@ -150,9 +166,13 @@ const StudentNotes = () => {
                   displayAttachments[0].type
                 )
               }
-              className="bg-[#282C34] h-11 w-11 rounded-xl border border-[#f49b33]/50 items-center justify-center shadow-lg active:bg-[#f49b33]/20"
+              style={{
+                backgroundColor: theme.bgPrimary,
+                borderColor: theme.accentSoft50 || theme.border,
+              }}
+              className="h-11 w-11 rounded-xl border items-center justify-center shadow-lg"
             >
-              <Ionicons name="open-outline" size={20} color="#f49b33" />
+              <Ionicons name="open-outline" size={20} color={theme.accent} />
             </TouchableOpacity>
           )}
         </View>
@@ -162,25 +182,40 @@ const StudentNotes = () => {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-[#282C34]">
-        <ActivityIndicator size="large" color="#f49b33" />
+      <SafeAreaView
+        style={{ backgroundColor: theme.bgPrimary }}
+        className="flex-1 items-center justify-center"
+      >
+        <ActivityIndicator size="large" color={theme.accent} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#282C34]">
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <StatusBar
+        backgroundColor={theme.bgPrimary}
+        barStyle={isDark ? "light-content" : "dark-content"}
+      />
 
       {/* Header */}
       <View className="flex-row items-center justify-between px-5 py-4 pt-3">
         <TouchableOpacity
           onPress={() => router.back()}
-          className="bg-[#333842] p-2 rounded-full border border-[#4C5361]"
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+          }}
+          className="p-2 rounded-full border"
         >
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text className="text-white text-2xl font-bold">Class Notes</Text>
+        <Text
+          style={{ color: theme.textPrimary }}
+          className="text-2xl font-bold"
+        >
+          Class Notes
+        </Text>
         <View className="w-10" />
       </View>
 
@@ -194,16 +229,22 @@ const StudentNotes = () => {
           renderItem={({ item }) => (
             <TouchableOpacity
               onPress={() => setSelectedSubject(item)}
-              className={`mr-3 px-5 py-2 rounded-full border ${
-                selectedSubject === item
-                  ? "bg-[#f49b33] border-[#f49b33]"
-                  : "bg-[#333842] border-[#4C5361]"
-              }`}
+              style={{
+                backgroundColor:
+                  selectedSubject === item ? theme.accent : theme.bgSecondary,
+                borderColor:
+                  selectedSubject === item ? theme.accent : theme.border,
+              }}
+              className="mr-3 px-5 py-2 rounded-full border"
             >
               <Text
-                className={`font-bold text-xs ${
-                  selectedSubject === item ? "text-[#282C34]" : "text-gray-400"
-                }`}
+                style={{
+                  color:
+                    selectedSubject === item
+                      ? theme.textDark
+                      : theme.textSecondary,
+                }}
+                className="font-bold text-xs"
               >
                 {item}
               </Text>
@@ -225,7 +266,8 @@ const StudentNotes = () => {
               setRefreshing(true);
               fetchNotes();
             }}
-            tintColor="#f49b33"
+            tintColor={theme.accent}
+            colors={[theme.accent]}
           />
         }
         ListEmptyComponent={() => (
@@ -233,9 +275,12 @@ const StudentNotes = () => {
             <MaterialCommunityIcons
               name="folder-outline"
               size={80}
-              color="gray"
+              color={theme.textMuted}
             />
-            <Text className="text-gray-400 mt-4 text-center">
+            <Text
+              style={{ color: theme.textMuted }}
+              className="mt-4 text-center"
+            >
               No study materials available.
             </Text>
           </View>

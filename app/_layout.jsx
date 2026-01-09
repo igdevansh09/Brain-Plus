@@ -11,6 +11,7 @@ import {
 } from "../utils/notificationService";
 import NotificationManager from "../components/NotificationManager";
 import AnimatedSplashScreen from "../components/AnimatedSplashScreen";
+import { ThemeProvider } from "../context/ThemeContext";
 
 // Ignore Firebase Deprecation Warnings
 LogBox.ignoreLogs([
@@ -90,25 +91,28 @@ const InitialLayout = () => {
   }
 
   return (
-    <ToastProvider>
-      <NotificationManager />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login_options" />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(admin)" />
-        <Stack.Screen name="(teacher)" />
-        <Stack.Screen name="(student)" />
-        <Stack.Screen name="(guest)" />
-      </Stack>
-    </ToastProvider>
+      <ToastProvider>
+        <NotificationManager />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="login_options" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(admin)" />
+          <Stack.Screen name="(teacher)" />
+          <Stack.Screen name="(student)" />
+          <Stack.Screen name="(guest)" />
+        </Stack>
+      </ToastProvider>
   );
 };;
 
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <InitialLayout />
+      {/* 2. WRAP APP IN THEME PROVIDER HERE */}
+      <ThemeProvider>
+        <InitialLayout />
+      </ThemeProvider>
     </AuthProvider>
   );
 }
