@@ -17,19 +17,35 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// NATIVE SDK
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
-import storage from "@react-native-firebase/storage";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  doc,
+  getDoc,
+  addDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+} from "@react-native-firebase/firestore";
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} from "@react-native-firebase/storage";
+import { auth, db, storage } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
 import CustomAlert from "../../components/CustomAlert";
 
 const TeacherHomework = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
@@ -64,22 +80,23 @@ const TeacherHomework = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- 1. INITIAL FETCH ---
+  // --- 1. INITIAL FETCH (MODULAR) ---
   useEffect(() => {
     let unsubscribeSnapshot;
     const init = async () => {
       try {
-        const currentUser = auth().currentUser;
+        // Modular: auth.currentUser
+        const currentUser = auth.currentUser;
         if (!currentUser) {
           setLoading(false);
           return;
         }
 
-        const userDoc = await firestore()
-          .collection("users")
-          .doc(currentUser.uid)
-          .get();
-        if (userDoc.exists) {
+        // Modular: doc + getDoc
+        const userDocRef = doc(db, "users", currentUser.uid);
+        const userDoc = await getDoc(userDocRef);
+
+        if (userDoc.exists()) {
           const data = userDoc.data();
           const profile = data.teachingProfile || [];
           if (profile && profile.length > 0) {
@@ -100,26 +117,30 @@ const TeacherHomework = () => {
           }
         }
 
-        unsubscribeSnapshot = firestore()
-          .collection("homework")
-          .where("teacherId", "==", currentUser.uid)
-          .orderBy("createdAt", "desc")
-          .onSnapshot(
-            (snapshot) => {
-              if (snapshot) {
-                const list = snapshot.docs.map((doc) => ({
-                  id: doc.id,
-                  ...doc.data(),
-                }));
-                setHistory(list);
-              }
-              setLoading(false);
-            },
-            (error) => {
-              console.log("History Error:", error);
-              setLoading(false);
+        // Modular: query + onSnapshot
+        const q = query(
+          collection(db, "homework"),
+          where("teacherId", "==", currentUser.uid),
+          orderBy("createdAt", "desc")
+        );
+
+        unsubscribeSnapshot = onSnapshot(
+          q,
+          (snapshot) => {
+            if (snapshot) {
+              const list = snapshot.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+              }));
+              setHistory(list);
             }
-          );
+            setLoading(false);
+          },
+          (error) => {
+            console.log("History Error:", error);
+            setLoading(false);
+          }
+        );
       } catch (error) {
         console.log("Init Error:", error);
         setLoading(false);
@@ -207,11 +228,18 @@ const TeacherHomework = () => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // --- UPLOAD FILE (MODULAR) ---
   const uploadFile = async (uri, filename) => {
-    const filePath = `homework_attachments/${auth().currentUser.uid}/${Date.now()}_${filename}`;
-    const reference = storage().ref(filePath);
-    await reference.putFile(uri);
-    return await reference.getDownloadURL();
+    const filePath = `homework_attachments/${auth.currentUser.uid}/${Date.now()}_${filename}`;
+    const storageRef = ref(storage, filePath);
+
+    const response = await fetch(uri);
+    const blob = await response.blob();
+
+    // Modular: uploadBytes
+    await uploadBytes(storageRef, blob);
+    // Modular: getDownloadURL
+    return await getDownloadURL(storageRef);
   };
 
   const handleAssign = async () => {
@@ -226,6 +254,8 @@ const TeacherHomework = () => {
         const url = await uploadFile(file.uri, file.name);
         uploadedFiles.push({ name: file.name, url: url, type: file.type });
       }
+
+      // Modular: addDoc + serverTimestamp
       const docData = {
         title: title.trim(),
         description: description.trim(),
@@ -235,11 +265,12 @@ const TeacherHomework = () => {
         fileType: uploadedFiles.length > 0 ? uploadedFiles[0].type : "none",
         classId: selectedClass,
         subject: selectedSubject,
-        teacherId: auth().currentUser.uid,
+        teacherId: auth.currentUser.uid,
         dueDate: formatDate(new Date()),
-        createdAt: firestore.FieldValue.serverTimestamp(),
+        createdAt: serverTimestamp(),
       };
-      await firestore().collection("homework").add(docData);
+      await addDoc(collection(db, "homework"), docData);
+
       showToast("Homework assigned successfully!", "success");
       setTitle("");
       setDescription("");
@@ -252,7 +283,7 @@ const TeacherHomework = () => {
     }
   };
 
-  // --- DELETE FUNCTION WITH STORAGE CLEANUP ---
+  // --- DELETE FUNCTION (MODULAR) ---
   const handleDelete = (id) => {
     setAlertConfig({
       visible: true,
@@ -263,7 +294,9 @@ const TeacherHomework = () => {
       onConfirm: async () => {
         setAlertConfig((prev) => ({ ...prev, visible: false }));
         try {
-          await firestore().collection("homework").doc(id).delete();
+          // Modular: deleteDoc
+          const docRef = doc(db, "homework", id);
+          await deleteDoc(docRef);
           showToast("Deleted successfully", "success");
         } catch (e) {
           showToast("Delete failed", "error");
@@ -685,7 +718,12 @@ const TeacherHomework = () => {
                       </View>
                       <TouchableOpacity
                         onPress={() => removeAttachment(idx)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        hitSlop={{
+                          top: 10,
+                          bottom: 10,
+                          left: 10,
+                          right: 10,
+                        }}
                         style={{
                           position: "absolute",
                           top: 0,

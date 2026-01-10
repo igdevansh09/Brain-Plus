@@ -13,12 +13,27 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import firestore from "@react-native-firebase/firestore";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  getDocs,
+  getDoc,
+  doc,
+  where,
+  limit,
+} from "@react-native-firebase/firestore";
+import { db } from "../../config/firebaseConfig"; // Import instance
+// --- REFACTOR END ---
+
+import { useTheme } from "../../context/ThemeContext";
 
 const AdminViewNotifications = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [combinedNotices, setCombinedNotices] = useState([]);
   const [filteredNotices, setFilteredNotices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,37 +49,39 @@ const AdminViewNotifications = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState(null);
 
-  // --- 1. FETCH DATA ---
+  // --- 1. FETCH DATA (MODULAR) ---
   useEffect(() => {
     setLoading(true);
 
     // Listener 1: Global Notices
-    const unsubGlobal = firestore()
-      .collection("notices")
-      .orderBy("createdAt", "desc")
-      .onSnapshot((snap) => {
-        const list = snap.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          sourceType: "Global",
-          author: doc.data().author || "Admin",
-        }));
-        setGlobalNotices(list);
-      });
+    const qGlobal = query(
+      collection(db, "notices"),
+      orderBy("createdAt", "desc")
+    );
+    const unsubGlobal = onSnapshot(qGlobal, (snap) => {
+      const list = snap.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        sourceType: "Global",
+        author: doc.data().author || "Admin",
+      }));
+      setGlobalNotices(list);
+    });
 
     // Listener 2: Class Notices
-    const unsubClass = firestore()
-      .collection("class_notices")
-      .orderBy("createdAt", "desc")
-      .onSnapshot((snap) => {
-        const list = snap.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          sourceType: "Class",
-          author: doc.data().teacherName || "Teacher",
-        }));
-        setClassNotices(list);
-      });
+    const qClass = query(
+      collection(db, "class_notices"),
+      orderBy("createdAt", "desc")
+    );
+    const unsubClass = onSnapshot(qClass, (snap) => {
+      const list = snap.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        sourceType: "Class",
+        author: doc.data().teacherName || "Teacher",
+      }));
+      setClassNotices(list);
+    });
 
     return () => {
       unsubGlobal();
@@ -72,26 +89,26 @@ const AdminViewNotifications = () => {
     };
   }, []);
 
-  // --- 2. COMBINE & FILTER ---
+  // --- 2. COMBINE & FILTER (MODULAR) ---
   useEffect(() => {
     const combineAndEnrich = async () => {
       let all = [...globalNotices, ...classNotices];
 
-      // Enrich each notice with authorImage when possible
       if (all.length > 0) {
         const enriched = await Promise.all(
           all.map(async (item) => {
             try {
-              // If notice already has an authorImage stored, use it
               if (item.authorImage) return item;
 
               // Global notices without teacherId -> admin author
               if (item.sourceType === "Global" && !item.teacherId) {
-                const adminSnap = await firestore()
-                  .collection("users")
-                  .where("role", "==", "admin")
-                  .limit(1)
-                  .get();
+                // Modular: query with limit
+                const qAdmin = query(
+                  collection(db, "users"),
+                  where("role", "==", "admin"),
+                  limit(1)
+                );
+                const adminSnap = await getDocs(qAdmin);
 
                 if (!adminSnap.empty) {
                   const adminData = adminSnap.docs[0].data();
@@ -104,14 +121,13 @@ const AdminViewNotifications = () => {
                 return { ...item, authorImage: null };
               }
 
-              // For class/teacher notices, try to resolve teacherId or authorId
+              // For class/teacher notices, resolve teacherId
               const authorId = item.teacherId || item.authorId || null;
               if (authorId) {
-                const userDoc = await firestore()
-                  .collection("users")
-                  .doc(authorId)
-                  .get();
-                if (userDoc.exists) {
+                // Modular: getDoc
+                const userDocRef = doc(db, "users", authorId);
+                const userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
                   const u = userDoc.data();
                   return {
                     ...item,

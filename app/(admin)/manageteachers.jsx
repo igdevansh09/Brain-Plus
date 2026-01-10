@@ -4,7 +4,6 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  StatusBar,
   TextInput,
   ActivityIndicator,
   Modal,
@@ -14,15 +13,26 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import firestore from "@react-native-firebase/firestore";
+
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  doc,
+  updateDoc,
+} from "@react-native-firebase/firestore";
+import { httpsCallable } from "@react-native-firebase/functions";
+import { db, functions } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
+
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
-import functions from "@react-native-firebase/functions";
 import ScreenWrapper from "../../components/ScreenWrapper";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
 // --- CONSTANTS ---
 const CLASS_OPTIONS = [
@@ -62,7 +72,7 @@ const SUBJECT_OPTIONS = [
 
 const ManageTeachers = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
 
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -107,28 +117,34 @@ const ManageTeachers = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- REAL-TIME LISTENER ---
+  // --- REAL-TIME LISTENER (MODULAR) ---
   useEffect(() => {
     setLoading(true);
     const isVerified = viewMode === "active";
-    const unsubscribe = firestore()
-      .collection("users")
-      .where("role", "==", "teacher")
-      .where("verified", "==", isVerified)
-      .onSnapshot(
-        (snapshot) => {
-          const list = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          setTeachers(list);
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Firestore Error:", error);
-          setLoading(false);
-        }
-      );
+
+    // Modular: query(collection(db, ...), where(...))
+    const q = query(
+      collection(db, "users"),
+      where("role", "==", "teacher"),
+      where("verified", "==", isVerified)
+    );
+
+    // Modular: onSnapshot(query, callback)
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const list = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setTeachers(list);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Firestore Error:", error);
+        setLoading(false);
+      }
+    );
     return () => unsubscribe();
   }, [viewMode]);
 
@@ -155,7 +171,9 @@ const ManageTeachers = () => {
       return showToast("Salary amount required", "error");
 
     try {
-      await firestore().collection("users").doc(editingId).update({
+      // Modular: updateDoc(doc(db, ...))
+      const teacherRef = doc(db, "users", editingId);
+      await updateDoc(teacherRef, {
         name: editName,
         phone: editPhone,
         salary: editSalary,
@@ -182,7 +200,8 @@ const ManageTeachers = () => {
   const performDelete = async (id) => {
     setAlert({ ...alert, visible: false });
     try {
-      const deleteUserFn = functions().httpsCallable("deleteTargetUser");
+      // Modular: httpsCallable(functionsInstance, name)
+      const deleteUserFn = httpsCallable(functions, "deleteTargetUser");
       await deleteUserFn({ targetUid: id });
       showToast("Teacher deleted.", "success");
     } catch (error) {
@@ -190,22 +209,18 @@ const ManageTeachers = () => {
     }
   };
 
-  // --- FIXED APPROVAL FUNCTION ---
+  // --- APPROVED FUNCTION (MODULAR) ---
   const confirmApproval = async () => {
     try {
       // 1. Update Salary Info first (Database Only)
-      await firestore()
-        .collection("users")
-        .doc(selectedTeacher.id)
-        .update({
-          // We do NOT set verified: true here anymore.
-          // We let the Cloud Function handle the verification status.
-          salary: approvalType === "Fixed" ? approvalSalary : "0",
-          salaryType: approvalType,
-        });
+      const teacherRef = doc(db, "users", selectedTeacher.id);
+      await updateDoc(teacherRef, {
+        salary: approvalType === "Fixed" ? approvalSalary : "0",
+        salaryType: approvalType,
+      });
 
-      // 2. Call Cloud Function to Approve (Syncs Auth Claims & DB)
-      const approveUser = functions().httpsCallable("approveUser");
+      // 2. Call Cloud Function to Approve (Modular)
+      const approveUser = httpsCallable(functions, "approveUser");
       await approveUser({ targetUid: selectedTeacher.id });
 
       setApproveModalVisible(false);
@@ -542,7 +557,10 @@ const ManageTeachers = () => {
                       className="flex-row justify-between items-center p-3 rounded-lg mb-2 border"
                     >
                       <Text
-                        style={{ color: theme.textPrimary, fontWeight: "bold" }}
+                        style={{
+                          color: theme.textPrimary,
+                          fontWeight: "bold",
+                        }}
                       >
                         {p.class} -{" "}
                         <Text style={{ color: theme.textSecondary }}>

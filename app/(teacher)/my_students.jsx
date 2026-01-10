@@ -15,17 +15,25 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// NATIVE SDK
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
 
 const TeacherMyStudents = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
 
   // Data Lists
@@ -54,16 +62,17 @@ const TeacherMyStudents = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- 1. INITIAL FETCH ---
+  // --- 1. INITIAL FETCH (MODULAR) ---
   useEffect(() => {
     const init = async () => {
       try {
-        const uid = auth().currentUser?.uid;
+        const uid = auth.currentUser?.uid;
         if (!uid) return;
 
-        // A. Fetch Teacher Profile
-        const teacherDoc = await firestore().collection("users").doc(uid).get();
-        if (!teacherDoc.exists) return;
+        // A. Fetch Teacher Profile (Modular)
+        const teacherDocRef = doc(db, "users", uid);
+        const teacherDoc = await getDoc(teacherDocRef);
+        if (!teacherDoc.exists()) return;
 
         const data = teacherDoc.data();
         const profile = data.teachingProfile || [];
@@ -88,14 +97,16 @@ const TeacherMyStudents = () => {
           classesToFetch = classes;
         }
 
-        // B. Fetch Students from these classes
+        // B. Fetch Students from these classes (Modular)
         if (classesToFetch.length > 0) {
           // Firestore 'in' limit is 10. Assuming < 10 classes for now.
-          const studentSnap = await firestore()
-            .collection("users")
-            .where("role", "==", "student")
-            .where("standard", "in", classesToFetch)
-            .get();
+          const q = query(
+            collection(db, "users"),
+            where("role", "==", "student"),
+            where("standard", "in", classesToFetch)
+          );
+
+          const studentSnap = await getDocs(q);
 
           const list = studentSnap.docs.map((doc) => ({
             id: doc.id,

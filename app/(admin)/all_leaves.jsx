@@ -13,8 +13,20 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import firestore from "@react-native-firebase/firestore";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  getDoc,
+} from "@react-native-firebase/firestore";
+import { db } from "../../config/firebaseConfig"; // Import initialized db instance
+// --- REFACTOR END ---
+
+import { useTheme } from "../../context/ThemeContext";
 
 const getDaysCount = (start, end) => {
   try {
@@ -33,7 +45,7 @@ const getDaysCount = (start, end) => {
 };
 
 const LeaveCard = ({ item, type }) => {
-  const { theme } = useTheme(); // Get dynamic theme
+  const { theme } = useTheme();
   const [userData, setUserData] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
 
@@ -49,11 +61,9 @@ const LeaveCard = ({ item, type }) => {
     const fetchProfile = async () => {
       try {
         if (userId) {
-          const userDoc = await firestore()
-            .collection("users")
-            .doc(userId)
-            .get();
-          if (isMounted && userDoc.exists) {
+          // Modular: getDoc(doc(db, ...))
+          const userDoc = await getDoc(doc(db, "users", userId));
+          if (isMounted && userDoc.exists()) {
             setUserData(userDoc.data());
           }
         }
@@ -213,7 +223,7 @@ const LeaveCard = ({ item, type }) => {
 
 const AllLeaves = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("Teachers"); // "Teachers" or "Students"
@@ -222,33 +232,36 @@ const AllLeaves = () => {
     setLoading(true);
 
     // --- COLLECTION SELECTION LOGIC ---
-    // Teachers -> "teacher_leaves"
-    // Students -> "leaves" (As per instruction)
     const collectionName =
       activeTab === "Teachers" ? "teacher_leaves" : "leaves";
 
-    const unsubscribe = firestore()
-      .collection(collectionName)
-      .orderBy("createdAt", "desc")
-      .onSnapshot(
-        (snapshot) => {
-          if (!snapshot) {
-            setLeaves([]);
-            setLoading(false);
-            return;
-          }
-          const list = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          setLeaves(list);
+    // Modular: query(collection, orderBy)
+    const q = query(
+      collection(db, collectionName),
+      orderBy("createdAt", "desc")
+    );
+
+    // Modular: onSnapshot(query, callback)
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (!snapshot) {
+          setLeaves([]);
           setLoading(false);
-        },
-        (err) => {
-          console.log("Error fetching leaves:", err);
-          setLoading(false);
+          return;
         }
-      );
+        const list = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setLeaves(list);
+        setLoading(false);
+      },
+      (err) => {
+        console.log("Error fetching leaves:", err);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [activeTab]);

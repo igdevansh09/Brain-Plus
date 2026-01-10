@@ -12,27 +12,37 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// --- NATIVE SDK IMPORTS ---
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 const MyCourses = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [courses, setCourses] = useState([]);
 
-  // --- 1. FETCH DATA ---
+  // --- 1. FETCH DATA (MODULAR) ---
   const fetchCourses = async () => {
     try {
-      const user = auth().currentUser;
+      // Modular: Access currentUser property directly
+      const user = auth.currentUser;
       if (!user) return;
 
-      // 1. Get Student Class
-      const userDoc = await firestore().collection("users").doc(user.uid).get();
+      // 1. Get Student Class (Modular: getDoc)
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
       const studentClass = userDoc.data()?.standard;
 
       if (!studentClass) {
@@ -40,13 +50,15 @@ const MyCourses = () => {
         return;
       }
 
-      // 2. Fetch Courses using 'target' field
-      // Logic: target string starts with the class name (e.g. "11th Physics" starts with "11th")
-      const snapshot = await firestore()
-        .collection("courses")
-        .where("target", ">=", studentClass)
-        .where("target", "<=", studentClass + "\uf8ff")
-        .get();
+      // 2. Fetch Courses (Modular: query + getDocs)
+      // Logic: target string starts with the class name
+      const q = query(
+        collection(db, "courses"),
+        where("target", ">=", studentClass),
+        where("target", "<=", studentClass + "\uf8ff")
+      );
+
+      const snapshot = await getDocs(q);
 
       const data = snapshot.docs.map((doc) => ({
         id: doc.id,

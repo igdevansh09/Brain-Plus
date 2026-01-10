@@ -11,29 +11,40 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// --- NATIVE SDK IMPORTS ---
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 const TestScores = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [scores, setScores] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState("All");
 
-  // --- 1. DATA FETCHING ---
+  // --- 1. DATA FETCHING (MODULAR) ---
   const fetchScores = async () => {
     try {
-      const user = auth().currentUser;
+      // Modular: auth.currentUser
+      const user = auth.currentUser;
       if (!user) return;
 
       console.log("Fetching profile for:", user.uid);
 
       // A. Get Student's Class (Standard) first
-      const userDoc = await firestore().collection("users").doc(user.uid).get();
+      // Modular: doc + getDoc
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
       const studentClass = userDoc.data()?.standard;
 
       if (!studentClass) {
@@ -45,10 +56,12 @@ const TestScores = () => {
       console.log("Fetching exams for class:", studentClass);
 
       // B. Fetch Exams for this Class from 'exam_results'
-      const snapshot = await firestore()
-        .collection("exam_results")
-        .where("classId", "==", studentClass)
-        .get();
+      // Modular: query + getDocs
+      const q = query(
+        collection(db, "exam_results"),
+        where("classId", "==", studentClass)
+      );
+      const snapshot = await getDocs(q);
 
       if (snapshot.empty) {
         console.log("No exams found for class:", studentClass);
@@ -56,15 +69,15 @@ const TestScores = () => {
 
       // C. Filter and Extract THIS student's score
       const data = snapshot.docs
-        .map((doc) => {
-          const exam = doc.data();
+        .map((docSnap) => {
+          const exam = docSnap.data();
           // The teacher saves scores in a map: { "uid123": 85, "uid456": 90 }
           const myScore = exam.results ? exam.results[user.uid] : null;
 
           // Only show exams where this student has a score
           if (myScore !== null && myScore !== undefined && myScore !== "") {
             return {
-              id: doc.id,
+              id: docSnap.id,
               testName: exam.examTitle || "Untitled Test",
               subject: exam.subject || "General",
               totalMarks: exam.maxScore || 100,
@@ -80,7 +93,8 @@ const TestScores = () => {
       data.sort((a, b) => {
         const parseDate = (str) => {
           if (!str) return new Date(0);
-          if (str.toDate) return str.toDate(); // Handle Firestore Timestamp if present
+          // Handle Firestore Timestamp if present (rare case here but good safety)
+          if (str.toDate) return str.toDate();
           const parts = str.split("/");
           if (parts.length === 3)
             return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);

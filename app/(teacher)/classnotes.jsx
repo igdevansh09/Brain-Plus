@@ -17,19 +17,35 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// NATIVE SDK
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
-import storage from "@react-native-firebase/storage";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  doc,
+  getDoc,
+  addDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+} from "@react-native-firebase/firestore";
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} from "@react-native-firebase/storage";
+import { auth, db, storage } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
 import CustomAlert from "../../components/CustomAlert";
 
 const TeacherNotesUploader = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
@@ -64,25 +80,23 @@ const TeacherNotesUploader = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- 1. INITIAL FETCH ---
+  // --- 1. INITIAL FETCH (MODULAR) ---
   useEffect(() => {
     let unsubscribeSnapshot;
 
     const init = async () => {
       try {
-        const currentUser = auth().currentUser;
+        const currentUser = auth.currentUser;
         if (!currentUser) {
           setLoading(false);
           return;
         }
 
-        // A. Fetch Teacher Profile
-        const userDoc = await firestore()
-          .collection("users")
-          .doc(currentUser.uid)
-          .get();
+        // A. Fetch Teacher Profile (Modular)
+        const userDocRef = doc(db, "users", currentUser.uid);
+        const userDoc = await getDoc(userDocRef);
 
-        if (userDoc.exists) {
+        if (userDoc.exists()) {
           const data = userDoc.data();
           const profile = data.teachingProfile || [];
 
@@ -107,27 +121,30 @@ const TeacherNotesUploader = () => {
           }
         }
 
-        // B. Real-time History Listener
-        unsubscribeSnapshot = firestore()
-          .collection("materials")
-          .where("teacherId", "==", currentUser.uid)
-          .orderBy("createdAt", "desc")
-          .onSnapshot(
-            (snapshot) => {
-              if (snapshot) {
-                const list = snapshot.docs.map((doc) => ({
-                  id: doc.id,
-                  ...doc.data(),
-                }));
-                setHistory(list);
-              }
-              setLoading(false);
-            },
-            (error) => {
-              console.log("History Error:", error);
-              setLoading(false);
+        // B. Real-time History Listener (Modular)
+        const q = query(
+          collection(db, "materials"),
+          where("teacherId", "==", currentUser.uid),
+          orderBy("createdAt", "desc")
+        );
+
+        unsubscribeSnapshot = onSnapshot(
+          q,
+          (snapshot) => {
+            if (snapshot) {
+              const list = snapshot.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+              }));
+              setHistory(list);
             }
-          );
+            setLoading(false);
+          },
+          (error) => {
+            console.log("History Error:", error);
+            setLoading(false);
+          }
+        );
       } catch (error) {
         console.log("Init Error:", error);
         setLoading(false);
@@ -228,13 +245,18 @@ const TeacherNotesUploader = () => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // --- 4. UPLOAD & SUBMIT ---
+  // --- 4. UPLOAD & SUBMIT (MODULAR) ---
   const uploadFile = async (uri, filename) => {
-    const reference = storage().ref(
-      `materials/${auth().currentUser.uid}/${Date.now()}_${filename}`
-    );
-    await reference.putFile(uri);
-    return await reference.getDownloadURL();
+    const filePath = `materials/${auth.currentUser.uid}/${Date.now()}_${filename}`;
+    const storageRef = ref(storage, filePath);
+
+    const response = await fetch(uri);
+    const blob = await response.blob();
+
+    // Modular: uploadBytes
+    await uploadBytes(storageRef, blob);
+    // Modular: getDownloadURL
+    return await getDownloadURL(storageRef);
   };
 
   const handleUpload = async () => {
@@ -256,7 +278,7 @@ const TeacherNotesUploader = () => {
         });
       }
 
-      // 2. Prepare Data (Backward Compatible)
+      // 2. Prepare Data (Modular)
       const docData = {
         title: title.trim(),
         description: description.trim(),
@@ -271,11 +293,11 @@ const TeacherNotesUploader = () => {
 
         classId: selectedClass,
         subject: selectedSubject,
-        teacherId: auth().currentUser.uid,
-        createdAt: firestore.FieldValue.serverTimestamp(),
+        teacherId: auth.currentUser.uid,
+        createdAt: serverTimestamp(),
       };
 
-      await firestore().collection("materials").add(docData);
+      await addDoc(collection(db, "materials"), docData);
 
       showToast("Material shared successfully!", "success");
       setTitle("");
@@ -293,6 +315,7 @@ const TeacherNotesUploader = () => {
     }
   };
 
+  // --- DELETE FUNCTION (MODULAR) ---
   const handleDelete = (id) => {
     setAlertConfig({
       visible: true,
@@ -303,7 +326,8 @@ const TeacherNotesUploader = () => {
       onConfirm: async () => {
         setAlertConfig((prev) => ({ ...prev, visible: false }));
         try {
-          await firestore().collection("materials").doc(id).delete();
+          const docRef = doc(db, "materials", id);
+          await deleteDoc(docRef);
           showToast("Deleted successfully", "success");
         } catch (e) {
           showToast("Delete failed", "error");

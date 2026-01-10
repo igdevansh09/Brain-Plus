@@ -13,15 +13,28 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import firestore from "@react-native-firebase/firestore";
-import functions from "@react-native-firebase/functions";
+
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  getDoc,
+  updateDoc,
+} from "@react-native-firebase/firestore";
+import { httpsCallable } from "@react-native-firebase/functions";
+import { db, functions } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
+
 import CustomToast from "../../components/CustomToast";
 import CustomAlert from "../../components/CustomAlert";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
 // --- FEE CARD COMPONENT (Handles Avatar Fetching) ---
 const FeeCard = ({ item, onUpdateStatus }) => {
-  const { theme } = useTheme(); // Get dynamic theme values
+  const { theme } = useTheme();
   const [studentImg, setStudentImg] = useState(null);
 
   useEffect(() => {
@@ -29,11 +42,9 @@ const FeeCard = ({ item, onUpdateStatus }) => {
     const fetchAvatar = async () => {
       if (item.studentId) {
         try {
-          const docSnap = await firestore()
-            .collection("users")
-            .doc(item.studentId)
-            .get();
-          if (docSnap.exists && isMounted) {
+          // Modular: getDoc(doc(db, ...))
+          const docSnap = await getDoc(doc(db, "users", item.studentId));
+          if (docSnap.exists() && isMounted) {
             setStudentImg(docSnap.data().profileImage);
           }
         } catch (e) {
@@ -189,7 +200,7 @@ const FeeCard = ({ item, onUpdateStatus }) => {
 
 const FeeReports = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [fees, setFees] = useState([]);
   const [filteredFees, setFilteredFees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -234,25 +245,27 @@ const FeeReports = () => {
     "CS",
   ];
 
+  // --- REAL-TIME LISTENER (MODULAR) ---
   useEffect(() => {
-    const unsubscribe = firestore()
-      .collection("fees")
-      .orderBy("createdAt", "desc")
-      .onSnapshot((snapshot) => {
-        if (!snapshot) return;
-        const list = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        list.sort((a, b) => {
-          if (a.status === "Verifying") return -1;
-          if (b.status === "Verifying") return 1;
-          if (a.status === "Pending") return -1;
-          return 1;
-        });
-        setFees(list);
-        setLoading(false);
+    // Modular: query(collection(db, ...), orderBy(...))
+    const q = query(collection(db, "fees"), orderBy("createdAt", "desc"));
+
+    // Modular: onSnapshot(query, callback)
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot) return;
+      const list = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      list.sort((a, b) => {
+        if (a.status === "Verifying") return -1;
+        if (b.status === "Verifying") return 1;
+        if (a.status === "Pending") return -1;
+        return 1;
       });
+      setFees(list);
+      setLoading(false);
+    });
     return () => unsubscribe();
   }, []);
 
@@ -291,7 +304,10 @@ const FeeReports = () => {
       if (newStatus === "Paid") updateData.paidAt = new Date().toISOString();
       if (newStatus === "Pending") updateData.transactionRef = null;
 
-      await firestore().collection("fees").doc(id).update(updateData);
+      // Modular: updateDoc(doc(db, ...))
+      const feeRef = doc(db, "fees", id);
+      await updateDoc(feeRef, updateData);
+
       showToast(`Fee marked as ${newStatus}`, "success");
     } catch (e) {
       showToast("Error updating fee", "error");
@@ -310,7 +326,8 @@ const FeeReports = () => {
     setGenerateConfirm({ ...generateConfirm, visible: false });
     setGenerating(true);
     try {
-      const fn = functions().httpsCallable("generateMonthlyFees");
+      // Modular: httpsCallable(functionsInstance, name)
+      const fn = httpsCallable(functions, "generateMonthlyFees");
       const result = await fn();
       showToast(result.data.message, "success");
     } catch (error) {

@@ -12,19 +12,23 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// --- NATIVE SDK ---
-import firestore from "@react-native-firebase/firestore";
+// --- CUSTOM COMPONENTS ---
+import CustomHeader from "../../components/CustomHeader";
+
+// --- MODULAR FIREBASE IMPORTS ---
+import { doc, getDoc } from "@react-native-firebase/firestore";
+import { db } from "../../config/firebaseConfig";
 
 const { width } = Dimensions.get("window");
 
 const StudentVideoPlayer = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
 
-  // Params can come from 'My Courses' (id) or direct playlist (legacy)
+  // Params
   const {
     id: courseId,
     playlist: playlistParam,
@@ -43,15 +47,14 @@ const StudentVideoPlayer = () => {
   // --- 1. INITIALIZATION ---
   useEffect(() => {
     const init = async () => {
-      // MODE A: Fetch by Course ID (Best Practice)
+      // Priority 1: Fetch fresh data if ID exists
       if (courseId) {
         try {
-          const doc = await firestore()
-            .collection("courses")
-            .doc(courseId)
-            .get();
-          if (doc.exists) {
-            const data = doc.data();
+          const docRef = doc(db, "courses", courseId);
+          const docSnap = await getDoc(docRef);
+
+          if (docSnap.exists()) {
+            const data = docSnap.data();
             setPlaylist(data.playlist || []);
             setCourseInfo({
               title: data.title || "Untitled Course",
@@ -62,7 +65,7 @@ const StudentVideoPlayer = () => {
           console.error("Fetch Error:", e);
         }
       }
-      // MODE B: Parse Param (Legacy)
+      // Priority 2: Use passed params
       else if (playlistParam) {
         try {
           const parsed = JSON.parse(playlistParam);
@@ -128,7 +131,6 @@ const StudentVideoPlayer = () => {
         }}
         className="flex-row items-center p-4 mb-2 mx-4 rounded-xl border"
       >
-        {/* Number / Icon */}
         <View className="mr-4">
           {isActive ? (
             <MaterialCommunityIcons
@@ -146,7 +148,6 @@ const StudentVideoPlayer = () => {
           )}
         </View>
 
-        {/* Info */}
         <View className="flex-1">
           <Text
             style={{
@@ -165,7 +166,6 @@ const StudentVideoPlayer = () => {
           </Text>
         </View>
 
-        {/* Status */}
         {isActive && (
           <View className="ml-2">
             <Ionicons name="stats-chart" size={16} color={theme.accent} />
@@ -194,7 +194,10 @@ const StudentVideoPlayer = () => {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
       <StatusBar barStyle="light-content" backgroundColor="black" />
 
-      {/* --- VIDEO SECTION (FIXED TOP) --- */}
+      {/* --- CUSTOM HEADER --- */}
+      <CustomHeader title="Course Player" showBack={true} />
+
+      {/* --- VIDEO SECTION --- */}
       <View
         style={{ backgroundColor: theme.black }}
         className="w-full aspect-video relative z-10 shadow-lg"
@@ -229,10 +232,10 @@ const StudentVideoPlayer = () => {
         )}
       </View>
 
-      {/* --- SCROLLABLE CONTENT --- */}
+      {/* --- CONTENT --- */}
       <View className="flex-1">
         <ScrollView showsVerticalScrollIndicator={false}>
-          {/* 1. INFO CARD */}
+          {/* INFO CARD */}
           <View
             style={{ borderColor: theme.border }}
             className="px-5 py-5 border-b"
@@ -244,7 +247,7 @@ const StudentVideoPlayer = () => {
               {currentVideo?.title || courseInfo.title}
             </Text>
 
-            <View className="flex-row items-center justify-between mb-4">
+            <View className="flex-row items-center justify-between">
               <View className="flex-row items-center">
                 <View
                   style={{ backgroundColor: theme.accentSoft20 }}
@@ -270,11 +273,10 @@ const StudentVideoPlayer = () => {
                 <TouchableOpacity
                   onPress={handlePrev}
                   disabled={currentIndex === 0}
-                  style={{
-                    backgroundColor: theme.bgSecondary,
-                    opacity: currentIndex === 0 ? 0.3 : 1,
-                  }}
-                  className="p-2 rounded-full mr-2"
+                  style={{ backgroundColor: theme.bgSecondary }}
+                  className={`p-2 rounded-full mr-2 ${
+                    currentIndex === 0 ? "opacity-30" : ""
+                  }`}
                 >
                   <Ionicons
                     name="play-skip-back"
@@ -285,11 +287,10 @@ const StudentVideoPlayer = () => {
                 <TouchableOpacity
                   onPress={handleNext}
                   disabled={currentIndex === playlist.length - 1}
-                  style={{
-                    backgroundColor: theme.bgSecondary,
-                    opacity: currentIndex === playlist.length - 1 ? 0.3 : 1,
-                  }}
-                  className="p-2 rounded-full"
+                  style={{ backgroundColor: theme.bgSecondary }}
+                  className={`p-2 rounded-full ${
+                    currentIndex === playlist.length - 1 ? "opacity-30" : ""
+                  }`}
                 >
                   <Ionicons
                     name="play-skip-forward"
@@ -300,16 +301,16 @@ const StudentVideoPlayer = () => {
               </View>
             </View>
 
-            {/* Description Accordion (Simple) */}
+            {/* Description */}
             <Text
               style={{ color: theme.textSecondary }}
-              className="text-sm leading-5"
+              className="text-sm leading-5 mt-4"
             >
               {courseInfo.description}
             </Text>
           </View>
 
-          {/* 2. PLAYLIST HEADER */}
+          {/* PLAYLIST HEADER */}
           <View className="px-5 py-4 flex-row items-center justify-between">
             <Text
               style={{ color: theme.textPrimary }}
@@ -322,7 +323,7 @@ const StudentVideoPlayer = () => {
             </Text>
           </View>
 
-          {/* 3. PLAYLIST ITEMS */}
+          {/* PLAYLIST ITEMS */}
           {playlist.length > 0 ? (
             <View className="pb-10">
               {playlist.map((item, index) => (

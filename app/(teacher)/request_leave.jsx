@@ -15,17 +15,28 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// NATIVE SDK
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  doc,
+  getDoc,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
 
 const TeacherLeaveRequest = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -51,16 +62,18 @@ const TeacherLeaveRequest = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- 1. FETCH PROFILE & HISTORY ---
+  // --- 1. FETCH PROFILE & HISTORY (MODULAR) ---
   useEffect(() => {
-    const uid = auth().currentUser?.uid;
-    if (!uid) return;
+    // Modular: auth.currentUser
+    const user = auth.currentUser;
+    if (!user) return;
 
-    // A. Fetch Profile
+    // A. Fetch Profile (Modular)
     const fetchProfile = async () => {
       try {
-        const docSnap = await firestore().collection("users").doc(uid).get();
-        if (docSnap.exists) {
+        const docRef = doc(db, "users", user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
           setTeacherProfile(docSnap.data());
         }
       } catch (e) {
@@ -69,26 +82,29 @@ const TeacherLeaveRequest = () => {
     };
     fetchProfile();
 
-    // B. Real-time History Listener
-    const unsubscribe = firestore()
-      .collection("teacher_leaves")
-      .where("teacherId", "==", uid)
-      .orderBy("createdAt", "desc")
-      .onSnapshot(
-        (snapshot) => {
-          if (!snapshot) return;
-          const list = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          setHistory(list);
-          setLoading(false);
-        },
-        (error) => {
-          console.log("History Error:", error);
-          setLoading(false);
-        }
-      );
+    // B. Real-time History Listener (Modular)
+    const q = query(
+      collection(db, "teacher_leaves"),
+      where("teacherId", "==", user.uid),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (!snapshot) return;
+        const list = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setHistory(list);
+        setLoading(false);
+      },
+      (error) => {
+        console.log("History Error:", error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, []);
@@ -130,19 +146,20 @@ const TeacherLeaveRequest = () => {
 
     setSubmitting(true);
     try {
-      await firestore()
-        .collection("teacher_leaves")
-        .add({
-          teacherId: auth().currentUser.uid,
-          teacherName: teacherProfile?.name || "Unknown Teacher",
-          phone: teacherProfile?.phone || "",
-          startDate: formatDate(startDate),
-          endDate: formatDate(endDate),
-          reason: reason.trim(),
-          duration: getDuration(),
-          status: "Informed",
-          createdAt: firestore.FieldValue.serverTimestamp(),
-        });
+      const user = auth.currentUser;
+
+      // Modular: addDoc + serverTimestamp
+      await addDoc(collection(db, "teacher_leaves"), {
+        teacherId: user.uid,
+        teacherName: teacherProfile?.name || "Unknown Teacher",
+        phone: teacherProfile?.phone || "",
+        startDate: formatDate(startDate),
+        endDate: formatDate(endDate),
+        reason: reason.trim(),
+        duration: getDuration(),
+        status: "Informed",
+        createdAt: serverTimestamp(),
+      });
 
       showToast("Admin Notified Successfully!", "success");
       setReason("");
@@ -157,7 +174,6 @@ const TeacherLeaveRequest = () => {
 
   // --- RENDER HISTORY CARD ---
   const renderLeaveItem = ({ item }) => {
-    // Safety check for Timestamp to prevent crashes on new items
     const dateDisplay = item.createdAt?.toDate
       ? item.createdAt.toDate().toLocaleDateString("en-GB")
       : "Just Now";

@@ -18,11 +18,21 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// NATIVE SDK
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  query,
+  where,
+  serverTimestamp,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
 import CustomAlert from "../../components/CustomAlert";
@@ -33,10 +43,10 @@ dayjs.extend(customParseFormat);
 const CustomCalendar = ({
   selectedDate,
   onSelectDate,
-  markedDates = [], // Array of "DD/MM/YYYY" strings
+  markedDates = [],
   onClose,
 }) => {
-  const { theme } = useTheme(); // Get dynamic theme values
+  const { theme } = useTheme();
   const [currentMonth, setCurrentMonth] = useState(dayjs(selectedDate));
 
   const generateDays = () => {
@@ -217,7 +227,7 @@ const CustomCalendar = ({
 // --- MAIN SCREEN ---
 const TeacherScoreSubmission = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [fetchingStudents, setFetchingStudents] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -262,15 +272,18 @@ const TeacherScoreSubmission = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- 1. FETCH PROFILE ---
+  // --- 1. FETCH PROFILE (MODULAR) ---
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const uid = auth().currentUser?.uid;
+        const uid = auth.currentUser?.uid;
         if (!uid) return;
 
-        const teacherDoc = await firestore().collection("users").doc(uid).get();
-        if (teacherDoc.exists) {
+        // Modular: doc + getDoc
+        const teacherDocRef = doc(db, "users", uid);
+        const teacherDoc = await getDoc(teacherDocRef);
+
+        if (teacherDoc.exists()) {
           const data = teacherDoc.data();
           const profile = data.teachingProfile || [];
 
@@ -304,15 +317,17 @@ const TeacherScoreSubmission = () => {
     fetchProfile();
   }, []);
 
-  // --- 2. FETCH MARKED DATES ---
+  // --- 2. FETCH MARKED DATES (MODULAR) ---
   const fetchMarkedDates = useCallback(async () => {
     if (!selectedClass || !selectedSubject) return;
     try {
-      const snap = await firestore()
-        .collection("exam_results")
-        .where("classId", "==", selectedClass)
-        .where("subject", "==", selectedSubject)
-        .get();
+      // Modular: query + getDocs
+      const q = query(
+        collection(db, "exam_results"),
+        where("classId", "==", selectedClass),
+        where("subject", "==", selectedSubject)
+      );
+      const snap = await getDocs(q);
 
       const dates = snap.docs.map((doc) => doc.data().date);
       setMarkedDates(dates);
@@ -342,19 +357,21 @@ const TeacherScoreSubmission = () => {
 
   const getFormattedDate = (date) => dayjs(date).format("DD/MM/YYYY");
 
+  // --- FETCH DATA FOR DATE (MODULAR) ---
   const fetchData = async () => {
     setFetchingStudents(true);
     try {
       const dateStr = getFormattedDate(examDate);
 
-      // A. Check for Existing Results
-      const resQuery = firestore()
-        .collection("exam_results")
-        .where("classId", "==", selectedClass)
-        .where("subject", "==", selectedSubject)
-        .where("date", "==", dateStr);
+      // A. Check for Existing Results (Modular)
+      const resQuery = query(
+        collection(db, "exam_results"),
+        where("classId", "==", selectedClass),
+        where("subject", "==", selectedSubject),
+        where("date", "==", dateStr)
+      );
 
-      const resSnap = await resQuery.get();
+      const resSnap = await getDocs(resQuery);
       let savedData = null;
 
       if (!resSnap.empty) {
@@ -364,20 +381,20 @@ const TeacherScoreSubmission = () => {
         setMaxScore(savedData.maxScore.toString());
       } else {
         setExistingData(null);
-        // Only reset if we previously had existing data to avoid wiping user input on date change
         if (existingData) {
           setExamTitle("");
           setMaxScore("100");
         }
       }
 
-      // B. Fetch Students
-      const q = firestore()
-        .collection("users")
-        .where("role", "==", "student")
-        .where("standard", "==", selectedClass);
+      // B. Fetch Students (Modular)
+      const userQuery = query(
+        collection(db, "users"),
+        where("role", "==", "student"),
+        where("standard", "==", selectedClass)
+      );
 
-      const snapshot = await q.get();
+      const snapshot = await getDocs(userQuery);
       const list = snapshot.docs.map((doc) => {
         const d = doc.data();
         let existingScore = "";
@@ -452,19 +469,18 @@ const TeacherScoreSubmission = () => {
         setAlertConfig((prev) => ({ ...prev, visible: false }));
         setSubmitting(true);
         try {
-          await firestore()
-            .collection("exam_results")
-            .add({
-              examTitle: examTitle.trim(),
-              maxScore: maxVal,
-              classId: selectedClass,
-              subject: selectedSubject,
-              teacherId: auth().currentUser.uid,
-              date: getFormattedDate(examDate),
-              createdAt: firestore.FieldValue.serverTimestamp(),
-              results: resultsMap,
-              studentCount: filledCount,
-            });
+          // Modular: addDoc + serverTimestamp
+          await addDoc(collection(db, "exam_results"), {
+            examTitle: examTitle.trim(),
+            maxScore: maxVal,
+            classId: selectedClass,
+            subject: selectedSubject,
+            teacherId: auth.currentUser.uid,
+            date: getFormattedDate(examDate),
+            createdAt: serverTimestamp(),
+            results: resultsMap,
+            studentCount: filledCount,
+          });
 
           showToast("Published Successfully!", "success");
           fetchMarkedDates();
@@ -594,7 +610,7 @@ const TeacherScoreSubmission = () => {
         visible={alertConfig.visible}
         title={alertConfig.title}
         message={alertConfig.message}
-        confirmText="Publish"
+        confirmText={alertConfig.confirmText}
         cancelText="Cancel"
         onConfirm={alertConfig.onConfirm}
         onCancel={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}

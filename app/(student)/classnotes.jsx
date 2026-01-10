@@ -12,26 +12,39 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import dayjs from "dayjs";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// NATIVE SDK
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 const StudentNotes = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notes, setNotes] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState("All");
 
+  // --- FETCH NOTES (MODULAR) ---
   const fetchNotes = async () => {
     try {
-      const user = auth().currentUser;
+      // Modular: Access currentUser property directly
+      const user = auth.currentUser;
       if (!user) return;
 
-      const userDoc = await firestore().collection("users").doc(user.uid).get();
+      // Modular: doc + getDoc
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
       const studentClass = userDoc.data()?.standard;
 
       if (!studentClass) {
@@ -39,11 +52,14 @@ const StudentNotes = () => {
         return;
       }
 
-      const snapshot = await firestore()
-        .collection("materials")
-        .where("classId", "==", studentClass)
-        .orderBy("createdAt", "desc")
-        .get();
+      // Modular: query + getDocs
+      const q = query(
+        collection(db, "materials"),
+        where("classId", "==", studentClass),
+        orderBy("createdAt", "desc")
+      );
+
+      const snapshot = await getDocs(q);
 
       const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setNotes(data);

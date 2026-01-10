@@ -15,15 +15,32 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import firestore from "@react-native-firebase/firestore";
-import functions from "@react-native-firebase/functions";
+
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+} from "@react-native-firebase/firestore";
+import { httpsCallable } from "@react-native-firebase/functions";
+import { db, functions } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
+
 import CustomToast from "../../components/CustomToast";
 import CustomAlert from "../../components/CustomAlert";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
 // --- SALARY CARD COMPONENT ---
 const SalaryCard = ({ item, onInitiatePayment }) => {
-  const { theme } = useTheme(); // Get dynamic theme
+  const { theme } = useTheme();
   const [teacherImg, setTeacherImg] = useState(null);
 
   useEffect(() => {
@@ -31,11 +48,10 @@ const SalaryCard = ({ item, onInitiatePayment }) => {
     const fetchAvatar = async () => {
       if (item.teacherId) {
         try {
-          const docSnap = await firestore()
-            .collection("users")
-            .doc(item.teacherId)
-            .get();
-          if (docSnap.exists && isMounted) {
+          // Modular: getDoc
+          const docRef = doc(db, "users", item.teacherId);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists() && isMounted) {
             setTeacherImg(docSnap.data().profileImage);
           }
         } catch (e) {}
@@ -161,7 +177,7 @@ const SalaryCard = ({ item, onInitiatePayment }) => {
 
 const TeacherSalaryReports = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [salaries, setSalaries] = useState([]);
   const [filteredSalaries, setFilteredSalaries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -196,20 +212,21 @@ const TeacherSalaryReports = () => {
     setToast({ visible: true, msg, type });
   const FILTER_OPTIONS = ["All", "Pending", "Paid"];
 
+  // --- 1. REAL-TIME LISTENER (MODULAR) ---
   useEffect(() => {
-    const unsubscribe = firestore()
-      .collection("salaries")
-      .orderBy("createdAt", "desc")
-      .onSnapshot((snapshot) => {
-        if (!snapshot) return;
-        const list = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        list.sort((a, b) => (a.status === "Pending" ? -1 : 1));
-        setSalaries(list);
-        setLoading(false);
-      });
+    // Modular: query(collection, orderBy)
+    const q = query(collection(db, "salaries"), orderBy("createdAt", "desc"));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot) return;
+      const list = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      list.sort((a, b) => (a.status === "Pending" ? -1 : 1));
+      setSalaries(list);
+      setLoading(false);
+    });
     return () => unsubscribe();
   }, []);
 
@@ -219,17 +236,20 @@ const TeacherSalaryReports = () => {
       setFilteredSalaries(salaries.filter((s) => s.status === selectedFilter));
   }, [selectedFilter, salaries]);
 
+  // --- 2. FETCH TEACHERS (MODULAR) ---
   useEffect(() => {
     if (isAdding) {
       const fetchTeachers = async () => {
         setLoadingTeachers(true);
         try {
-          const snap = await firestore()
-            .collection("users")
-            .where("role", "==", "teacher")
-            .where("verified", "==", true)
-            .where("salaryType", "==", "Commission")
-            .get();
+          // Modular: query + getDocs
+          const q = query(
+            collection(db, "users"),
+            where("role", "==", "teacher"),
+            where("verified", "==", true),
+            where("salaryType", "==", "Commission")
+          );
+          const snap = await getDocs(q);
           const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
           setCommissionTeachers(list);
         } catch (e) {
@@ -249,7 +269,9 @@ const TeacherSalaryReports = () => {
 
   const confirmPayment = async () => {
     try {
-      await firestore().collection("salaries").doc(selectedSalaryId).update({
+      // Modular: updateDoc
+      const salaryRef = doc(db, "salaries", selectedSalaryId);
+      await updateDoc(salaryRef, {
         status: "Paid",
         paidAt: new Date().toISOString(),
       });
@@ -267,19 +289,18 @@ const TeacherSalaryReports = () => {
     }
     setSubmitting(true);
     try {
-      await firestore()
-        .collection("salaries")
-        .add({
-          teacherId: selectedTeacher.id,
-          teacherName: selectedTeacher.name || "Unknown",
-          teacherEmail: selectedTeacher.email || "N/A",
-          teacherPhone: selectedTeacher.phone || "",
-          title: title.trim(),
-          amount: amount.trim(),
-          status: "Pending",
-          date: new Date().toLocaleDateString("en-GB"),
-          createdAt: firestore.FieldValue.serverTimestamp(),
-        });
+      // Modular: addDoc + serverTimestamp
+      await addDoc(collection(db, "salaries"), {
+        teacherId: selectedTeacher.id,
+        teacherName: selectedTeacher.name || "Unknown",
+        teacherEmail: selectedTeacher.email || "N/A",
+        teacherPhone: selectedTeacher.phone || "",
+        title: title.trim(),
+        amount: amount.trim(),
+        status: "Pending",
+        date: new Date().toLocaleDateString("en-GB"),
+        createdAt: serverTimestamp(),
+      });
 
       setIsAdding(false);
       setSelectedTeacher(null);
@@ -306,7 +327,8 @@ const TeacherSalaryReports = () => {
     setGenerateConfirm({ ...generateConfirm, visible: false });
     setGenerating(true);
     try {
-      const fn = functions().httpsCallable("generateMonthlySalaries");
+      // Modular: httpsCallable
+      const fn = httpsCallable(functions, "generateMonthlySalaries");
       const result = await fn();
       showToast(result.data.message, "success");
     } catch (error) {

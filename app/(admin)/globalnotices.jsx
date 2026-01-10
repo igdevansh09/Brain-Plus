@@ -14,16 +14,25 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-// NATIVE SDK
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  addDoc,
+  query,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+} from "@react-native-firebase/firestore";
+import { db } from "../../config/firebaseConfig"; // Import initialized db instance
+// --- REFACTOR END ---
 
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
 const ManageNotices = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [notices, setNotices] = useState([]);
 
   // Modal State
@@ -49,31 +58,34 @@ const ManageNotices = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- FETCH NOTICES ---
+  // --- FETCH NOTICES (MODULAR) ---
   useEffect(() => {
     setLoading(true);
-    const unsubscribe = firestore()
-      .collection("notices")
-      .orderBy("createdAt", "desc")
-      .onSnapshot(
-        (snapshot) => {
-          if (!snapshot) return;
-          const noticesList = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          setNotices(noticesList);
-          setLoading(false);
-        },
-        (error) => {
-          console.error(error);
-          setLoading(false);
-        }
-      );
+
+    // Modular: query(collection(db, ...), orderBy(...))
+    const q = query(collection(db, "notices"), orderBy("createdAt", "desc"));
+
+    // Modular: onSnapshot(query, callback)
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (!snapshot) return;
+        const noticesList = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setNotices(noticesList);
+        setLoading(false);
+      },
+      (error) => {
+        console.error(error);
+        setLoading(false);
+      }
+    );
     return () => unsubscribe();
   }, []);
 
-  // --- HANDLERS ---
+  // --- HANDLERS (MODULAR) ---
   const handleAddNotice = async () => {
     if (!newTitle.trim() || !newContent.trim()) {
       showToast("Enter title and content", "error");
@@ -82,14 +94,13 @@ const ManageNotices = () => {
 
     setPosting(true);
     try {
-      await firestore()
-        .collection("notices")
-        .add({
-          title: newTitle,
-          content: newContent,
-          date: new Date().toLocaleDateString("en-GB"),
-          createdAt: firestore.FieldValue.serverTimestamp(),
-        });
+      // Modular: addDoc(collection(db, ...), data)
+      await addDoc(collection(db, "notices"), {
+        title: newTitle,
+        content: newContent,
+        date: new Date().toLocaleDateString("en-GB"),
+        createdAt: serverTimestamp(), // Modular Timestamp
+      });
 
       showToast("Notice posted successfully!", "success");
       setNewTitle("");

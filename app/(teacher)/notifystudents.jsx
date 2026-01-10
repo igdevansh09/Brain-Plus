@@ -14,17 +14,28 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// NATIVE SDK
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  doc,
+  getDoc,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
 
 const TeacherClassUpdates = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
@@ -52,15 +63,18 @@ const TeacherClassUpdates = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- 1. FETCH PROFILE (ONCE) ---
+  // --- 1. FETCH PROFILE (MODULAR) ---
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const uid = auth().currentUser?.uid;
-        if (!uid) return;
+        const user = auth.currentUser;
+        if (!user) return;
 
-        const userDoc = await firestore().collection("users").doc(uid).get();
-        if (userDoc.exists) {
+        // Modular: doc + getDoc
+        const userDocRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userDocRef);
+
+        if (userDoc.exists()) {
           const data = userDoc.data();
           setTeacherName(data.name || "Teacher");
 
@@ -95,30 +109,35 @@ const TeacherClassUpdates = () => {
     fetchProfile();
   }, []);
 
-  // --- 2. FETCH HISTORY (REAL-TIME LISTENER) ---
+  // --- 2. FETCH HISTORY (MODULAR LISTENER) ---
   useEffect(() => {
-    const uid = auth().currentUser?.uid;
-    if (!uid) return;
+    const user = auth.currentUser;
+    if (!user) return;
 
     setLoading(true);
-    const unsubscribe = firestore()
-      .collection("class_notices")
-      .where("teacherId", "==", uid)
-      .orderBy("createdAt", "desc")
-      .onSnapshot(
-        (snapshot) => {
-          const list = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          setHistory(list);
-          setLoading(false);
-        },
-        (error) => {
-          console.error("History Listener Error:", error);
-          setLoading(false);
-        }
-      );
+
+    // Modular: query + onSnapshot
+    const q = query(
+      collection(db, "class_notices"),
+      where("teacherId", "==", user.uid),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const list = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setHistory(list);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("History Listener Error:", error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, []);
@@ -135,7 +154,7 @@ const TeacherClassUpdates = () => {
     else setSelectedSubject(null);
   };
 
-  // --- SEND NOTICE ---
+  // --- SEND NOTICE (MODULAR) ---
   const handleSend = async () => {
     if (
       !title.trim() ||
@@ -149,21 +168,20 @@ const TeacherClassUpdates = () => {
 
     setSending(true);
     try {
-      await firestore()
-        .collection("class_notices")
-        .add({
-          title: title.trim(),
-          subject: selectedSubject,
-          tag: selectedTag,
-          message: message.trim(),
-          content: message.trim(),
-          classId: selectedClass,
-          teacherId: auth().currentUser.uid,
-          teacherName: teacherName,
-          date: new Date().toLocaleDateString("en-GB"),
-          createdAt: firestore.FieldValue.serverTimestamp(),
-          type: "Class Update",
-        });
+      // Modular: addDoc + serverTimestamp
+      await addDoc(collection(db, "class_notices"), {
+        title: title.trim(),
+        subject: selectedSubject,
+        tag: selectedTag,
+        message: message.trim(),
+        content: message.trim(),
+        classId: selectedClass,
+        teacherId: auth.currentUser.uid,
+        teacherName: teacherName,
+        date: new Date().toLocaleDateString("en-GB"),
+        createdAt: serverTimestamp(),
+        type: "Class Update",
+      });
 
       showToast(`Sent to ${selectedClass}!`, "success");
       setTitle("");

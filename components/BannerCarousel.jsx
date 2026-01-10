@@ -1,13 +1,22 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, FlatList, Image, Dimensions } from "react-native";
-import firestore from "@react-native-firebase/firestore";
-import { useTheme } from "../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../context/ThemeContext";
+
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  getDocs,
+  query,
+  orderBy,
+} from "@react-native-firebase/firestore";
+import { db } from "../config/firebaseConfig"; // Import initialized db instance
+// --- REFACTOR END ---
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 32;
 
 const BannerCarousel = () => {
-  const { theme } = useTheme(); // Get dynamic theme
+  const { theme } = useTheme();
   const [originalBanners, setOriginalBanners] = useState([]);
   const [infiniteBanners, setInfiniteBanners] = useState([]);
   const flatListRef = useRef(null);
@@ -15,20 +24,24 @@ const BannerCarousel = () => {
   // Track scroll position manually
   const scrollOffset = useRef(0);
 
+  // --- FETCH DATA (MODULAR) ---
   useEffect(() => {
     const fetchBanners = async () => {
       try {
-        const snap = await firestore()
-          .collection("banners")
-          .orderBy("createdAt", "desc")
-          .get();
+        // Modular: query(collection, orderBy)
+        const q = query(
+          collection(db, "banners"),
+          orderBy("createdAt", "desc")
+        );
+
+        // Modular: getDocs
+        const snap = await getDocs(q);
+
         const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
         if (list.length > 0) {
           setOriginalBanners(list);
           // Create a large buffer for smooth looping
-          // We repeat the list enough times to ensure we never run out of "next" items
-          // before the invisible reset happens.
           const repeated = Array(100)
             .fill(list)
             .flat()
@@ -46,6 +59,7 @@ const BannerCarousel = () => {
     fetchBanners();
   }, []);
 
+  // --- INFINITE SCROLL LOGIC (UNCHANGED) ---
   useEffect(() => {
     if (infiniteBanners.length === 0) return;
 
@@ -61,10 +75,6 @@ const BannerCarousel = () => {
       scrollOffset.current += speed;
 
       // 2. Seamless Reset Logic
-      // When we have scrolled past the entire first set of banners,
-      // we instantly snap back to the start (0).
-      // Because the content at 0 is identical to the content at singleSetWidth,
-      // this snap is invisible to the human eye.
       if (scrollOffset.current >= singleSetWidth) {
         scrollOffset.current = 0;
         flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
@@ -102,8 +112,8 @@ const BannerCarousel = () => {
               className="w-full h-full rounded-2xl"
               resizeMode="cover"
               style={{
-                backgroundColor: theme.bgTertiary, // Theme-aware placeholder
-                borderColor: theme.border, // Theme-aware border
+                backgroundColor: theme.bgTertiary,
+                borderColor: theme.border,
                 borderWidth: 1,
               }}
             />

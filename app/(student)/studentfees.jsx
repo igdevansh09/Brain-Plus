@@ -12,18 +12,26 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// --- NATIVE SDK IMPORTS ---
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  updateDoc,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig"; // Import initialized instances
+// --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
 
 const StudentFees = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -46,15 +54,21 @@ const StudentFees = () => {
     setToast({ visible: true, msg, type });
   };
 
+  // --- FETCH FEES (MODULAR) ---
   const fetchFees = async () => {
     try {
-      const user = auth().currentUser;
+      // Modular: Access currentUser property directly
+      const user = auth.currentUser;
       if (!user) return;
 
-      const querySnapshot = await firestore()
-        .collection("fees")
-        .where("studentId", "==", user.uid)
-        .get();
+      // Modular: query(collection, where)
+      const q = query(
+        collection(db, "fees"),
+        where("studentId", "==", user.uid)
+      );
+
+      // Modular: getDocs
+      const querySnapshot = await getDocs(q);
 
       const allFees = querySnapshot.docs.map((doc) => ({
         id: doc.id,
@@ -106,10 +120,13 @@ const StudentFees = () => {
     setPayModalVisible(true);
   };
 
+  // --- SUBMIT PROOF (MODULAR) ---
   const handleSubmitProof = async () => {
     setSubmitting(true);
     try {
-      await firestore().collection("fees").doc(selectedFee.id).update({
+      // Modular: updateDoc(doc(db, ...))
+      const feeRef = doc(db, "fees", selectedFee.id);
+      await updateDoc(feeRef, {
         status: "Verifying",
         submittedAt: new Date().toISOString(),
       });
@@ -209,7 +226,6 @@ const StudentFees = () => {
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: theme.bgPrimary }}
-      className="pt-8"
     >
       <StatusBar
         backgroundColor={theme.bgPrimary}

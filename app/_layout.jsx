@@ -4,6 +4,9 @@ import { AuthProvider, useAuth } from "../context/AuthContext";
 import "../global.css";
 import { ToastProvider } from "../context/ToastContext";
 
+// --- IMPORT FIREBASE CONFIG FIRST ---
+import "../config/firebaseConfig"; // Ensure Firebase is initialized
+
 // --- REFACTOR START: Modular Imports ---
 import {
   getMessaging,
@@ -78,7 +81,6 @@ const InitialLayout = () => {
 
   return (
     <ToastProvider>
-      <NotificationManager />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="login_options" />
@@ -88,6 +90,8 @@ const InitialLayout = () => {
         <Stack.Screen name="(student)" />
         <Stack.Screen name="(guest)" />
       </Stack>
+      {/* Placed after Stack to ensure it overlays on top if it has UI */}
+      <NotificationManager />
     </ToastProvider>
   );
 };

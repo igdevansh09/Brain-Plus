@@ -9,31 +9,42 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// --- NATIVE SDK IMPORTS ---
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 const TeacherSalary = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingSalaries, setPendingSalaries] = useState([]);
   const [salaryHistory, setSalaryHistory] = useState([]);
 
+  // --- FETCH SALARIES (MODULAR) ---
   const fetchSalaries = async () => {
     try {
-      const user = auth().currentUser;
+      // Modular: Access currentUser property directly
+      const user = auth.currentUser;
       if (!user) return;
 
-      // NATIVE SDK SYNTAX
-      const querySnapshot = await firestore()
-        .collection("salaries")
-        .where("teacherId", "==", user.uid)
-        .get();
+      // Modular: query(collection, where)
+      const q = query(
+        collection(db, "salaries"),
+        where("teacherId", "==", user.uid)
+      );
+
+      // Modular: getDocs
+      const querySnapshot = await getDocs(q);
 
       const allSalaries = querySnapshot.docs.map((doc) => ({
         id: doc.id,
@@ -122,7 +133,6 @@ const TeacherSalary = () => {
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: theme.bgPrimary }}
-      className="pt-8"
     >
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}

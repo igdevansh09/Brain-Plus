@@ -10,15 +10,19 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import firestore from "@react-native-firebase/firestore";
 import Pdf from "react-native-pdf";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
+
+// --- REFACTOR START: Modular Imports ---
+import { doc, getDoc } from "@react-native-firebase/firestore";
+import { db } from "../../config/firebaseConfig"; // Import instance
+// --- REFACTOR END ---
 
 const ViewAttachment = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
 
   // Robustly decode the URL passed from params (handle single/double-encoding)
   const decodeSafe = (u) => {
@@ -64,9 +68,12 @@ const ViewAttachment = () => {
         // Students might be viewing homework or materials
         const collectionsToTry = ["homework", "materials"];
         for (const col of collectionsToTry) {
-          const doc = await firestore().collection(col).doc(params.docId).get();
-          if (!doc.exists) continue;
-          const data = doc.data() || {};
+          // Modular: doc + getDoc
+          const docRef = doc(db, col, params.docId);
+          const docSnap = await getDoc(docRef);
+
+          if (!docSnap.exists()) continue;
+          const data = docSnap.data() || {};
 
           const idx = params.idx != null ? parseInt(params.idx, 10) : null;
           if (

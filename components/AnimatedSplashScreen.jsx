@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { View, Animated, Image, Text, Dimensions } from "react-native";
+import { View, Animated, Image, Text } from "react-native";
 import { useTheme } from "../context/ThemeContext"; // Import Theme Hook
 
 const AnimatedSplashScreen = () => {

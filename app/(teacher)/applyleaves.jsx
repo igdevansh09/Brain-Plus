@@ -13,8 +13,17 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import firestore from "@react-native-firebase/firestore";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
+
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+} from "@react-native-firebase/firestore";
+import { db } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 // Helper: Calculate Days
 const getDaysCount = (start, end) => {
@@ -31,7 +40,7 @@ const getDaysCount = (start, end) => {
 };
 
 const StudentLeaveCard = ({ item }) => {
-  const { theme } = useTheme(); // Get dynamic theme values
+  const { theme } = useTheme();
   const [studentData, setStudentData] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
 
@@ -41,11 +50,11 @@ const StudentLeaveCard = ({ item }) => {
     const fetchStudentProfile = async () => {
       try {
         if (item.studentId) {
-          const userDoc = await firestore()
-            .collection("users")
-            .doc(item.studentId)
-            .get();
-          if (isMounted && userDoc.exists) {
+          // Modular: doc + getDoc
+          const userDocRef = doc(db, "users", item.studentId);
+          const userDoc = await getDoc(userDocRef);
+
+          if (isMounted && userDoc.exists()) {
             setStudentData(userDoc.data());
           }
         }
@@ -190,31 +199,32 @@ const StudentLeaveCard = ({ item }) => {
 
 const TeacherStudentLeaves = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // FIX: Removed .orderBy to avoid index issues, handling sort manually
-    const unsubscribe = firestore()
-      .collection("leaves") // Fetching Student Leaves
-      .onSnapshot((snapshot) => {
-        if (!snapshot) return;
-        const list = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+    // Modular: collection + onSnapshot
+    const leavesCollection = collection(db, "leaves");
 
-        // Manual Sort (Newest First)
-        list.sort((a, b) => {
-          const tA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
-          const tB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
-          return tB - tA;
-        });
+    const unsubscribe = onSnapshot(leavesCollection, (snapshot) => {
+      if (!snapshot) return;
+      const list = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-        setLeaves(list);
-        setLoading(false);
+      // Manual Sort (Newest First)
+      list.sort((a, b) => {
+        const tA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+        const tB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+        return tB - tA;
       });
+
+      setLeaves(list);
+      setLoading(false);
+    });
+
     return () => unsubscribe();
   }, []);
 

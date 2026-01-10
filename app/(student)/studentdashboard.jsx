@@ -18,23 +18,38 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import BannerCarousel from "../../components/BannerCarousel";
 
-// --- NATIVE SDK IMPORTS ---
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
-import storage from "@react-native-firebase/storage";
+// --- REFACTOR START: Modular Imports ---
+import { signOut } from "@react-native-firebase/auth";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  query,
+  where,
+  limit,
+} from "@react-native-firebase/firestore";
+import {
+  ref,
+  getDownloadURL,
+  uploadBytes,
+} from "@react-native-firebase/storage";
+import { auth, db, storage } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
+
 import * as ImagePicker from "expo-image-picker";
 
-// --- CUSTOM COMPONENTS ---
 import CustomAlert from "../../components/CustomAlert";
 import CustomAlert2 from "../../components/CustomAlert2";
 import CustomToast from "../../components/CustomToast";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
 const { height } = Dimensions.get("window");
 
 const StudentDashboard = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [studentData, setStudentData] = useState(null);
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +73,6 @@ const StudentDashboard = () => {
     message: "",
   });
 
-  // Helper to show toast
   const showToast = (msg, type = "success") => {
     setToast({ visible: true, msg, type });
   };
@@ -94,26 +108,24 @@ const StudentDashboard = () => {
     }
   }, [profileModalVisible]);
 
-  // --- DATA FETCHING ---
+  // --- DATA FETCHING (MODULAR) ---
   const fetchData = async () => {
     try {
-      const user = auth().currentUser;
+      const user = auth.currentUser; // Modular access
       if (user) {
         // 1. Fetch User Data
-        const userDoc = await firestore()
-          .collection("users")
-          .doc(user.uid)
-          .get();
+        const userDocRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userDocRef);
         let currentStandard = "";
 
-        if (userDoc.exists) {
+        if (userDoc.exists()) {
           const data = userDoc.data();
           setStudentData(data);
           currentStandard = data.standard;
         }
 
         // 2. Fetch Notices
-        const globalSnap = await firestore().collection("notices").get();
+        const globalSnap = await getDocs(collection(db, "notices"));
         const globalList = globalSnap.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
@@ -123,10 +135,11 @@ const StudentDashboard = () => {
 
         let classList = [];
         if (currentStandard) {
-          const classSnap = await firestore()
-            .collection("class_notices")
-            .where("classId", "==", currentStandard)
-            .get();
+          const qClass = query(
+            collection(db, "class_notices"),
+            where("classId", "==", currentStandard)
+          );
+          const classSnap = await getDocs(qClass);
 
           classList = classSnap.docs.map((doc) => ({
             id: doc.id,
@@ -143,13 +156,14 @@ const StudentDashboard = () => {
           const enriched = await Promise.all(
             combined.map(async (item) => {
               try {
-                // Check if it's an admin notice (tag === 'Global' and no teacherId)
+                // Check if it's an admin notice
                 if (item.tag === "Global" && !item.teacherId) {
-                  const adminSnap = await firestore()
-                    .collection("users")
-                    .where("role", "==", "admin")
-                    .limit(1)
-                    .get();
+                  const qAdmin = query(
+                    collection(db, "users"),
+                    where("role", "==", "admin"),
+                    limit(1)
+                  );
+                  const adminSnap = await getDocs(qAdmin);
 
                   if (!adminSnap.empty) {
                     const adminData = adminSnap.docs[0].data();
@@ -162,15 +176,13 @@ const StudentDashboard = () => {
                   return { ...item, authorImage: null };
                 }
 
-                // For teacher notices, fetch teacher data
+                // For teacher notices
                 const authorId = item.teacherId || item.authorId || null;
                 if (authorId) {
-                  const userDoc = await firestore()
-                    .collection("users")
-                    .doc(authorId)
-                    .get();
-                  if (userDoc.exists) {
-                    const u = userDoc.data();
+                  const authorDocRef = doc(db, "users", authorId);
+                  const userDocSnap = await getDoc(authorDocRef);
+                  if (userDocSnap.exists()) {
+                    const u = userDocSnap.data();
                     return {
                       ...item,
                       author: u.name || item.author,
@@ -200,10 +212,11 @@ const StudentDashboard = () => {
         setNotices(combined);
 
         // 3. Fetch Fees
-        const feesSnap = await firestore()
-          .collection("fees")
-          .where("studentId", "==", user.uid)
-          .get();
+        const qFees = query(
+          collection(db, "fees"),
+          where("studentId", "==", user.uid)
+        );
+        const feesSnap = await getDocs(qFees);
 
         const pending = feesSnap.docs.filter(
           (d) => d.data().status === "Pending"
@@ -233,7 +246,7 @@ const StudentDashboard = () => {
     setRefreshing(false);
   }, []);
 
-  // --- AVATAR UPDATE ---
+  // --- AVATAR UPDATE (MODULAR) ---
   const handleUpdateAvatar = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -246,13 +259,20 @@ const StudentDashboard = () => {
       if (!result.canceled) {
         setUploading(true);
         const { uri } = result.assets[0];
-        const user = auth().currentUser;
+        const user = auth.currentUser;
 
-        const ref = storage().ref(`profile_pictures/${user.uid}/avatar.jpg`);
-        await ref.putFile(uri);
-        const url = await ref.getDownloadURL();
+        // Modular Storage Upload
+        const filename = `profile_pictures/${user.uid}/avatar.jpg`;
+        const storageRef = ref(storage, filename);
 
-        await firestore().collection("users").doc(user.uid).update({
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        await uploadBytes(storageRef, blob);
+        const url = await getDownloadURL(storageRef);
+
+        // Modular Firestore Update
+        const userRef = doc(db, "users", user.uid);
+        await updateDoc(userRef, {
           profileImage: url,
         });
 
@@ -270,7 +290,7 @@ const StudentDashboard = () => {
   const confirmLogout = async () => {
     setLogoutAlertVisible(false);
     try {
-      await auth().signOut();
+      await signOut(auth); // Modular SignOut
       showToast("Signed out", "success");
     } catch (e) {
       showToast(e.message, "error");

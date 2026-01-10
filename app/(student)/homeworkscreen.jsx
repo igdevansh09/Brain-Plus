@@ -13,28 +13,41 @@ import { useRouter } from "expo-router";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// NATIVE SDK
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs,
+  doc,
+  getDoc,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 dayjs.extend(relativeTime);
 
 const StudentHomework = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [homework, setHomework] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState("All");
 
+  // --- FETCH HOMEWORK (MODULAR) ---
   const fetchHomework = async () => {
     try {
-      const user = auth().currentUser;
+      // Modular: auth.currentUser
+      const user = auth.currentUser;
       if (!user) return;
 
-      const userDoc = await firestore().collection("users").doc(user.uid).get();
+      // Modular: getDoc
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
       const studentClass = userDoc.data()?.standard || userDoc.data()?.class;
 
       if (!studentClass) {
@@ -42,11 +55,15 @@ const StudentHomework = () => {
         return;
       }
 
-      const snapshot = await firestore()
-        .collection("homework")
-        .where("classId", "==", studentClass)
-        .orderBy("createdAt", "desc")
-        .get();
+      // Modular: query
+      const q = query(
+        collection(db, "homework"),
+        where("classId", "==", studentClass),
+        orderBy("createdAt", "desc")
+      );
+
+      // Modular: getDocs
+      const snapshot = await getDocs(q);
 
       const data = snapshot.docs.map((doc) => ({
         id: doc.id,
@@ -192,17 +209,6 @@ const StudentHomework = () => {
       </View>
     );
   };
-
-  if (loading) {
-    return (
-      <SafeAreaView
-        style={{ backgroundColor: theme.bgPrimary }}
-        className="flex-1 justify-center items-center"
-      >
-        <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>

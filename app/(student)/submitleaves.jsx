@@ -15,18 +15,30 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// NATIVE SDK
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  doc,
+  getDoc,
+  addDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
 import CustomAlert from "../../components/CustomAlert";
 
 const ApplyLeave = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -60,40 +72,47 @@ const ApplyLeave = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- 1. FETCH PROFILE & HISTORY ---
+  // --- 1. FETCH PROFILE & HISTORY (MODULAR) ---
   useEffect(() => {
-    const uid = auth().currentUser?.uid;
-    if (!uid) return;
+    // Modular: auth.currentUser
+    const user = auth.currentUser;
+    if (!user) return;
 
     const fetchProfile = async () => {
       try {
-        const docSnap = await firestore().collection("users").doc(uid).get();
-        if (docSnap.exists) setStudentProfile(docSnap.data());
+        // Modular: doc + getDoc
+        const docRef = doc(db, "users", user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) setStudentProfile(docSnap.data());
       } catch (e) {
         console.log("Profile Error:", e);
       }
     };
     fetchProfile();
 
-    const unsubscribe = firestore()
-      .collection("leaves")
-      .where("studentId", "==", uid)
-      .orderBy("createdAt", "desc")
-      .onSnapshot(
-        (snapshot) => {
-          if (!snapshot) return;
-          const list = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          setHistory(list);
-          setLoading(false);
-        },
-        (err) => {
-          console.log("History Error:", err);
-          setLoading(false);
-        }
-      );
+    // Modular: query + onSnapshot
+    const q = query(
+      collection(db, "leaves"),
+      where("studentId", "==", user.uid),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (!snapshot) return;
+        const list = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setHistory(list);
+        setLoading(false);
+      },
+      (err) => {
+        console.log("History Error:", err);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, []);
@@ -135,20 +154,20 @@ const ApplyLeave = () => {
 
     setSubmitting(true);
     try {
-      await firestore()
-        .collection("leaves")
-        .add({
-          studentId: auth().currentUser.uid,
-          studentName:
-            studentProfile?.name || auth().currentUser.displayName || "Student",
-          phone: studentProfile?.phone || "",
-          startDate: formatDate(startDate),
-          endDate: formatDate(endDate),
-          reason: reason.trim(),
-          duration: getDuration(),
-          status: "Pending",
-          createdAt: firestore.FieldValue.serverTimestamp(),
-        });
+      const user = auth.currentUser;
+
+      // Modular: addDoc + serverTimestamp
+      await addDoc(collection(db, "leaves"), {
+        studentId: user.uid,
+        studentName: studentProfile?.name || user.displayName || "Student",
+        phone: studentProfile?.phone || "",
+        startDate: formatDate(startDate),
+        endDate: formatDate(endDate),
+        reason: reason.trim(),
+        duration: getDuration(),
+        status: "Pending",
+        createdAt: serverTimestamp(),
+      });
 
       showToast("Application submitted!", "success");
       setReason("");
@@ -160,21 +179,6 @@ const ApplyLeave = () => {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleDelete = (id) => {
-    setAlertConfig({
-      visible: true,
-      title: "Delete Request",
-      message: "Are you sure you want to delete this pending request?",
-      confirmText: "Delete",
-      type: "warning",
-      onConfirm: async () => {
-        setAlertConfig((prev) => ({ ...prev, visible: false }));
-        await firestore().collection("leaves").doc(id).delete();
-        showToast("Request deleted", "success");
-      },
-    });
   };
 
   // --- RENDER HISTORY ITEM ---
@@ -230,18 +234,6 @@ const ApplyLeave = () => {
                 {item.duration || 1} Days
               </Text>
             </View>
-            {item.status === "Pending" && (
-              <TouchableOpacity
-                onPress={() => handleDelete(item.id)}
-                style={{
-                  backgroundColor: theme.errorSoft,
-                  borderColor: theme.error,
-                }}
-                className="w-10 h-10 rounded-xl items-center justify-center border border-opacity-30"
-              >
-                <Ionicons name="trash-outline" size={20} color={theme.error} />
-              </TouchableOpacity>
-            )}
           </View>
         </View>
 

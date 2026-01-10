@@ -13,15 +13,22 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import dayjs from "dayjs";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// --- NATIVE SDK IMPORTS ---
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// Modular Imports
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig";
 
 const AttendanceCalendar = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
 
   const [currentDate, setCurrentDate] = useState(dayjs());
@@ -35,14 +42,15 @@ const AttendanceCalendar = () => {
   const padding = 32;
   const colWidth = (screenWidth - padding) / 7;
 
-  // --- 1. FETCH DATA (NATIVE) ---
+  // --- 1. FETCH DATA ---
   const fetchAttendance = async () => {
     try {
-      const user = auth().currentUser;
+      const user = auth.currentUser;
       if (!user) return;
 
-      const userDoc = await firestore().collection("users").doc(user.uid).get();
-      if (!userDoc.exists) return;
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (!userDoc.exists()) return;
 
       const studentClass = userDoc.data().standard;
       if (!studentClass) {
@@ -50,17 +58,18 @@ const AttendanceCalendar = () => {
         return;
       }
 
-      const querySnapshot = await firestore()
-        .collection("attendance")
-        .where("classId", "==", studentClass)
-        .get();
+      const q = query(
+        collection(db, "attendance"),
+        where("classId", "==", studentClass)
+      );
+      const querySnapshot = await getDocs(q);
 
       const rawData = [];
       const subjectsSet = new Set(["All"]);
 
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        const myStatus = data.records?.[user.uid]; // Safety check
+        const myStatus = data.records?.[user.uid];
         if (myStatus) {
           rawData.push({
             date: data.date,
@@ -84,33 +93,62 @@ const AttendanceCalendar = () => {
     fetchAttendance();
   }, []);
 
-  // --- 2. PROCESS DATA (MEMOIZED) ---
+  // --- 2. PROCESS DATA (ROBUST FIX) ---
   const { stats, processedMap } = useMemo(() => {
     const newMap = {};
     let p = 0;
     let t = 0;
 
     fullData.forEach((item) => {
-      if (selectedSubject === "All" || item.subject === selectedSubject) {
-        // Handle date formats (DD-MM-YYYY -> YYYY-MM-DD) safely
-        const parts = item.date.split("-");
-        let formattedDate = item.date;
-        if (parts.length === 3) {
-          formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-        }
+      // 1. Filter by Subject
+      const itemSubject = item.subject || "General";
+      if (selectedSubject !== "All" && itemSubject !== selectedSubject) {
+        return;
+      }
 
-        if (!newMap[formattedDate]) {
-          newMap[formattedDate] = item.status;
-          if (item.status === "Present") p++;
-          t++;
+      // 2. Robust Date Normalization (Handles 10-1-2026, 10/01/2026 -> 2026-01-10)
+      let formattedDate = item.date;
+      if (item.date) {
+        // Replace slashes with dashes and trim whitespace
+        const normalizedStr = item.date.replace(/\//g, "-").trim();
+        const parts = normalizedStr.split("-");
+
+        // Check if format is DD-MM-YYYY (e.g., ["10", "1", "2026"])
+        if (parts.length === 3) {
+          // If the last part is the year (4 digits)
+          if (parts[2].length === 4) {
+            const day = parts[0].padStart(2, "0"); // "1" -> "01"
+            const month = parts[1].padStart(2, "0"); // "1" -> "01"
+            const year = parts[2];
+            formattedDate = `${year}-${month}-${day}`;
+          }
+          // If the first part is the year (4 digits) e.g. 2026-1-10
+          else if (parts[0].length === 4) {
+            const year = parts[0];
+            const month = parts[1].padStart(2, "0");
+            const day = parts[2].padStart(2, "0");
+            formattedDate = `${year}-${month}-${day}`;
+          }
         }
+      }
+
+      // 3. Status Normalization (Handles "Present ", "present", "PRESENT")
+      const statusRaw = item.status || "";
+      const statusLower = statusRaw.trim().toLowerCase();
+
+      // Only count if this is the first entry for this date (avoid duplicates)
+      if (!newMap[formattedDate]) {
+        // Store the normalized lowercase status ("present" or "absent")
+        newMap[formattedDate] = statusLower;
+
+        if (statusLower === "present") p++;
+        t++;
       }
     });
 
     return { stats: { present: p, total: t }, processedMap: newMap };
   }, [selectedSubject, fullData]);
 
-  // Update map only when processing changes
   useEffect(() => {
     setAttendanceMap(processedMap);
   }, [processedMap]);
@@ -128,7 +166,9 @@ const AttendanceCalendar = () => {
 
     for (let i = 1; i <= daysInMonth; i++) {
       const dateObj = currentDate.date(i);
+      // Dayjs .format("YYYY-MM-DD") creates the key we need to match
       const dateString = dateObj.format("YYYY-MM-DD");
+
       days.push({
         key: dateString,
         type: "day",
@@ -162,18 +202,20 @@ const AttendanceCalendar = () => {
       let borderCol = "transparent";
       let borderWidth = 0;
 
-      if (item.status === "Present") {
-        bg = theme.present; // Dynamic Present Color
+      // Status is stored as lowercase "present" or "absent" in our map now
+      if (item.status === "present") {
+        bg = theme.present || "#4CAF50"; // Fallback green if theme missing
         textCol = "#FFF";
-      } else if (item.status === "Absent") {
-        bg = theme.absent; // Dynamic Absent Color
+      } else if (item.status === "absent") {
+        bg = theme.absent || "#F44336"; // Fallback red
         textCol = "#FFF";
       }
 
+      // Today Highlight
       if (item.fullDate === dayjs().format("YYYY-MM-DD")) {
-        borderCol = theme.today; // Dynamic Today Border
+        borderCol = theme.today || "#2196F3";
         borderWidth = 2;
-        if (!item.status) textCol = theme.today;
+        if (!item.status) textCol = theme.today || "#2196F3";
       }
 
       return (
@@ -211,7 +253,7 @@ const AttendanceCalendar = () => {
         </View>
       );
     },
-    [colWidth, theme, attendanceMap]
+    [colWidth, theme]
   );
 
   if (loading) {

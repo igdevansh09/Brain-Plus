@@ -15,12 +15,24 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import firestore from "@react-native-firebase/firestore";
+
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  doc,
+  updateDoc,
+} from "@react-native-firebase/firestore";
+import { httpsCallable } from "@react-native-firebase/functions";
+import { db, functions } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
+
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
-import functions from "@react-native-firebase/functions";
 import ScreenWrapper from "../../components/ScreenWrapper";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
 // --- CONSTANTS ---
 const CLASS_OPTIONS = [
@@ -68,7 +80,7 @@ const SUB_ARTS = [
 
 const ManageStudents = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
 
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -109,29 +121,34 @@ const ManageStudents = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- 1. REAL-TIME LISTENER ---
+  // --- 1. REAL-TIME LISTENER (MODULAR) ---
   useEffect(() => {
     setLoading(true);
     const isVerified = viewMode === "active";
 
-    const unsubscribe = firestore()
-      .collection("users")
-      .where("role", "==", "student")
-      .where("verified", "==", isVerified)
-      .onSnapshot(
-        (snapshot) => {
-          const list = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          setStudents(list);
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Firestore Error:", error);
-          setLoading(false);
-        }
-      );
+    // Modular: query(collection(db, ...), where(...))
+    const q = query(
+      collection(db, "users"),
+      where("role", "==", "student"),
+      where("verified", "==", isVerified)
+    );
+
+    // Modular: onSnapshot(query, callback)
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const list = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setStudents(list);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Firestore Error:", error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [viewMode]);
@@ -168,7 +185,6 @@ const ManageStudents = () => {
     setEditName(student.name);
     setEditPhone(student.phone || "");
 
-    // Set Fields & Calculate Initial Available Subjects
     const cls = student.standard || student.studentClass || "";
     const strm = student.stream || "N/A";
 
@@ -186,7 +202,6 @@ const ManageStudents = () => {
     if (type === "class") {
       setEditClass(value);
 
-      // Reset logic based on new class
       if (value === "CS") {
         setEditStream("N/A");
         setEditSubjects(["N/A"]);
@@ -202,7 +217,7 @@ const ManageStudents = () => {
         setEditSubjects([]);
         setAvailableSubjects(SUB_GENERAL);
       } else if (["11th", "12th"].includes(value)) {
-        setEditStream("N/A"); // Force user to re-select stream
+        setEditStream("N/A");
         setEditSubjects([]);
         setAvailableSubjects([]);
       }
@@ -226,7 +241,9 @@ const ManageStudents = () => {
     }
 
     try {
-      await firestore().collection("users").doc(editingId).update({
+      // Modular: updateDoc(doc(db, ...))
+      const studentRef = doc(db, "users", editingId);
+      await updateDoc(studentRef, {
         name: editName,
         phone: editPhone,
         standard: editClass,
@@ -254,7 +271,8 @@ const ManageStudents = () => {
   const performDelete = async (id) => {
     setAlert({ ...alert, visible: false });
     try {
-      const deleteUserFn = functions().httpsCallable("deleteTargetUser");
+      // Modular: httpsCallable(functionsInstance, name)
+      const deleteUserFn = httpsCallable(functions, "deleteTargetUser");
       await deleteUserFn({ targetUid: id });
       showToast("Student deleted.", "success");
     } catch (error) {
@@ -268,19 +286,17 @@ const ManageStudents = () => {
     setApproveModalVisible(true);
   };
 
-  // --- FIXED APPROVAL FUNCTION ---
+  // --- APPROVED FUNCTION (MODULAR) ---
   const confirmApproval = async () => {
     try {
-      // 1. Update the Fee Amount first (Database Only)
-      await firestore().collection("users").doc(selectedStudent.id).update({
+      // 1. Update DB (Modular)
+      const studentRef = doc(db, "users", selectedStudent.id);
+      await updateDoc(studentRef, {
         monthlyFeeAmount: approvalFee,
-        // We do NOT set verified: true here anymore.
-        // We let the Cloud Function handle the verification status
-        // to ensure Auth Claims are synced.
       });
 
-      // 2. Call Cloud Function to Approve (Syncs Auth Claims & DB)
-      const approveUser = functions().httpsCallable("approveUser");
+      // 2. Call Cloud Function (Modular)
+      const approveUser = httpsCallable(functions, "approveUser");
       await approveUser({ targetUid: selectedStudent.id });
 
       setApproveModalVisible(false);

@@ -19,12 +19,27 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import BannerCarousel from "../../components/BannerCarousel";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// Native SDKs
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
-import storage from "@react-native-firebase/storage";
+// --- REFACTOR START: Modular Imports ---
+import { signOut, onAuthStateChanged } from "@react-native-firebase/auth";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+} from "@react-native-firebase/firestore";
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} from "@react-native-firebase/storage";
+import { auth, db, storage } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 import CustomAlert from "../../components/CustomAlert";
 import CustomAlert2 from "../../components/CustomAlert2";
@@ -34,7 +49,7 @@ const { width, height } = Dimensions.get("window");
 
 const TeacherDashboard = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
 
   // Data State
   const [teacherData, setTeacherData] = useState(null);
@@ -104,18 +119,23 @@ const TeacherDashboard = () => {
     return "book-outline";
   };
 
+  // --- DATA FETCHING (MODULAR) ---
   const fetchData = async (uid) => {
     try {
-      const userDoc = await firestore().collection("users").doc(uid).get();
-      if (userDoc.exists) {
+      // 1. Fetch Teacher Data
+      const teacherDocRef = doc(db, "users", uid);
+      const userDoc = await getDoc(teacherDocRef);
+      if (userDoc.exists()) {
         setTeacherData(userDoc.data());
       }
 
-      const salarySnap = await firestore()
-        .collection("salaries")
-        .where("teacherId", "==", uid)
-        .where("status", "==", "Pending")
-        .get();
+      // 2. Fetch Pending Salary
+      const qSalary = query(
+        collection(db, "salaries"),
+        where("teacherId", "==", uid),
+        where("status", "==", "Pending")
+      );
+      const salarySnap = await getDocs(qSalary);
 
       let total = 0;
       salarySnap.forEach((doc) => {
@@ -123,10 +143,12 @@ const TeacherDashboard = () => {
       });
       setPendingSalary(total);
 
-      const noticesSnap = await firestore()
-        .collection("notices")
-        .orderBy("createdAt", "desc")
-        .get();
+      // 3. Fetch Notices
+      const qNotices = query(
+        collection(db, "notices"),
+        orderBy("createdAt", "desc")
+      );
+      const noticesSnap = await getDocs(qNotices);
 
       const noticesList = noticesSnap.docs.map((doc) => ({
         id: doc.id,
@@ -141,10 +163,12 @@ const TeacherDashboard = () => {
   };
 
   useEffect(() => {
-    const current = auth().currentUser;
+    // Modular: auth.currentUser
+    const current = auth.currentUser;
     if (current) fetchData(current.uid);
 
-    const unsubscribe = auth().onAuthStateChanged((user) => {
+    // Modular: onAuthStateChanged
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         fetchData(user.uid);
       }
@@ -155,7 +179,7 @@ const TeacherDashboard = () => {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    const user = auth().currentUser;
+    const user = auth.currentUser;
     if (user) await fetchData(user.uid);
     setRefreshing(false);
   }, []);
@@ -174,17 +198,25 @@ const TeacherDashboard = () => {
   };
 
   const uploadImage = async (uri) => {
-    const uid = auth().currentUser?.uid;
+    const uid = auth.currentUser?.uid;
     if (!uid) return;
 
     setUploading(true);
     try {
+      // Modular Storage
       const filename = `profile_pictures/${uid}/avatar.jpg`;
-      const reference = storage().ref(filename);
-      await reference.putFile(uri);
-      const url = await reference.getDownloadURL();
+      const storageRef = ref(storage, filename);
 
-      await firestore().collection("users").doc(uid).update({
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      // uploadBytes replaces putFile
+      await uploadBytes(storageRef, blob);
+      const url = await getDownloadURL(storageRef);
+
+      // Modular Firestore Update
+      const userRef = doc(db, "users", uid);
+      await updateDoc(userRef, {
         profileImage: url,
       });
 
@@ -203,7 +235,8 @@ const TeacherDashboard = () => {
   const confirmLogout = async () => {
     setLogoutAlertVisible(false);
     try {
-      await auth().signOut();
+      // Modular SignOut
+      await signOut(auth);
       router.replace("/");
     } catch (error) {
       Alert.alert("Error", error.message);

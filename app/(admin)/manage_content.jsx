@@ -15,14 +15,32 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import storage from "@react-native-firebase/storage";
 
-// NATIVE SDK
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  orderBy,
+  onSnapshot,
+  getDocs,
+  serverTimestamp,
+} from "@react-native-firebase/firestore";
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from "@react-native-firebase/storage";
+import { db, storage } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
 // --- SELECTION CONSTANTS ---
 const ALL_CLASSES = [
@@ -64,7 +82,7 @@ const SUB_HIGHER_ALL = [
 const ManageContent = () => {
   const router = useRouter();
   const scrollRef = useRef();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
 
   const [activeTab, setActiveTab] = useState("banners");
 
@@ -111,44 +129,43 @@ const ManageContent = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- 0. INITIAL FETCH ---
+  // --- 0. INITIAL FETCH (MODULAR) ---
   useEffect(() => {
     fetchBanners();
 
-    // Existing Course Listener with SAFETY CHECK
-    const unsubscribe = firestore()
-      .collection("courses")
-      .orderBy("createdAt", "desc")
-      .onSnapshot(
-        (snapshot) => {
-          if (snapshot && snapshot.docs) {
-            const list = snapshot.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            }));
-            setContentList(list);
-          }
-          setLoading(false);
-        },
-        (error) => {
-          console.log("Firestore Error:", error);
-          setLoading(false);
+    const q = query(collection(db, "courses"), orderBy("createdAt", "desc"));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (snapshot) {
+          const list = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+          setContentList(list);
         }
-      );
+        setLoading(false);
+      },
+      (error) => {
+        console.log("Firestore Error:", error);
+        setLoading(false);
+      }
+    );
     return () => unsubscribe();
   }, []);
 
-  // --- BANNER LOGIC ---
+  // --- BANNER LOGIC (MODULAR) ---
   const fetchBanners = async () => {
     try {
-      const snap = await firestore()
-        .collection("banners")
-        .orderBy("createdAt", "desc")
-        .get();
+      const q = query(collection(db, "banners"), orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
 
-      if (snap && snap.docs) {
+      if (!snap.empty) {
         const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         setBanners(list);
+      } else {
+        setBanners([]);
       }
     } catch (e) {
       console.error("Fetch banners error", e);
@@ -173,19 +190,25 @@ const ManageContent = () => {
     setUploadingBanner(true);
     try {
       const filename = `banners/${Date.now()}.jpg`;
-      const reference = storage().ref(filename);
-      await reference.putFile(bannerImage);
-      const url = await reference.getDownloadURL();
+      const storageRef = ref(storage, filename);
 
-      await firestore().collection("banners").add({
+      // Modular Upload
+      const response = await fetch(bannerImage);
+      const blob = await response.blob();
+      await uploadBytes(storageRef, blob);
+      const url = await getDownloadURL(storageRef);
+
+      // Modular Add Doc
+      await addDoc(collection(db, "banners"), {
         imageUrl: url,
-        createdAt: firestore.FieldValue.serverTimestamp(),
+        createdAt: serverTimestamp(),
       });
 
       showToast("Banner added!");
       setBannerImage(null);
       fetchBanners();
     } catch (error) {
+      console.error(error);
       showToast("Upload failed", "error");
     } finally {
       setUploadingBanner(false);
@@ -197,14 +220,16 @@ const ManageContent = () => {
     try {
       if (imageUrl) {
         try {
-          await storage().refFromURL(imageUrl).delete();
+          const imageRef = ref(storage, imageUrl);
+          await deleteObject(imageRef);
           console.log("Image deleted from storage");
         } catch (storageErr) {
           console.warn("Storage delete failed:", storageErr);
         }
       }
 
-      await firestore().collection("banners").doc(id).delete();
+      const docRef = doc(db, "banners", id);
+      await deleteDoc(docRef);
 
       showToast("Banner deleted");
       fetchBanners();
@@ -316,7 +341,7 @@ const ManageContent = () => {
     setPlaylist(playlist.filter((_, i) => i !== index));
   };
 
-  // --- 4. CRUD OPERATIONS ---
+  // --- 4. CRUD OPERATIONS (MODULAR) ---
   const handleSaveOrUpdate = async () => {
     if (!title.trim() || playlist.length === 0)
       return showToast("Title & Videos required", "error");
@@ -341,19 +366,18 @@ const ManageContent = () => {
         thumbnail,
         target: targetString,
         playlist,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
 
       if (isEditing) {
-        await firestore().collection("courses").doc(editingId).update(payload);
+        const courseRef = doc(db, "courses", editingId);
+        await updateDoc(courseRef, payload);
         showToast("Course Updated!", "success");
       } else {
-        await firestore()
-          .collection("courses")
-          .add({
-            ...payload,
-            createdAt: firestore.FieldValue.serverTimestamp(),
-          });
+        await addDoc(collection(db, "courses"), {
+          ...payload,
+          createdAt: serverTimestamp(),
+        });
         showToast("Course Created!", "success");
       }
 
@@ -376,7 +400,8 @@ const ManageContent = () => {
   const performDelete = async (id) => {
     setAlertVisible(false);
     try {
-      await firestore().collection("courses").doc(id).delete();
+      const courseRef = doc(db, "courses", id);
+      await deleteDoc(courseRef);
       showToast("Deleted.", "success");
       if (editingId === id) resetForm();
     } catch (e) {

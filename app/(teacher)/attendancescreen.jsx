@@ -15,11 +15,22 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// NATIVE SDK
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// --- REFACTOR START: Modular Imports ---
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  query,
+  where,
+  serverTimestamp,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
 import CustomAlert from "../../components/CustomAlert";
@@ -30,10 +41,10 @@ dayjs.extend(customParseFormat);
 const CustomCalendar = ({
   selectedDate,
   onSelectDate,
-  markedDates = [], // Array of "DD/MM/YYYY" strings
+  markedDates = [],
   onClose,
 }) => {
-  const { theme } = useTheme(); // Get dynamic theme values
+  const { theme } = useTheme();
   const [currentMonth, setCurrentMonth] = useState(dayjs(selectedDate));
 
   const generateDays = () => {
@@ -214,7 +225,7 @@ const CustomCalendar = ({
 // --- MAIN SCREEN ---
 const TeacherAttendance = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [fetchingStudents, setFetchingStudents] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -254,15 +265,18 @@ const TeacherAttendance = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- 1. FETCH PROFILE ---
+  // --- 1. FETCH PROFILE (MODULAR) ---
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const uid = auth().currentUser?.uid;
-        if (!uid) return;
+        const user = auth.currentUser;
+        if (!user) return;
 
-        const teacherDoc = await firestore().collection("users").doc(uid).get();
-        if (teacherDoc.exists) {
+        // Modular: doc + getDoc
+        const teacherDocRef = doc(db, "users", user.uid);
+        const teacherDoc = await getDoc(teacherDocRef);
+
+        if (teacherDoc.exists()) {
           const data = teacherDoc.data();
           const profile = data.teachingProfile || [];
 
@@ -296,15 +310,17 @@ const TeacherAttendance = () => {
     fetchProfile();
   }, []);
 
-  // --- 2. FETCH MARKED DATES ---
+  // --- 2. FETCH MARKED DATES (MODULAR) ---
   const fetchMarkedDates = useCallback(async () => {
     if (!selectedClass || !selectedSubject) return;
     try {
-      const snap = await firestore()
-        .collection("attendance")
-        .where("classId", "==", selectedClass)
-        .where("subject", "==", selectedSubject)
-        .get();
+      // Modular: query + getDocs
+      const q = query(
+        collection(db, "attendance"),
+        where("classId", "==", selectedClass),
+        where("subject", "==", selectedSubject)
+      );
+      const snap = await getDocs(q);
 
       const dates = snap.docs.map((doc) => doc.data().date);
       setMarkedDates(dates);
@@ -334,19 +350,21 @@ const TeacherAttendance = () => {
 
   const getFormattedDate = (date) => dayjs(date).format("DD/MM/YYYY");
 
+  // --- FETCH ATTENDANCE FOR DATE (MODULAR) ---
   const fetchAttendanceForDate = async () => {
     setFetchingStudents(true);
     try {
       const dateStr = getFormattedDate(currentDate);
 
       // A. Check for existing attendance record
-      const attQuery = firestore()
-        .collection("attendance")
-        .where("classId", "==", selectedClass)
-        .where("subject", "==", selectedSubject)
-        .where("date", "==", dateStr);
+      const attQuery = query(
+        collection(db, "attendance"),
+        where("classId", "==", selectedClass),
+        where("subject", "==", selectedSubject),
+        where("date", "==", dateStr)
+      );
 
-      const attSnap = await attQuery.get();
+      const attSnap = await getDocs(attQuery);
       let savedRecords = null;
 
       if (!attSnap.empty) {
@@ -357,12 +375,13 @@ const TeacherAttendance = () => {
       }
 
       // B. Fetch Students
-      const q = firestore()
-        .collection("users")
-        .where("role", "==", "student")
-        .where("standard", "==", selectedClass);
+      const userQuery = query(
+        collection(db, "users"),
+        where("role", "==", "student"),
+        where("standard", "==", selectedClass)
+      );
 
-      const snapshot = await q.get();
+      const snapshot = await getDocs(userQuery);
       const list = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
@@ -429,36 +448,35 @@ const TeacherAttendance = () => {
         try {
           const dateStr = getFormattedDate(currentDate);
 
-          // Check if doc exists to update or create
-          const q = firestore()
-            .collection("attendance")
-            .where("classId", "==", selectedClass)
-            .where("subject", "==", selectedSubject)
-            .where("date", "==", dateStr);
+          // Check if doc exists to update or create (Modular)
+          const q = query(
+            collection(db, "attendance"),
+            where("classId", "==", selectedClass),
+            where("subject", "==", selectedSubject),
+            where("date", "==", dateStr)
+          );
 
-          const snap = await q.get();
+          const snap = await getDocs(q);
 
           const payload = {
             classId: selectedClass,
             subject: selectedSubject,
             date: dateStr,
-            teacherId: auth().currentUser.uid,
+            teacherId: auth.currentUser.uid,
             records: attendanceData,
-            updatedAt: firestore.FieldValue.serverTimestamp(),
+            updatedAt: serverTimestamp(),
           };
 
           if (!snap.empty) {
-            await firestore()
-              .collection("attendance")
-              .doc(snap.docs[0].id)
-              .update(payload);
+            // Update existing
+            const docRef = doc(db, "attendance", snap.docs[0].id);
+            await updateDoc(docRef, payload);
           } else {
-            await firestore()
-              .collection("attendance")
-              .add({
-                ...payload,
-                createdAt: firestore.FieldValue.serverTimestamp(),
-              });
+            // Create new
+            await addDoc(collection(db, "attendance"), {
+              ...payload,
+              createdAt: serverTimestamp(),
+            });
           }
 
           showToast("Attendance Saved!", "success");
