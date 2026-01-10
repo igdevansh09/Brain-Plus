@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -15,18 +15,32 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 
-// Native SDKs
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
-import storage from "@react-native-firebase/storage";
+// --- Modular Firebase Imports ---
+import { signOut, onAuthStateChanged } from "@react-native-firebase/auth";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  onSnapshot,
+} from "@react-native-firebase/firestore";
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} from "@react-native-firebase/storage";
+
+import { auth, db, storage } from "../../config/firebaseConfig";
 
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
 const AdminDashboard = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
 
   const [adminData, setAdminData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -57,10 +71,11 @@ const AdminDashboard = () => {
     setToastVisible(true);
   };
 
-  const fetchUserData = async (uid) => {
+  // --- 1. MEMOIZED FETCH FUNCTION (Fixes Hook Warning) ---
+  const fetchUserData = useCallback(async (uid) => {
     try {
-      const userDoc = await firestore().collection("users").doc(uid).get();
-      if (userDoc.exists) {
+      const userDoc = await getDoc(doc(db, "users", uid));
+      if (userDoc.exists()) {
         setAdminData(userDoc.data());
       }
     } catch (error) {
@@ -68,33 +83,44 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const handleUpdateAvatar = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.5,
-    });
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+      });
 
-    if (!result.canceled) {
-      uploadImage(result.assets[0].uri);
+      if (!result.canceled && result.assets[0].uri) {
+        await uploadImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error(error);
+      showToast("Error picking image", "error");
     }
   };
 
   const uploadImage = async (uri) => {
-    const uid = auth().currentUser?.uid;
+    const uid = auth.currentUser?.uid;
     if (!uid) return;
 
     setUploading(true);
     try {
       const filename = `profile_pictures/${uid}/avatar.jpg`;
-      const reference = storage().ref(filename);
-      await reference.putFile(uri);
-      const url = await reference.getDownloadURL();
+      const storageRef = ref(storage, filename);
 
-      await firestore().collection("users").doc(uid).update({
+      // Convert URI to Blob
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      await uploadBytes(storageRef, blob);
+      const url = await getDownloadURL(storageRef);
+
+      // Update Firestore
+      await updateDoc(doc(db, "users", uid), {
         profileImage: url,
       });
 
@@ -110,54 +136,56 @@ const AdminDashboard = () => {
 
   // --- LISTENERS ---
   useEffect(() => {
-    const current = auth().currentUser;
-    if (current) fetchUserData(current.uid);
-
-    const unsubscribeAuth = auth().onAuthStateChanged(async (user) => {
+    // Auth Listener
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         await fetchUserData(user.uid);
+      } else {
+        setLoading(false);
       }
     });
 
     // 1. Students Listener
-    const unsubStudents = firestore()
-      .collection("users")
-      .where("role", "==", "student")
-      .where("verified", "==", true)
-      .onSnapshot((snapshot) => {
-        if (snapshot) setActiveStudentCount(snapshot.size);
-      });
+    const qStudents = query(
+      collection(db, "users"),
+      where("role", "==", "student"),
+      where("verified", "==", true)
+    );
+    const unsubStudents = onSnapshot(qStudents, (snapshot) => {
+      if (snapshot) setActiveStudentCount(snapshot.size);
+    });
 
     // 2. Teachers Listener
-    const unsubTeachers = firestore()
-      .collection("users")
-      .where("role", "==", "teacher")
-      .where("verified", "==", true)
-      .onSnapshot((snapshot) => {
-        if (snapshot) setActiveTeacherCount(snapshot.size);
-      });
+    const qTeachers = query(
+      collection(db, "users"),
+      where("role", "==", "teacher"),
+      where("verified", "==", true)
+    );
+    const unsubTeachers = onSnapshot(qTeachers, (snapshot) => {
+      if (snapshot) setActiveTeacherCount(snapshot.size);
+    });
 
     // 3. Pending Listener
-    const unsubPending = firestore()
-      .collection("users")
-      .where("verified", "==", false)
-      .onSnapshot((snapshot) => {
-        if (snapshot) {
-          setPendingCount(snapshot.size);
+    const qPending = query(
+      collection(db, "users"),
+      where("verified", "==", false)
+    );
+    const unsubPending = onSnapshot(qPending, (snapshot) => {
+      if (snapshot) {
+        setPendingCount(snapshot.size);
 
-          let sCount = 0;
-          let tCount = 0;
+        let sCount = 0;
+        let tCount = 0;
+        snapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          if (data.role === "student") sCount++;
+          if (data.role === "teacher") tCount++;
+        });
 
-          snapshot.docs.forEach((doc) => {
-            const data = doc.data();
-            if (data.role === "student") sCount++;
-            if (data.role === "teacher") tCount++;
-          });
-
-          setPendingStudentCount(sCount);
-          setPendingTeacherCount(tCount);
-        }
-      });
+        setPendingStudentCount(sCount);
+        setPendingTeacherCount(tCount);
+      }
+    });
 
     return () => {
       unsubscribeAuth();
@@ -165,19 +193,19 @@ const AdminDashboard = () => {
       unsubTeachers();
       unsubPending();
     };
-  }, []);
+  }, [fetchUserData]); // Dependency added
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    const user = auth().currentUser;
+    const user = auth.currentUser;
     if (user) await fetchUserData(user.uid);
     setRefreshing(false);
-  }, []);
+  }, [fetchUserData]);
 
   const handleConfirmLogout = async () => {
     setLogoutAlertVisible(false);
     try {
-      await auth().signOut();
+      await signOut(auth);
       router.replace("/");
     } catch (error) {
       console.log("Logout Error", error.message);
@@ -323,7 +351,7 @@ const AdminDashboard = () => {
         onRequestClose={() => setProfileModalVisible(false)}
       >
         <View
-          style={{ backgroundColor: theme.blackSoft80 }}
+          style={{ backgroundColor: theme.blackSoft80 || "rgba(0,0,0,0.8)" }}
           className="flex-1 justify-center items-center p-4"
         >
           <View
@@ -521,10 +549,9 @@ const AdminDashboard = () => {
 
         <View className="flex-row flex-wrap justify-between">
           {adminActions.map((item) => {
-            // Determine badge count based on Item ID
             let badgeCount = 0;
-            if (item.id === "1") badgeCount = pendingStudentCount; // Manage Students
-            if (item.id === "2") badgeCount = pendingTeacherCount; // Manage Teachers
+            if (item.id === "1") badgeCount = pendingStudentCount;
+            if (item.id === "2") badgeCount = pendingTeacherCount;
 
             return (
               <TouchableOpacity
@@ -546,7 +573,6 @@ const AdminDashboard = () => {
                   {item.name}
                 </Text>
 
-                {/* --- NOTIFICATION BADGE --- */}
                 {badgeCount > 0 && (
                   <View
                     style={{

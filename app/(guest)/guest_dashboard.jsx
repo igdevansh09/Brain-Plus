@@ -12,31 +12,41 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// --- NATIVE SDK IMPORTS ---
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// Refactor: Custom Header
+import CustomHeader from "../../components/CustomHeader";
+
+// Refactor: Modular Imports
+import { signInAnonymously } from "@react-native-firebase/auth";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+} from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig";
 
 const GuestDashboard = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get theme values
+  const { theme, isDark } = useTheme();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const initializeGuest = async () => {
       try {
-        // 1. Silent Anonymous Login
-        if (!auth().currentUser) {
-          await auth().signInAnonymously();
+        // 1. Silent Anonymous Login (Modular)
+        if (!auth.currentUser) {
+          await signInAnonymously(auth);
         }
 
-        // 2. Fetch Guest Content (Native SDK)
-        const snapshot = await firestore()
-          .collection("courses")
-          .where("target", "==", "Guest")
-          .get();
+        // 2. Fetch Guest Content (Modular)
+        const q = query(
+          collection(db, "courses"),
+          where("target", "==", "Guest")
+        );
+        const snapshot = await getDocs(q);
 
         const list = snapshot.docs.map((doc) => ({
           id: doc.id,
@@ -95,29 +105,24 @@ const GuestDashboard = () => {
         barStyle={isDark ? "light-content" : "dark-content"}
       />
 
-      {/* Header */}
-      <View className="px-4 py-4 flex-row justify-between items-center">
-        <View>
-          <Text
-            style={{ color: theme.textPrimary }}
-            className="text-2xl font-bold"
+      {/* --- ADDED showBack={true} HERE --- */}
+      <CustomHeader
+        title="Guest Access"
+        subtitle="Explore free content"
+        showBack={true}
+        // Passing the Login Button as a custom right component
+        rightComponent={
+          <TouchableOpacity
+            onPress={() => router.push("/login_options")}
+            style={{ backgroundColor: theme.accent }}
+            className="px-4 py-2 rounded-full"
           >
-            Guest Access
-          </Text>
-          <Text style={{ color: theme.textSecondary }} className="text-sm">
-            Explore free content
-          </Text>
-        </View>
-        <TouchableOpacity
-          onPress={() => router.push("/login_options")}
-          style={{ backgroundColor: theme.accent }}
-          className="px-4 py-2 rounded-full"
-        >
-          <Text style={{ color: theme.textDark }} className="font-bold">
-            Login
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <Text style={{ color: theme.textDark }} className="font-bold">
+              Login
+            </Text>
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView
         className="flex-1 px-4 mt-2"
@@ -125,7 +130,7 @@ const GuestDashboard = () => {
       >
         <Text
           style={{ color: theme.accent }}
-          className="text-xl font-bold mb-4"
+          className="text-xl font-bold mb-4 mt-4"
         >
           Free Demo Classes
         </Text>

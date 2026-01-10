@@ -16,16 +16,19 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// Refactor: Modular Imports
+import { signInWithPhoneNumber, signOut } from "@react-native-firebase/auth";
+import { doc, getDoc } from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig";
+
 import CustomToast from "../../components/CustomToast";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
 const logo = require("../../assets/images/dinetimelogo.png");
 
 const TeacherSignIn = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
 
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -58,7 +61,7 @@ const TeacherSignIn = () => {
       return showToast("Enter valid 10-digit number", "error");
     setLoading(true);
     try {
-      const confirmation = await auth().signInWithPhoneNumber(`+91${phone}`);
+      const confirmation = await signInWithPhoneNumber(auth, `+91${phone}`);
       setConfirmResult(confirmation);
       setStep("OTP");
       setResendTimer(60);
@@ -87,9 +90,10 @@ const TeacherSignIn = () => {
       const userCredential = await confirmResult.confirm(otp);
       const uid = userCredential.user.uid;
 
-      const userDoc = await firestore().collection("users").doc(uid).get();
+      const userRef = doc(db, "users", uid);
+      const userDoc = await getDoc(userRef);
 
-      if (!userDoc.exists) {
+      if (!userDoc.exists()) {
         showToast("Account not found. Please Register.", "error");
         await forceLogoutAfterDelay();
         return;
@@ -104,7 +108,6 @@ const TeacherSignIn = () => {
         return;
       }
 
-      // ✅ CHECK: Verified Status Only
       if (userData?.verified === false) {
         showToast("Account pending Admin approval.", "error");
         await forceLogoutAfterDelay();
@@ -128,7 +131,7 @@ const TeacherSignIn = () => {
 
   const forceLogoutAfterDelay = async () => {
     setTimeout(async () => {
-      await auth().signOut();
+      await signOut(auth);
       setStep("PHONE");
       setOtp("");
       setConfirmResult(null);
@@ -142,7 +145,7 @@ const TeacherSignIn = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+    <SafeAreaView style={{ backgroundColor: theme.bgPrimary, flex: 1 }}>
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor={theme.bgPrimary}

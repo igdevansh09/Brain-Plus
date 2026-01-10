@@ -17,18 +17,23 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import auth from "@react-native-firebase/auth";
+// Refactor: Modular Auth Imports
+import {
+  signInWithEmailAndPassword,
+  signOut,
+} from "@react-native-firebase/auth";
+import { auth } from "../../config/firebaseConfig"; // Import initialized instance
 
 import logo from "../../assets/images/dinetimelogo.png";
 import validationSchema from "../../utils/adminSchema";
 import CustomToast from "../../components/CustomToast";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
 const entryImg = require("../../assets/images/Frame.png");
 
 const AdminSignin = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get theme values
+  const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(false);
 
   const [toastVisible, setToastVisible] = useState(false);
@@ -44,20 +49,23 @@ const AdminSignin = () => {
   const handleAdminLogin = async (values) => {
     setLoading(true);
     try {
-      const userCredential = await auth().signInWithEmailAndPassword(
+      // Modular: signInWithEmailAndPassword(authInstance, email, password)
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
         values.email,
         values.password
       );
 
       const user = userCredential.user;
+      // Note: getIdTokenResult is still a method on the User object
       const idTokenResult = await user.getIdTokenResult(true);
 
       if (idTokenResult.claims.role === "admin") {
         console.log("✅ Verified Admin");
-        // Success! AuthContext will pick this up and Redirect automatically.
+        // Success! AuthContext will pick this up.
       } else {
-        // Not an admin? Sign them out immediately.
-        await auth().signOut();
+        // Modular: signOut(authInstance)
+        await signOut(auth);
         showToast("Access Denied: You are not an Admin.", "error");
       }
     } catch (error) {
@@ -82,12 +90,10 @@ const AdminSignin = () => {
   };
 
   return (
-    <SafeAreaView 
-      style={{ backgroundColor: theme.bgPrimary, flex: 1 }} // Dynamic Background
-    >
-      <StatusBar 
-        barStyle={isDark ? "light-content" : "dark-content"} 
-        backgroundColor={theme.bgPrimary} 
+    <SafeAreaView style={{ backgroundColor: theme.bgPrimary, flex: 1 }}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={theme.bgPrimary}
       />
 
       <CustomToast
@@ -101,7 +107,10 @@ const AdminSignin = () => {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text style={{ color: theme.textPrimary }} className="text-lg font-semibold ml-4">
+        <Text
+          style={{ color: theme.textPrimary }}
+          className="text-lg font-semibold ml-4"
+        >
           Back
         </Text>
       </View>
@@ -120,8 +129,8 @@ const AdminSignin = () => {
           >
             <View className="m-1 flex justify-center items-center">
               <Image source={logo} style={{ width: 300, height: 200 }} />
-              <Text 
-                style={{ color: theme.textPrimary }} 
+              <Text
+                style={{ color: theme.textPrimary }}
                 className="text-lg text-center font-bold mb-10"
               >
                 Admin Login
@@ -142,15 +151,16 @@ const AdminSignin = () => {
                     touched,
                   }) => (
                     <View className="w-full">
-                      {/* Email Input */}
-                      <Text style={{ color: theme.accent }} className="mt-2 mb-2">
+                      <Text
+                        style={{ color: theme.accent }}
+                        className="mt-2 mb-2"
+                      >
                         Email
                       </Text>
                       <TextInput
-                        style={{ 
-                          borderColor: theme.border, 
+                        style={{
+                          borderColor: theme.textPrimary,
                           color: theme.textPrimary,
-                          backgroundColor: theme.bgSecondary 
                         }}
                         className="h-12 border rounded px-3 mb-1"
                         keyboardType="email-address"
@@ -162,20 +172,24 @@ const AdminSignin = () => {
                         placeholderTextColor={theme.textMuted}
                       />
                       {touched.email && errors.email && (
-                        <Text style={{ color: theme.error }} className="text-xs mb-3">
+                        <Text
+                          style={{ color: theme.dueRed }}
+                          className="text-xs mb-3"
+                        >
                           {errors.email}
                         </Text>
                       )}
 
-                      {/* Password Input */}
-                      <Text style={{ color: theme.accent }} className="mt-2 mb-2">
+                      <Text
+                        style={{ color: theme.accent }}
+                        className="mt-2 mb-2"
+                      >
                         Password
                       </Text>
                       <TextInput
-                        style={{ 
-                          borderColor: theme.border, 
+                        style={{
+                          borderColor: theme.textPrimary,
                           color: theme.textPrimary,
-                          backgroundColor: theme.bgSecondary 
                         }}
                         className="h-12 border rounded px-3 mb-1"
                         secureTextEntry
@@ -186,25 +200,29 @@ const AdminSignin = () => {
                         placeholderTextColor={theme.textMuted}
                       />
                       {touched.password && errors.password && (
-                        <Text style={{ color: theme.error }} className="text-xs mb-3">
+                        <Text
+                          style={{ color: theme.dueRed }}
+                          className="text-xs mb-3"
+                        >
                           {errors.password}
                         </Text>
                       )}
 
-                      {/* Submit Button */}
                       <TouchableOpacity
                         onPress={handleSubmit}
                         disabled={loading}
-                        style={{ 
-                          backgroundColor: loading ? theme.gray600 : theme.accent 
+                        style={{
+                          backgroundColor: loading
+                            ? theme.gray600
+                            : theme.accent,
                         }}
                         className="p-3 my-2 rounded-lg mt-8"
                       >
                         {loading ? (
                           <ActivityIndicator color={theme.bgPrimary} />
                         ) : (
-                          <Text 
-                            style={{ color: theme.textDark }} 
+                          <Text
+                            style={{ color: theme.textDark }}
                             className="text-lg font-semibold text-center"
                           >
                             Sign In

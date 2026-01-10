@@ -190,20 +190,29 @@ const ManageTeachers = () => {
     }
   };
 
+  // --- FIXED APPROVAL FUNCTION ---
   const confirmApproval = async () => {
     try {
+      // 1. Update Salary Info first (Database Only)
       await firestore()
         .collection("users")
         .doc(selectedTeacher.id)
         .update({
-          verified: true,
+          // We do NOT set verified: true here anymore.
+          // We let the Cloud Function handle the verification status.
           salary: approvalType === "Fixed" ? approvalSalary : "0",
           salaryType: approvalType,
         });
+
+      // 2. Call Cloud Function to Approve (Syncs Auth Claims & DB)
+      const approveUser = functions().httpsCallable("approveUser");
+      await approveUser({ targetUid: selectedTeacher.id });
+
       setApproveModalVisible(false);
       showToast("Teacher approved!", "success");
     } catch (e) {
-      showToast("Approval failed", "error");
+      console.error(e);
+      showToast("Approval failed. Check network.", "error");
     }
   };
 

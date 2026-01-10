@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,16 +16,19 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// Refactor: Modular Imports
+import { signInWithPhoneNumber, signOut } from "@react-native-firebase/auth";
+import { doc, getDoc } from "@react-native-firebase/firestore";
+import { auth, db } from "../../config/firebaseConfig";
+
 import CustomToast from "../../components/CustomToast";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
 const logo = require("../../assets/images/dinetimelogo.png");
 
 const StudentSignIn = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
 
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -34,7 +37,6 @@ const StudentSignIn = () => {
   const [loading, setLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
 
-  // Local Toast State
   const [toast, setToast] = useState({
     visible: false,
     msg: "",
@@ -44,7 +46,6 @@ const StudentSignIn = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // Timer logic
   useEffect(() => {
     let interval;
     if (resendTimer > 0) {
@@ -62,7 +63,8 @@ const StudentSignIn = () => {
 
     setLoading(true);
     try {
-      const confirmation = await auth().signInWithPhoneNumber(`+91${phone}`);
+      // Modular: signInWithPhoneNumber
+      const confirmation = await signInWithPhoneNumber(auth, `+91${phone}`);
       setConfirmResult(confirmation);
       setStep("OTP");
       setResendTimer(60);
@@ -73,8 +75,6 @@ const StudentSignIn = () => {
         showToast("Too many attempts. Please try again in 1 hour.", "error");
       } else if (error.code === "auth/invalid-phone-number") {
         showToast("Invalid phone number format.", "error");
-      } else if (error.code === "auth/quota-exceeded") {
-        showToast("SMS Quota Exceeded. Contact Support.", "error");
       } else {
         showToast("Failed to send OTP. Try again later.", "error");
       }
@@ -89,11 +89,15 @@ const StudentSignIn = () => {
     setLoading(true);
 
     try {
+      // Confirm result is method on the object returned by signInWithPhoneNumber
       const userCredential = await confirmResult.confirm(otp);
       const uid = userCredential.user.uid;
-      const userDoc = await firestore().collection("users").doc(uid).get();
 
-      if (!userDoc.exists) {
+      // Modular: getDoc(doc(...))
+      const userRef = doc(db, "users", uid);
+      const userDoc = await getDoc(userRef);
+
+      if (!userDoc.exists()) {
         showToast("Account not found. Please Register.", "error");
         await forceLogoutAfterDelay();
         return;
@@ -130,7 +134,8 @@ const StudentSignIn = () => {
 
   const forceLogoutAfterDelay = async () => {
     setTimeout(async () => {
-      await auth().signOut();
+      // Modular: signOut
+      await signOut(auth);
       setStep("PHONE");
       setOtp("");
       setConfirmResult(null);
@@ -144,7 +149,7 @@ const StudentSignIn = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+    <SafeAreaView style={{ backgroundColor: theme.bgPrimary, flex: 1 }}>
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor={theme.bgPrimary}

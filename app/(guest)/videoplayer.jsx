@@ -9,21 +9,24 @@ import {
   Dimensions,
   Alert,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
-// --- NATIVE SDK ---
-import firestore from "@react-native-firebase/firestore";
+// Refactor: Custom Header
+import CustomHeader from "../../components/CustomHeader";
+
+// Refactor: Modular Imports
+import { doc, getDoc } from "@react-native-firebase/firestore";
+import { db } from "../../config/firebaseConfig";
 
 const { width } = Dimensions.get("window");
 
 const GuestVideoPlayer = () => {
-  const router = useRouter();
   const params = useLocalSearchParams();
-  const { theme, isDark } = useTheme(); // Get theme values
+  const { theme, isDark } = useTheme();
 
   // Params
   const {
@@ -47,12 +50,12 @@ const GuestVideoPlayer = () => {
       // Priority 1: Fetch fresh data if ID exists
       if (courseId) {
         try {
-          const doc = await firestore()
-            .collection("courses")
-            .doc(courseId)
-            .get();
-          if (doc.exists) {
-            const data = doc.data();
+          // Modular: getDoc(doc(db, ...))
+          const docRef = doc(db, "courses", courseId);
+          const docSnap = await getDoc(docRef);
+
+          if (docSnap.exists()) {
+            const data = docSnap.data();
             setPlaylist(data.playlist || []);
             setCourseInfo({
               title: data.title || "Guest Course",
@@ -119,9 +122,6 @@ const GuestVideoPlayer = () => {
     if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
   };
 
-  const handleSignUp = () => {
-    router.replace("/(auth)/studentsignup");
-  };
 
   // --- 3. RENDER ITEMS ---
   const renderPlaylistItem = ({ item, index }) => {
@@ -199,6 +199,9 @@ const GuestVideoPlayer = () => {
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor="black" // Keep black for video area focus
       />
+
+      {/* --- ADDED HEADER WITH BACK BUTTON --- */}
+      <CustomHeader title="Course Player" showBack={true} />
 
       {/* --- VIDEO PLAYER --- */}
       <View className="bg-black w-full aspect-video relative z-10 shadow-lg">
@@ -296,24 +299,6 @@ const GuestVideoPlayer = () => {
                 </TouchableOpacity>
               </View>
             </View>
-
-            {/* UPSELL BUTTON (Guest Specific) */}
-            <TouchableOpacity
-              onPress={handleSignUp}
-              style={{
-                backgroundColor: theme.bgSecondary,
-                borderColor: theme.accentSoft50 || theme.accent,
-              }}
-              className="flex-row items-center justify-center py-3 rounded-xl border mt-5"
-            >
-              <Ionicons name="lock-closed" size={18} color={theme.accent} />
-              <Text
-                style={{ color: theme.textPrimary }}
-                className="ml-2 font-bold text-xs uppercase"
-              >
-                Sign Up for Full Access
-              </Text>
-            </TouchableOpacity>
           </View>
 
           {/* PLAYLIST HEADER */}

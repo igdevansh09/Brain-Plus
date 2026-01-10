@@ -16,11 +16,14 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// Refactor: Modular Imports
+import { signInWithPhoneNumber, signOut } from "@react-native-firebase/auth";
+import { doc, setDoc, serverTimestamp } from "@react-native-firebase/firestore";
+import { getToken } from "@react-native-firebase/messaging";
+import { auth, db, messaging } from "../../config/firebaseConfig";
+
 import CustomToast from "../../components/CustomToast";
-import messaging from "@react-native-firebase/messaging";
-import { useTheme } from "../../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../../context/ThemeContext";
 
 // --- CONSTANTS ---
 const CLASSES = [
@@ -41,7 +44,6 @@ const CLASSES = [
 ];
 const STREAMS = ["Science", "Commerce", "Arts"];
 
-// Subject Pools
 const SUB_GENERAL = ["English", "Hindi", "Maths", "Science", "Social Science"];
 const SUB_SCIENCE = [
   "Physics",
@@ -69,12 +71,12 @@ const SUB_ARTS = [
 
 const StudentSignUp = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
+
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [confirmResult, setConfirmResult] = useState(null);
 
-  // Form Data
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -83,7 +85,6 @@ const StudentSignUp = () => {
   const [selectedStream, setSelectedStream] = useState(null);
   const [selectedSubjects, setSelectedSubjects] = useState([]);
 
-  // UI State
   const [modalType, setModalType] = useState(null); // 'class' | 'stream'
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [isSubjectLocked, setIsSubjectLocked] = useState(false);
@@ -98,7 +99,6 @@ const StudentSignUp = () => {
 
   // --- EFFECT: Handle Class/Stream Changes ---
   useEffect(() => {
-    // Reset Logic on Class Change
     if (!selectedClass) {
       setAvailableSubjects([]);
       setIsSubjectLocked(false);
@@ -106,48 +106,36 @@ const StudentSignUp = () => {
       return;
     }
 
-    // 1. CS Logic
     if (selectedClass === "CS") {
       setIsSubjectLocked(true);
       setLockMessage("No subjects needed for CS.");
       setSelectedSubjects(["N/A"]);
       setSelectedStream("N/A");
-    }
-    // 2. Prep to 3rd Logic
-    else if (["Prep", "1st", "2nd", "3rd"].includes(selectedClass)) {
+    } else if (["Prep", "1st", "2nd", "3rd"].includes(selectedClass)) {
       setIsSubjectLocked(true);
       setLockMessage("Course covers All Subjects.");
       setSelectedSubjects(["All Subjects"]);
       setSelectedStream("N/A");
-    }
-    // 3. 4th to 10th Logic
-    else if (
+    } else if (
       ["4th", "5th", "6th", "7th", "8th", "9th", "10th"].includes(selectedClass)
     ) {
       setIsSubjectLocked(false);
       setLockMessage("");
       setAvailableSubjects(SUB_GENERAL);
       setSelectedStream("N/A");
-      // Clear previous selections if they don't match
       setSelectedSubjects([]);
-    }
-    // 4. 11th & 12th Logic
-    else if (["11th", "12th"].includes(selectedClass)) {
+    } else if (["11th", "12th"].includes(selectedClass)) {
       setIsSubjectLocked(false);
       setLockMessage("");
-
-      // Populate subjects based on Stream
       if (selectedStream === "Science") setAvailableSubjects(SUB_SCIENCE);
       else if (selectedStream === "Commerce")
         setAvailableSubjects(SUB_COMMERCE);
       else if (selectedStream === "Arts") setAvailableSubjects(SUB_ARTS);
-      else setAvailableSubjects([]); // Wait for stream selection
-
+      else setAvailableSubjects([]);
       setSelectedSubjects([]);
     }
   }, [selectedClass, selectedStream]);
 
-  // --- HANDLER: Toggle Subject (Multi-Select) ---
   const toggleSubject = (subject) => {
     if (selectedSubjects.includes(subject)) {
       setSelectedSubjects((prev) => prev.filter((s) => s !== subject));
@@ -162,33 +150,28 @@ const StudentSignUp = () => {
     if (!phone || phone.length !== 10)
       return showToast("Invalid Phone Number", "error");
     if (!selectedClass) return showToast("Select your Class", "error");
-
-    // Stream check
     if (["11th", "12th"].includes(selectedClass) && !selectedStream) {
       return showToast("Select your Stream", "error");
     }
-
-    // Subject check (if not locked)
     if (!isSubjectLocked && selectedSubjects.length === 0) {
       return showToast("Select at least one subject", "error");
     }
 
     setLoading(true);
     try {
-      const confirmation = await auth().signInWithPhoneNumber(`+91${phone}`);
+      // Modular: signInWithPhoneNumber
+      const confirmation = await signInWithPhoneNumber(auth, `+91${phone}`);
       setConfirmResult(confirmation);
       setStep(2);
       showToast("OTP Sent!", "success");
     } catch (error) {
       console.error(error);
-
-      // --- CUSTOM ERROR HANDLING ---
       if (error.code === "auth/too-many-requests") {
         showToast("Too many attempts. Please try again in 1 hour.", "error");
-      } else if (error.code === "auth/invalid-phone-number") {
+      }else if (error.code === "auth/invalid-phone-number") {
         showToast("Invalid phone number format.", "error");
       } else if (error.code === "auth/quota-exceeded") {
-        showToast("SMS Quota Exceeded. Contact Support.", "error");
+        showToast("SMS Quota Exceeded. Contact Support.", "error")
       } else {
         showToast("Failed to send OTP. Try again later.", "error");
       }
@@ -206,35 +189,32 @@ const StudentSignUp = () => {
       const res = await confirmResult.confirm(otp);
       const uid = res.user.uid;
 
-      // 2. FETCH THE TOKEN (Handle errors gracefully)
+      // 2. FETCH THE TOKEN (Modular)
       let fcmToken = "";
       try {
-        fcmToken = await messaging().getToken();
+        fcmToken = await getToken(messaging);
       } catch (e) {
         console.log("Failed to get FCM token", e);
       }
 
-      // 3. SAVE IT TO FIRESTORE
-      await firestore()
-        .collection("users")
-        .doc(uid)
-        .set({
-          name: name.trim(),
-          phone: `+91${phone}`,
-          role: "student",
-          standard: selectedClass,
-          stream: selectedStream || "N/A",
-          enrolledSubjects: selectedSubjects,
-          verified: false,
-          monthlyFeeAmount: "0",
-          fcmToken: fcmToken, // <--- CRITICAL ADDITION
-          createdAt: firestore.FieldValue.serverTimestamp(),
-        });
+      // 3. SAVE TO FIRESTORE (Modular)
+      await setDoc(doc(db, "users", uid), {
+        name: name.trim(),
+        phone: `+91${phone}`,
+        role: "student",
+        standard: selectedClass,
+        stream: selectedStream || "N/A",
+        enrolledSubjects: selectedSubjects,
+        verified: false,
+        monthlyFeeAmount: "0",
+        fcmToken: fcmToken,
+        createdAt: serverTimestamp(),
+      });
 
       showToast("Registration Success! Wait for Admin Approval.", "success");
 
       setTimeout(async () => {
-        await auth().signOut();
+        await signOut(auth);
         router.replace("/(auth)/studentsignin");
       }, 500);
     } catch (error) {
@@ -246,19 +226,17 @@ const StudentSignUp = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+    <SafeAreaView style={{ backgroundColor: theme.bgPrimary, flex: 1 }}>
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor={theme.bgPrimary}
       />
-
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
         type={toast.type}
         onHide={() => setToast({ ...toast, visible: false })}
       />
-
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -344,7 +322,6 @@ const StudentSignUp = () => {
                 </Text>
               </TouchableOpacity>
 
-              {/* Stream Selector (Conditional) */}
               {["11th", "12th"].includes(selectedClass) && (
                 <>
                   <Text
@@ -396,7 +373,6 @@ const StudentSignUp = () => {
               </Text>
 
               {isSubjectLocked ? (
-                // Locked State (CS or Prep-3rd)
                 <View
                   style={{
                     backgroundColor: theme.bgSecondary,
@@ -412,7 +388,6 @@ const StudentSignUp = () => {
                   </Text>
                 </View>
               ) : (
-                // Multi-Select Grid
                 <View className="flex-row flex-wrap mb-6">
                   {availableSubjects.length > 0 ? (
                     availableSubjects.map((sub) => {

@@ -1,13 +1,23 @@
-import messaging from "@react-native-firebase/messaging";
+import {
+  getMessaging,
+  getToken,
+  requestPermission,
+  AuthorizationStatus,
+} from "@react-native-firebase/messaging";
 import { PermissionsAndroid, Platform } from "react-native";
+
+// Initialize Messaging Instance
+// We define this at the top level so we can pass it to the modular functions
+const messaging = getMessaging();
 
 // 1. Request Permission (Required for iOS & Android 13+)
 export const requestUserPermission = async () => {
   if (Platform.OS === "ios") {
-    const authStatus = await messaging().requestPermission();
+    // Modular style: Pass the instance to the function
+    const authStatus = await requestPermission(messaging);
     const enabled =
-      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+      authStatus === AuthorizationStatus.AUTHORIZED ||
+      authStatus === AuthorizationStatus.PROVISIONAL;
     return enabled;
   } else if (Platform.OS === "android" && Platform.Version >= 33) {
     const granted = await PermissionsAndroid.request(
@@ -21,23 +31,21 @@ export const requestUserPermission = async () => {
 // 2. Get the FCM Token (Used by AuthContext)
 export const getFCMToken = async () => {
   try {
-    const hasPermission = await messaging().hasPermission();
+    // Note: In the modular SDK, we typically just call requestPermission()
+    // It will check the current status and return it without showing a prompt
+    // if already determined.
+    const authStatus = await requestPermission(messaging);
+
     if (
-      hasPermission === messaging.AuthorizationStatus.AUTHORIZED ||
-      hasPermission === messaging.AuthorizationStatus.PROVISIONAL ||
-      hasPermission === 1
+      authStatus === AuthorizationStatus.AUTHORIZED ||
+      authStatus === AuthorizationStatus.PROVISIONAL
     ) {
-      const token = await messaging().getToken();
+      // Modular style: getToken(messagingInstance)
+      const token = await getToken(messaging);
       console.log("FCM Token:", token);
       return token;
-    } else {
-      const granted = await requestUserPermission();
-      if (granted) {
-        const token = await messaging().getToken();
-        console.log("FCM Token:", token);
-        return token;
-      }
     }
+
     console.log("Notification permission denied");
     return null;
   } catch (error) {
@@ -46,15 +54,8 @@ export const getFCMToken = async () => {
   }
 };
 
-
-
-// 3. Notification Listener (returns unsubscribe cleanup)
-// Minimal-safe implementation: returns a cleanup function so imports expecting
-// `NotificationListener` won't be undefined. Notification UI/listeners
-// are handled by `NotificationManager` component to avoid duplicate handlers.
+// 3. Notification Listener
+// Kept empty as listeners are handled in components/NotificationManager.jsx
 export const NotificationListener = () => {
-  // If you later want a centralized listener here, implement messaging handlers
-  // similar to those in `components/NotificationManager` and return the
-  // unsubscriber(s). For now, return a no-op cleanup function.
   return () => {};
 };

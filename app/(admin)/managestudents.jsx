@@ -4,7 +4,6 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  StatusBar,
   TextInput,
   ActivityIndicator,
   Modal,
@@ -14,7 +13,6 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import firestore from "@react-native-firebase/firestore";
@@ -270,16 +268,26 @@ const ManageStudents = () => {
     setApproveModalVisible(true);
   };
 
+  // --- FIXED APPROVAL FUNCTION ---
   const confirmApproval = async () => {
     try {
+      // 1. Update the Fee Amount first (Database Only)
       await firestore().collection("users").doc(selectedStudent.id).update({
-        verified: true,
         monthlyFeeAmount: approvalFee,
+        // We do NOT set verified: true here anymore.
+        // We let the Cloud Function handle the verification status
+        // to ensure Auth Claims are synced.
       });
+
+      // 2. Call Cloud Function to Approve (Syncs Auth Claims & DB)
+      const approveUser = functions().httpsCallable("approveUser");
+      await approveUser({ targetUid: selectedStudent.id });
+
       setApproveModalVisible(false);
       showToast("Student approved!", "success");
     } catch (e) {
-      showToast("Approval failed", "error");
+      console.error(e);
+      showToast("Approval failed. Check network.", "error");
     }
   };
 

@@ -4,13 +4,14 @@ import {
   createUserWithEmailAndPassword,
   inMemoryPersistence,
 } from "firebase/auth";
-import { firebaseConfig } from "../config/firebaseConfig";
+import app from "../config/firebaseConfig"; // Import the initialized Native App
 
 export const createUserWithoutLoggingOut = async (email, password) => {
-  const secondaryApp = initializeApp(
-    firebaseConfig,
-    `SecondaryApp-${Date.now()}`
-  );
+  // Extract the raw config (apiKey, appId, etc.) from the existing Native App
+  const config = app.options;
+
+  // Initialize a secondary Web SDK app using the same credentials
+  const secondaryApp = initializeApp(config, `SecondaryApp-${Date.now()}`);
 
   const secondaryAuth = initializeAuth(secondaryApp, {
     persistence: inMemoryPersistence,

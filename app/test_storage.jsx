@@ -8,14 +8,19 @@ import {
   ActivityIndicator,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import storage from "@react-native-firebase/storage";
-import auth from "@react-native-firebase/auth";
-import { useTheme } from "../context/ThemeContext"; // Import theme hook
+// Refactor: Import Modular SDK functions
+import {
+  getStorage,
+  ref,
+  getDownloadURL,
+} from "@react-native-firebase/storage";
+import { getAuth } from "@react-native-firebase/auth";
+import { useTheme } from "../context/ThemeContext";
 
 export default function TestStorage() {
   const [image, setImage] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const { theme } = useTheme(); // Get dynamic theme
+  const { theme } = useTheme();
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -32,17 +37,27 @@ export default function TestStorage() {
   };
 
   const uploadImage = async (uri) => {
-    const user = auth().currentUser;
+    // Modular: Initialize auth and get user
+    const auth = getAuth();
+    const user = auth.currentUser;
+
     if (!user) return Alert.alert("Login First");
 
     setUploading(true);
     const filename = `profile_pictures/${user.uid}/profile.jpg`;
-    const reference = storage().ref(filename);
+
+    // Modular: Get storage instance and create reference
+    const storage = getStorage();
+    const storageRef = ref(storage, filename);
 
     try {
-      await reference.putFile(uri);
-      const url = await reference.getDownloadURL();
-      Alert.alert("Success!", "Image uploaded to: " + url);
+      // Note: In React Native Firebase Modular, putFile is available on the reference object
+      // This is slightly different from Web SDK (uploadBytes) but is the correct way for RN local files
+      await storageRef.putFile(uri);
+
+      // Modular: getDownloadURL(ref)
+      const url = await getDownloadURL(storageRef);
+      Alert.alert("Success", "Image uploaded!");
       console.log(url);
     } catch (error) {
       console.error(error);
@@ -58,7 +73,7 @@ export default function TestStorage() {
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: theme.bgPrimary, // Dynamic Background
+        backgroundColor: theme.bgPrimary,
       }}
     >
       <TouchableOpacity
@@ -92,12 +107,12 @@ export default function TestStorage() {
         <Image
           source={{ uri: image }}
           style={{
+            marginTop: 20,
             width: 200,
             height: 200,
-            marginTop: 20,
-            borderRadius: 12,
+            borderRadius: 100,
             borderWidth: 2,
-            borderColor: theme.border,
+            borderColor: theme.accent,
           }}
         />
       )}

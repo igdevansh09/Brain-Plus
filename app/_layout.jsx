@@ -1,10 +1,16 @@
 import React, { useEffect } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
-import { View, ActivityIndicator, LogBox } from "react-native";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import "../global.css";
 import { ToastProvider } from "../context/ToastContext";
-import messaging from "@react-native-firebase/messaging";
+
+// --- REFACTOR START: Modular Imports ---
+import {
+  getMessaging,
+  setBackgroundMessageHandler,
+} from "@react-native-firebase/messaging";
+// --- REFACTOR END ---
+
 import {
   NotificationListener,
   requestUserPermission,
@@ -13,18 +19,15 @@ import NotificationManager from "../components/NotificationManager";
 import AnimatedSplashScreen from "../components/AnimatedSplashScreen";
 import { ThemeProvider } from "../context/ThemeContext";
 
-// Ignore Firebase Deprecation Warnings
-LogBox.ignoreLogs([
-  "This method is deprecated",
-  "Method called was",
-  "Please use `getApp()` instead",
-  "Please see migration guide for more details",
-]);
+// --- REFACTOR START: Modular Background Handler ---
+// 1. Initialize instance
+const messaging = getMessaging();
 
-// Background Handler
-messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+// 2. Use the functional syntax: setBackgroundMessageHandler(instance, callback)
+setBackgroundMessageHandler(messaging, async (remoteMessage) => {
   console.log("Message handled in the background!", remoteMessage);
 });
+// --- REFACTOR END ---
 
 const InitialLayout = () => {
   const { user, userRole, loading } = useAuth();
@@ -46,8 +49,6 @@ const InitialLayout = () => {
     };
   }, []);
 
-  // --- Routing Logic ---
-  // --- Routing Logic ---
   useEffect(() => {
     if (loading) return;
 
@@ -56,30 +57,15 @@ const InitialLayout = () => {
     const inTeacherGroup = segments[0] === "(teacher)";
     const inStudentGroup = segments[0] === "(student)";
 
-    // Check if user is on the landing page or login options
-    const inPublicArea =
-      segments.length === 0 ||
-      segments[0] === "index" ||
-      segments[0] === "login_options";
-
     if (user && userRole) {
-      // --- LOGGED IN ---
-
-      // 1. Admin Redirect
       if (userRole === "admin" && !inAdminGroup) {
         router.replace("/(admin)/admindashboard");
-      }
-      // 2. Teacher Redirect
-      else if (userRole === "teacher" && !inTeacherGroup) {
+      } else if (userRole === "teacher" && !inTeacherGroup) {
         router.replace("/(teacher)/teacherdashboard");
-      }
-      // 3. Student Redirect
-      else if (userRole === "student" && !inStudentGroup) {
+      } else if (userRole === "student" && !inStudentGroup) {
         router.replace("/(student)/studentdashboard");
       }
     } else if (!user) {
-      // --- NOT LOGGED IN ---
-      // If they are in a protected area, kick them out
       if (inAdminGroup || inTeacherGroup || inStudentGroup) {
         router.replace("/");
       }
@@ -91,25 +77,24 @@ const InitialLayout = () => {
   }
 
   return (
-      <ToastProvider>
-        <NotificationManager />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="login_options" />
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(admin)" />
-          <Stack.Screen name="(teacher)" />
-          <Stack.Screen name="(student)" />
-          <Stack.Screen name="(guest)" />
-        </Stack>
-      </ToastProvider>
+    <ToastProvider>
+      <NotificationManager />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="login_options" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(admin)" />
+        <Stack.Screen name="(teacher)" />
+        <Stack.Screen name="(student)" />
+        <Stack.Screen name="(guest)" />
+      </Stack>
+    </ToastProvider>
   );
-};;
+};
 
 export default function RootLayout() {
   return (
     <AuthProvider>
-      {/* 2. WRAP APP IN THEME PROVIDER HERE */}
       <ThemeProvider>
         <InitialLayout />
       </ThemeProvider>

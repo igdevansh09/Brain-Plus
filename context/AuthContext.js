@@ -1,34 +1,25 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
+// 1. Import Modular Functions
+import {
+  onAuthStateChanged,
+  getIdTokenResult, // <--- Import this function
+} from "@react-native-firebase/auth";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  // Removed CACHE_SIZE_UNLIMITED as settings are handled in config or default
+} from "@react-native-firebase/firestore";
+
+// 2. Import Instances
+import { auth, db } from "../config/firebaseConfig";
 import { getFCMToken } from "../utils/notificationService";
 
 const AuthContext = createContext();
 
-// *** FIX: Enable Firestore Offline Persistence ***
-// This must be called before any Firestore operations
-const enableOfflinePersistence = () => {
-  try {
-    // Enable persistence with default settings
-    // Note: This is automatically enabled in React Native Firebase
-    // but we explicitly set it for clarity
-    firestore().settings({
-      persistence: true, // Enable offline persistence
-      cacheSizeBytes: firestore.CACHE_SIZE_UNLIMITED, // Optional: unlimited cache
-    });
-    console.log("✅ Firestore offline persistence enabled");
-  } catch (error) {
-    // This will fail if persistence is already enabled
-    // or if called after the first Firestore operation
-    console.log(
-      "Firestore persistence already enabled or error:",
-      error.message
-    );
-  }
-};
-
-// Enable persistence immediately
-enableOfflinePersistence();
+// NOTE: db.settings() block removed.
+// Persistence is enabled by default in React Native Firebase.
+// If you need specific cache settings, use initializeFirestore in your config file.
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -39,10 +30,8 @@ export const AuthProvider = ({ children }) => {
     try {
       const token = await getFCMToken();
       if (token) {
-        await firestore()
-          .collection("users")
-          .doc(uid)
-          .set({ fcmToken: token }, { merge: true });
+        const userRef = doc(db, "users", uid);
+        await setDoc(userRef, { fcmToken: token }, { merge: true });
       }
     } catch (e) {
       console.log("Token Save Error:", e);
@@ -50,7 +39,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    const unsubscribe = auth().onAuthStateChanged(async (currentUser) => {
+    // Modular Listener
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) {
         setUser(null);
         setUserRole(null);
@@ -61,8 +51,9 @@ export const AuthProvider = ({ children }) => {
       setUser(currentUser);
 
       try {
-        // --- 1. ADMIN CHECK (Priority) ---
-        const idTokenResult = await currentUser.getIdTokenResult();
+        // --- 1. ADMIN CHECK ---
+        // FIX: Use functional syntax: getIdTokenResult(user)
+        const idTokenResult = await getIdTokenResult(currentUser);
 
         if (idTokenResult.claims.role === "admin") {
           console.log("✅ Admin Access Granted");
@@ -71,15 +62,12 @@ export const AuthProvider = ({ children }) => {
           return;
         }
 
-        // --- 2. STUDENT/TEACHER CHECK (Firestore with offline support) ---
-        const userDoc = await firestore()
-          .collection("users")
-          .doc(currentUser.uid)
-          .get({ source: "default" }); // Will use cache if offline
+        // --- 2. FIRESTORE CHECK ---
+        const userRef = doc(db, "users", currentUser.uid);
+        const userDoc = await getDoc(userRef);
 
-        if (userDoc.exists) {
+        if (userDoc.exists()) {
           const userData = userDoc.data();
-
           if (userData?.verified === true) {
             setUserRole(userData?.role || null);
             saveTokenToDatabase(currentUser.uid);
@@ -91,25 +79,7 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (error) {
         console.error("Auth Context Error:", error);
-
-        // *** FIX: If offline, try to get cached role ***
-        try {
-          const cachedDoc = await firestore()
-            .collection("users")
-            .doc(currentUser.uid)
-            .get({ source: "cache" });
-
-          if (cachedDoc.exists) {
-            const userData = cachedDoc.data();
-            if (userData?.verified === true) {
-              console.log("✅ Using cached user data (offline mode)");
-              setUserRole(userData?.role || null);
-            }
-          }
-        } catch (cacheError) {
-          console.log("No cached data available");
-          setUserRole(null);
-        }
+        setUserRole(null);
       } finally {
         setLoading(false);
       }
