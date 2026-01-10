@@ -35,7 +35,6 @@ import {
 } from "@react-native-firebase/firestore";
 import {
   ref,
-  uploadBytes,
   getDownloadURL,
 } from "@react-native-firebase/storage";
 import { auth, db, storage } from "../../config/firebaseConfig"; // Import instances
@@ -207,11 +206,8 @@ const TeacherDashboard = () => {
       const filename = `profile_pictures/${uid}/avatar.jpg`;
       const storageRef = ref(storage, filename);
 
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
-      // uploadBytes replaces putFile
-      await uploadBytes(storageRef, blob);
+      // FIX: Use putFile instead of uploadBytes for React Native local URIs
+      await storageRef.putFile(uri);
       const url = await getDownloadURL(storageRef);
 
       // Modular Firestore Update

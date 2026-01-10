@@ -31,9 +31,9 @@ import {
 } from "@react-native-firebase/firestore";
 import {
   ref,
-  uploadBytes,
   getDownloadURL,
   deleteObject,
+  // uploadBytes, // REMOVED: Incompatible with RN local files
 } from "@react-native-firebase/storage";
 import { db, storage } from "../../config/firebaseConfig"; // Import instances
 // --- REFACTOR END ---
@@ -184,6 +184,7 @@ const ManageContent = () => {
     }
   };
 
+  // --- FIX: UPLOAD BANNER (putFile) ---
   const handleUploadBanner = async () => {
     if (!bannerImage) return showToast("Select image first", "error");
 
@@ -192,10 +193,9 @@ const ManageContent = () => {
       const filename = `banners/${Date.now()}.jpg`;
       const storageRef = ref(storage, filename);
 
-      // Modular Upload
-      const response = await fetch(bannerImage);
-      const blob = await response.blob();
-      await uploadBytes(storageRef, blob);
+      // FIX: Use putFile instead of uploadBytes
+      await storageRef.putFile(bannerImage);
+
       const url = await getDownloadURL(storageRef);
 
       // Modular Add Doc
@@ -365,6 +365,8 @@ const ManageContent = () => {
         description,
         thumbnail,
         target: targetString,
+        classId: selectedClass, // Added explicit classId for easier filtering
+        subject: selectedSubject, // Added explicit subject for easier filtering
         playlist,
         updatedAt: serverTimestamp(),
       };
@@ -414,20 +416,27 @@ const ManageContent = () => {
     let cls = null;
     let sub = null;
 
-    if (targetStr === "Guest") {
-      cls = "Guest";
-      sub = "General";
-    } else if (targetStr === "CS") {
-      cls = "CS";
-      sub = "N/A";
+    // Try to use explicit fields first if they exist
+    if (item.classId) {
+      cls = item.classId;
+      sub = item.subject || "N/A";
     } else {
-      const parts = targetStr.split(" ");
-      if (parts.length >= 2) {
-        cls = parts[0];
-        sub = parts.slice(1).join(" ");
+      // Fallback parsing for legacy data
+      if (targetStr === "Guest") {
+        cls = "Guest";
+        sub = "General";
+      } else if (targetStr === "CS") {
+        cls = "CS";
+        sub = "N/A";
       } else {
-        cls = targetStr;
-        sub = "All Subjects";
+        const parts = targetStr.split(" ");
+        if (parts.length >= 2) {
+          cls = parts[0];
+          sub = parts.slice(1).join(" ");
+        } else {
+          cls = targetStr;
+          sub = "All Subjects";
+        }
       }
     }
 

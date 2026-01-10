@@ -28,8 +28,8 @@ import {
 } from "@react-native-firebase/firestore";
 import {
   ref,
-  uploadBytes,
   getDownloadURL,
+  // uploadBytes, // REMOVED: Incompatible with RN local files
 } from "@react-native-firebase/storage";
 
 import { auth, db, storage } from "../../config/firebaseConfig";
@@ -71,7 +71,7 @@ const AdminDashboard = () => {
     setToastVisible(true);
   };
 
-  // --- 1. MEMOIZED FETCH FUNCTION (Fixes Hook Warning) ---
+  // --- 1. MEMOIZED FETCH FUNCTION ---
   const fetchUserData = useCallback(async (uid) => {
     try {
       const userDoc = await getDoc(doc(db, "users", uid));
@@ -103,6 +103,7 @@ const AdminDashboard = () => {
     }
   };
 
+  // --- FIX: UPLOAD IMAGE (putFile) ---
   const uploadImage = async (uri) => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
@@ -112,11 +113,9 @@ const AdminDashboard = () => {
       const filename = `profile_pictures/${uid}/avatar.jpg`;
       const storageRef = ref(storage, filename);
 
-      // Convert URI to Blob
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      // FIX: Use putFile instead of uploadBytes for React Native local URIs
+      await storageRef.putFile(uri);
 
-      await uploadBytes(storageRef, blob);
       const url = await getDownloadURL(storageRef);
 
       // Update Firestore
@@ -193,7 +192,7 @@ const AdminDashboard = () => {
       unsubTeachers();
       unsubPending();
     };
-  }, [fetchUserData]); // Dependency added
+  }, [fetchUserData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

@@ -1,22 +1,24 @@
-import { getApp } from "@react-native-firebase/app";
+import { getApp, getApps, initializeApp } from "@react-native-firebase/app";
 import { getAuth } from "@react-native-firebase/auth";
 import { getFirestore } from "@react-native-firebase/firestore";
 import { getStorage } from "@react-native-firebase/storage";
-import { getMessaging } from "@react-native-firebase/messaging";
+import { getFunctions } from "@react-native-firebase/functions"; // 1. Import Functions
 
-// React Native Firebase initializes the default app natively.
-// However, using getApp() is the modular way to retrieve it.
-const app = getApp();
+// React Native Firebase auto-initializes via native code,
+// but checking getApps() is a safe modular pattern.
+let app;
+if (getApps().length === 0) {
+  app = initializeApp();
+} else {
+  app = getApp();
+}
 
+// Initialize services
 const db = getFirestore(app);
-const authInstance = getAuth(app);
-const storageInstance = getStorage(app);
-const messagingInstance = getMessaging(app);
+const auth = getAuth(app);
+const storage = getStorage(app);
+const functions = getFunctions(app); // 2. Initialize Functions
 
-export {
-  db,
-  authInstance as auth,
-  storageInstance as storage,
-  messagingInstance as messaging,
-};
+// 3. Export everything (including functions)
+export { db, auth, storage, functions, app };
 export default app;

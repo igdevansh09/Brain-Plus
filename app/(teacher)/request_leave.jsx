@@ -17,7 +17,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
 
-// --- REFACTOR START: Modular Imports ---
+// --- MODULAR IMPORTS ---
 import {
   collection,
   doc,
@@ -25,12 +25,10 @@ import {
   addDoc,
   query,
   where,
-  orderBy,
   onSnapshot,
   serverTimestamp,
 } from "@react-native-firebase/firestore";
 import { auth, db } from "../../config/firebaseConfig"; // Import instances
-// --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
 
@@ -62,13 +60,12 @@ const TeacherLeaveRequest = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- 1. FETCH PROFILE & HISTORY (MODULAR) ---
+  // --- 1. FETCH PROFILE & HISTORY ---
   useEffect(() => {
-    // Modular: auth.currentUser
     const user = auth.currentUser;
     if (!user) return;
 
-    // A. Fetch Profile (Modular)
+    // A. Fetch Profile
     const fetchProfile = async () => {
       try {
         const docRef = doc(db, "users", user.uid);
@@ -82,21 +79,41 @@ const TeacherLeaveRequest = () => {
     };
     fetchProfile();
 
-    // B. Real-time History Listener (Modular)
+    // B. Real-time History Listener (FIXED FOR INSTANT UPDATES)
     const q = query(
       collection(db, "teacher_leaves"),
-      where("teacherId", "==", user.uid),
-      orderBy("createdAt", "desc")
+      where("teacherId", "==", user.uid)
+      // REMOVED: orderBy("createdAt", "desc")
+      // Removing 'orderBy' lets the listener receive the 'pending' local write immediately.
     );
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
         if (!snapshot) return;
-        const list = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+
+        const list = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          // Handle pending timestamps (null locally) by defaulting to now
+          // This ensures the new item sits at the top immediately
+          const createdTime = data.createdAt
+            ? data.createdAt
+            : { toDate: () => new Date() };
+
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: createdTime,
+          };
+        });
+
+        // Client-side Sorting (Newest First)
+        list.sort((a, b) => {
+          const dateA = a.createdAt.toDate();
+          const dateB = b.createdAt.toDate();
+          return dateB - dateA;
+        });
+
         setHistory(list);
         setLoading(false);
       },
@@ -148,7 +165,6 @@ const TeacherLeaveRequest = () => {
     try {
       const user = auth.currentUser;
 
-      // Modular: addDoc + serverTimestamp
       await addDoc(collection(db, "teacher_leaves"), {
         teacherId: user.uid,
         teacherName: teacherProfile?.name || "Unknown Teacher",
@@ -158,7 +174,7 @@ const TeacherLeaveRequest = () => {
         reason: reason.trim(),
         duration: getDuration(),
         status: "Informed",
-        createdAt: serverTimestamp(),
+        createdAt: serverTimestamp(), // This initially creates a null value locally
       });
 
       showToast("Admin Notified Successfully!", "success");

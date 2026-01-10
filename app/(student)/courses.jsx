@@ -21,7 +21,7 @@ import {
   getDoc,
   getDocs,
   query,
-  where,
+  orderBy,
 } from "@react-native-firebase/firestore";
 import { auth, db } from "../../config/firebaseConfig"; // Import instances
 // --- REFACTOR END ---
@@ -36,36 +36,53 @@ const MyCourses = () => {
   // --- 1. FETCH DATA (MODULAR) ---
   const fetchCourses = async () => {
     try {
-      // Modular: Access currentUser property directly
       const user = auth.currentUser;
       if (!user) return;
 
-      // 1. Get Student Class (Modular: getDoc)
+      // 1. Get Student Data (Standard & Enrolled Subjects)
       const userDocRef = doc(db, "users", user.uid);
       const userDoc = await getDoc(userDocRef);
-      const studentClass = userDoc.data()?.standard;
 
-      if (!studentClass) {
+      if (!userDoc.exists()) {
         setLoading(false);
         return;
       }
 
-      // 2. Fetch Courses (Modular: query + getDocs)
-      // Logic: target string starts with the class name
-      const q = query(
-        collection(db, "courses"),
-        where("target", ">=", studentClass),
-        where("target", "<=", studentClass + "\uf8ff")
-      );
+      const userData = userDoc.data();
+      const studentClass = userData.standard; // e.g., "12th" or "CS"
+      const enrolledSubjects = userData.enrolledSubjects || []; // e.g., ["Physics", "CS"]
 
+      // 2. Fetch All Courses and Filter Locally
+      // (Fetching all is necessary because Firestore queries with mixed OR logic on different fields are limited)
+      const q = query(collection(db, "courses"), orderBy("createdAt", "desc"));
       const snapshot = await getDocs(q);
 
-      const data = snapshot.docs.map((doc) => ({
+      const allCourses = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
 
-      setCourses(data);
+      // --- FILTER LOGIC ---
+      const filteredCourses = allCourses.filter((course) => {
+        // Condition A: Course matches student's standard exactly (e.g. "12th" matches "12th")
+        // Logic: Check if target starts with the class name
+        if (course.target.startsWith(studentClass)) return true;
+
+        // Condition B: CS Course Exception
+        // If the course target is "CS", show it to students in class "CS" OR students with "CS" subject
+        if (course.target.startsWith("CS")) {
+          const hasCSSubject = enrolledSubjects.some(
+            (sub) =>
+              sub.trim().toUpperCase() === "CS" ||
+              sub.trim().toUpperCase() === "COMPUTER SCIENCE"
+          );
+          if (studentClass === "CS" || hasCSSubject) return true;
+        }
+
+        return false;
+      });
+
+      setCourses(filteredCourses);
     } catch (error) {
       console.log("Error fetching courses:", error);
     } finally {

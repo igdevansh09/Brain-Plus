@@ -34,8 +34,8 @@ import {
 } from "@react-native-firebase/firestore";
 import {
   ref,
-  uploadBytes,
   getDownloadURL,
+  // uploadBytes, // REMOVED: Incompatible with RN local files
 } from "@react-native-firebase/storage";
 import { auth, db, storage } from "../../config/firebaseConfig"; // Import instances
 // --- REFACTOR END ---
@@ -245,17 +245,14 @@ const TeacherNotesUploader = () => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // --- 4. UPLOAD & SUBMIT (MODULAR) ---
+  // --- 4. UPLOAD & SUBMIT (MODULAR FIXED) ---
   const uploadFile = async (uri, filename) => {
     const filePath = `materials/${auth.currentUser.uid}/${Date.now()}_${filename}`;
     const storageRef = ref(storage, filePath);
 
-    const response = await fetch(uri);
-    const blob = await response.blob();
+    // FIX: Use putFile instead of uploadBytes
+    await storageRef.putFile(uri);
 
-    // Modular: uploadBytes
-    await uploadBytes(storageRef, blob);
-    // Modular: getDownloadURL
     return await getDownloadURL(storageRef);
   };
 
@@ -670,7 +667,7 @@ const TeacherNotesUploader = () => {
             {/* ATTACHMENT BUTTONS */}
             <View className="flex-row justify-between mb-4 mt-2">
               <TouchableOpacity
-                onPress={() => pickImage(true)}
+                onPress={() => takePhoto()}
                 style={{
                   backgroundColor: theme.bgTertiary,
                   borderColor: theme.border,

@@ -212,7 +212,7 @@ const ApplyLeave = () => {
                 style={{ color: theme.textPrimary }}
                 className="font-bold text-base"
               >
-                Leave Request
+                Notification Sent
               </Text>
               <Text style={{ color: theme.textSecondary }} className="text-xs">
                 Posted: {dateDisplay}

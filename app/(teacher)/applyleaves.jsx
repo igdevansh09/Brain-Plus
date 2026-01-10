@@ -15,15 +15,17 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../context/ThemeContext";
 
-// --- REFACTOR START: Modular Imports ---
+// --- MODULAR IMPORTS ---
 import {
   collection,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
+  query,
+  where,
 } from "@react-native-firebase/firestore";
-import { db } from "../../config/firebaseConfig"; // Import instances
-// --- REFACTOR END ---
+import { auth, db } from "../../config/firebaseConfig"; // Import instances
 
 // Helper: Calculate Days
 const getDaysCount = (start, end) => {
@@ -42,15 +44,13 @@ const getDaysCount = (start, end) => {
 const StudentLeaveCard = ({ item }) => {
   const { theme } = useTheme();
   const [studentData, setStudentData] = useState(null);
-  const [loadingData, setLoadingData] = useState(true);
 
-  // Fetch Student Avatar
+  // Fetch Student Avatar & Details
   useEffect(() => {
     let isMounted = true;
     const fetchStudentProfile = async () => {
       try {
         if (item.studentId) {
-          // Modular: doc + getDoc
           const userDocRef = doc(db, "users", item.studentId);
           const userDoc = await getDoc(userDocRef);
 
@@ -60,8 +60,6 @@ const StudentLeaveCard = ({ item }) => {
         }
       } catch (error) {
         console.log("Error fetching student:", error);
-      } finally {
-        if (isMounted) setLoadingData(false);
       }
     };
     fetchStudentProfile();
@@ -89,7 +87,6 @@ const StudentLeaveCard = ({ item }) => {
     >
       {/* Header: Avatar, Info & Call */}
       <View className="flex-row items-center mb-4">
-        {/* Avatar Section */}
         <View className="mr-4">
           {studentData?.profileImage ? (
             <Image
@@ -115,7 +112,6 @@ const StudentLeaveCard = ({ item }) => {
           )}
         </View>
 
-        {/* Name & Days Info */}
         <View className="flex-1">
           <Text
             style={{ color: theme.textPrimary }}
@@ -141,7 +137,6 @@ const StudentLeaveCard = ({ item }) => {
           </View>
         </View>
 
-        {/* Call Button */}
         <TouchableOpacity
           onPress={handleCall}
           style={{
@@ -154,7 +149,6 @@ const StudentLeaveCard = ({ item }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Date Range Strip */}
       <View
         style={{
           backgroundColor: theme.bgTertiary,
@@ -184,7 +178,6 @@ const StudentLeaveCard = ({ item }) => {
         </Text>
       </View>
 
-      {/* Reason */}
       <View
         style={{ borderLeftColor: theme.accentSoft50 }}
         className="pl-2 border-l-2"
@@ -204,26 +197,78 @@ const TeacherStudentLeaves = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Modular: collection + onSnapshot
-    const leavesCollection = collection(db, "leaves");
+    let unsubscribe = () => {};
 
-    const unsubscribe = onSnapshot(leavesCollection, (snapshot) => {
-      if (!snapshot) return;
-      const list = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+    const loadData = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
 
-      // Manual Sort (Newest First)
-      list.sort((a, b) => {
-        const tA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
-        const tB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
-        return tB - tA;
-      });
+        // 1. Get Teacher's Profile to find their classes
+        const teacherDocRef = doc(db, "users", user.uid);
+        const teacherDoc = await getDoc(teacherDocRef);
 
-      setLeaves(list);
-      setLoading(false);
-    });
+        if (!teacherDoc.exists()) {
+          setLoading(false);
+          return;
+        }
+
+        const teacherData = teacherDoc.data();
+        let teacherClasses = [];
+
+        // Support both old (classesTaught) and new (teachingProfile) structures
+        if (teacherData.teachingProfile && teacherData.teachingProfile.length > 0) {
+          teacherClasses = [
+            ...new Set(teacherData.teachingProfile.map((p) => p.class)),
+          ];
+        } else if (teacherData.classesTaught && teacherData.classesTaught.length > 0) {
+          teacherClasses = teacherData.classesTaught;
+        }
+
+        // If teacher has no classes assigned, stop here
+        if (teacherClasses.length === 0) {
+          setLeaves([]);
+          setLoading(false);
+          return;
+        }
+
+        // 2. Fetch all STUDENTS who belong to these classes
+        // Note: 'in' query works for up to 10 classes.
+        const studentsQuery = query(
+          collection(db, "users"),
+          where("role", "==", "student"),
+          where("standard", "in", teacherClasses)
+        );
+        
+        const studentsSnap = await getDocs(studentsQuery);
+        const validStudentIds = new Set(studentsSnap.docs.map((d) => d.id));
+
+        // 3. Fetch leaves and filter LOCALLY by validStudentIds
+        const leavesCollection = collection(db, "leaves");
+        
+        unsubscribe = onSnapshot(leavesCollection, (snapshot) => {
+          const filteredList = snapshot.docs
+            .map((doc) => ({ id: doc.id, ...doc.data() }))
+            .filter((leave) => validStudentIds.has(leave.studentId)); // Filtering happens here
+
+          // Sort manually
+          filteredList.sort((a, b) => {
+            const tA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+            const tB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+            return tB - tA;
+          });
+
+          setLeaves(filteredList);
+          setLoading(false);
+        });
+
+      } catch (error) {
+        console.error("Error loading leaves:", error);
+        setLoading(false);
+      }
+    };
+
+    loadData();
 
     return () => unsubscribe();
   }, []);
@@ -279,7 +324,7 @@ const TeacherStudentLeaves = () => {
                 style={{ color: theme.textMuted }}
                 className="text-center mt-4"
               >
-                No leave applications found.
+                No leave applications from your students.
               </Text>
             </View>
           }

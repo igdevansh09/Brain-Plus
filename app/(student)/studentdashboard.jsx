@@ -33,9 +33,9 @@ import {
 import {
   ref,
   getDownloadURL,
-  uploadBytes,
+  // uploadBytes, // REMOVED: Not supported for React Native local files
 } from "@react-native-firebase/storage";
-import { auth, db, storage } from "../../config/firebaseConfig"; // Import instances
+import { auth, db, storage } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 import * as ImagePicker from "expo-image-picker";
@@ -111,7 +111,7 @@ const StudentDashboard = () => {
   // --- DATA FETCHING (MODULAR) ---
   const fetchData = async () => {
     try {
-      const user = auth.currentUser; // Modular access
+      const user = auth.currentUser;
       if (user) {
         // 1. Fetch User Data
         const userDocRef = doc(db, "users", user.uid);
@@ -246,7 +246,7 @@ const StudentDashboard = () => {
     setRefreshing(false);
   }, []);
 
-  // --- AVATAR UPDATE (MODULAR) ---
+  // --- AVATAR UPDATE (MODULAR FIX) ---
   const handleUpdateAvatar = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -261,13 +261,12 @@ const StudentDashboard = () => {
         const { uri } = result.assets[0];
         const user = auth.currentUser;
 
-        // Modular Storage Upload
+        // Modular Storage Upload using putFile (Native SDK)
         const filename = `profile_pictures/${user.uid}/avatar.jpg`;
         const storageRef = ref(storage, filename);
 
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        await uploadBytes(storageRef, blob);
+        // FIX: Replaced uploadBytes (Web) with putFile (Native)
+        await storageRef.putFile(uri);
         const url = await getDownloadURL(storageRef);
 
         // Modular Firestore Update

@@ -383,7 +383,7 @@ const StudentFees = () => {
               style={{ color: theme.textSecondary }}
               className="text-sm mb-4"
             >
-              1. Take the screenshot of the QR Code below with any UPI App.
+              1. Take the screenshot of the QR Code.
               {"\n"}
               2. Complete the payment.{"\n"}
               3. Click &quot;Submit&quot; below.

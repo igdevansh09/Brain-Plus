@@ -16,7 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-// --- REFACTOR START: Modular Imports ---
+// --- MODULAR IMPORTS ---
 import {
   collection,
   query,
@@ -26,8 +26,7 @@ import {
   updateDoc,
 } from "@react-native-firebase/firestore";
 import { httpsCallable } from "@react-native-firebase/functions";
-import { db, functions } from "../../config/firebaseConfig"; // Import instances
-// --- REFACTOR END ---
+import { auth, db, functions } from "../../config/firebaseConfig"; // Import instances
 
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
@@ -80,7 +79,7 @@ const SUB_ARTS = [
 
 const ManageStudents = () => {
   const router = useRouter();
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
 
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -121,19 +120,17 @@ const ManageStudents = () => {
   const showToast = (msg, type = "success") =>
     setToast({ visible: true, msg, type });
 
-  // --- 1. REAL-TIME LISTENER (MODULAR) ---
+  // --- 1. REAL-TIME LISTENER ---
   useEffect(() => {
     setLoading(true);
     const isVerified = viewMode === "active";
 
-    // Modular: query(collection(db, ...), where(...))
     const q = query(
       collection(db, "users"),
       where("role", "==", "student"),
       where("verified", "==", isVerified)
     );
 
-    // Modular: onSnapshot(query, callback)
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -241,7 +238,6 @@ const ManageStudents = () => {
     }
 
     try {
-      // Modular: updateDoc(doc(db, ...))
       const studentRef = doc(db, "users", editingId);
       await updateDoc(studentRef, {
         name: editName,
@@ -271,9 +267,11 @@ const ManageStudents = () => {
   const performDelete = async (id) => {
     setAlert({ ...alert, visible: false });
     try {
-      // Modular: httpsCallable(functionsInstance, name)
+      if (!functions) throw new Error("Functions not initialized in config");
+
       const deleteUserFn = httpsCallable(functions, "deleteTargetUser");
       await deleteUserFn({ targetUid: id });
+
       showToast("Student deleted.", "success");
     } catch (error) {
       console.error("Delete error:", error);
@@ -286,16 +284,17 @@ const ManageStudents = () => {
     setApproveModalVisible(true);
   };
 
-  // --- APPROVED FUNCTION (MODULAR) ---
   const confirmApproval = async () => {
     try {
-      // 1. Update DB (Modular)
+      if (!functions) throw new Error("Functions not initialized in config");
+
+      // 1. Update DB
       const studentRef = doc(db, "users", selectedStudent.id);
       await updateDoc(studentRef, {
         monthlyFeeAmount: approvalFee,
       });
 
-      // 2. Call Cloud Function (Modular)
+      // 2. Call Cloud Function
       const approveUser = httpsCallable(functions, "approveUser");
       await approveUser({ targetUid: selectedStudent.id });
 
