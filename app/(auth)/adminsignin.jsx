@@ -25,6 +25,7 @@ import {
 import { auth } from "../../config/firebaseConfig"; // Import initialized instance
 
 import logo from "../../assets/images/dinetimelogo.png";
+import logo2 from "../../assets/images/dinetimelogo2.png";
 import validationSchema from "../../utils/adminSchema";
 import CustomToast from "../../components/CustomToast";
 import { useTheme } from "../../context/ThemeContext";
@@ -128,7 +129,7 @@ const AdminSignin = () => {
             }}
           >
             <View className="m-1 flex justify-center items-center">
-              <Image source={logo} style={{ width: 300, height: 200 }} />
+              <Image source={isDark ? logo2 : logo} style={{ width: 300, height: 200 }} />
               <Text
                 style={{ color: theme.textPrimary }}
                 className="text-lg text-center font-bold mb-10"

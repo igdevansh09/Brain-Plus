@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext"; // Import the hook
 import logo from "../assets/images/dinetimelogo.png";
+import logo2 from "../assets/images/dinetimelogo2.png";
 const entryImg = require("../assets/images/Frame.png");
 
 export default function Index() {
@@ -21,7 +22,7 @@ export default function Index() {
     <SafeAreaView style={{ backgroundColor: theme.bgPrimary, flex: 1 }}>
       <ScrollView contentContainerStyle={{ height: "100%" }}>
         <View className="m-2 flex justify-center items-center">
-          <Image source={logo} style={{ width: 300, height: 300 }} />
+          <Image source={isDark ? logo2 : logo} style={{ width: 300, height: 300 }} />
           <View className="w-3/4">
             <TouchableOpacity
               onPress={() => router.push("/login_options")}

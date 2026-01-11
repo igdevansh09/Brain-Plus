@@ -25,6 +25,7 @@ import CustomToast from "../../components/CustomToast";
 import { useTheme } from "../../context/ThemeContext";
 
 const logo = require("../../assets/images/dinetimelogo.png");
+const logo2 = require("../../assets/images/dinetimelogo2.png");
 
 const StudentSignIn = () => {
   const router = useRouter();
@@ -188,7 +189,7 @@ const StudentSignIn = () => {
           >
             <View className="items-center mb-8">
               <Image
-                source={logo}
+                source={isDark ? logo2 : logo}
                 style={{ width: 250, height: 250 }}
                 resizeMode="contain"
               />
