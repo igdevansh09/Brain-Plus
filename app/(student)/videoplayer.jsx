@@ -118,7 +118,18 @@ const StudentVideoPlayer = () => {
     if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
   };
 
-  // --- 3. RENDER ITEMS ---
+  // --- 3. NAVIGATION GUARD (THE FIX) ---
+  // This intercepts any URL click inside the player (Logo, Title, Recommendations)
+  const handleWebViewNavigation = (request) => {
+    // Only allow the internal video stream URL
+    if (request.url.includes("youtube.com/embed")) {
+      return true; // Allow loading
+    }
+    // Block everything else (YouTube App, External Browser)
+    return false;
+  };
+
+  // --- 4. RENDER ITEMS ---
   const renderPlaylistItem = ({ item, index }) => {
     const isActive = index === currentIndex;
 
@@ -211,8 +222,15 @@ const StudentVideoPlayer = () => {
             videoId={currentVideo.videoId}
             onChangeState={onStateChange}
             initialPlayerParams={{
-              modestbranding: true,
-              rel: false,
+              modestbranding: true, // Reduces logo size
+              rel: false, // Disables recommendations from OTHER channels (Best possible fix)
+              preventFullScreen: false,
+            }}
+            // [THE FIX]: Intercepts and blocks redirects
+            webViewProps={{
+              onShouldStartLoadWithRequest: handleWebViewNavigation,
+              setSupportMultipleWindows: false, // Android specific fix
+              mediaPlaybackRequiresUserAction: false,
             }}
           />
         ) : (
