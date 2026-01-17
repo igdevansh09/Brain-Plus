@@ -688,3 +688,4 @@ const TeacherSalaryReports = () => {
 };
 
 export default TeacherSalaryReports;
+ 

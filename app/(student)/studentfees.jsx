@@ -422,4 +422,4 @@ const StudentFees = () => {
   );
 };
 
-export default StudentFees;
+export default StudentFees; 

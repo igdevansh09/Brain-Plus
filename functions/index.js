@@ -965,3 +965,4 @@ exports.onSalaryWrite = onDocumentWritten("salaries/{id}", async (event) => {
     }
   }
 });
+ 

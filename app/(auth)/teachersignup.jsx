@@ -536,3 +536,4 @@ const TeacherSignUp = () => {
 };
 
 export default TeacherSignUp;
+ 

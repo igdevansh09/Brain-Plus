@@ -83,3 +83,4 @@ const AnimatedSplashScreen = () => {
 };
 
 export default AnimatedSplashScreen;
+ 

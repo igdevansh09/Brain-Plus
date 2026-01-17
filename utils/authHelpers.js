@@ -30,4 +30,4 @@ export const createUserWithoutLoggingOut = async (email, password) => {
     await deleteApp(secondaryApp);
   }
 };
-export default createUserWithoutLoggingOut;
+export default createUserWithoutLoggingOut; 

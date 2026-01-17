@@ -579,3 +579,4 @@ const StudentSignUp = () => {
 };
 
 export default StudentSignUp;
+ 

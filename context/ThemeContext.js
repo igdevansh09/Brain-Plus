@@ -25,3 +25,4 @@ export const ThemeProvider = ({ children }) => {
 
 // Custom hook for easy access
 export const useTheme = () => useContext(ThemeContext);
+ 

@@ -236,3 +236,4 @@ const TeacherSalary = () => {
 };
 
 export default TeacherSalary;
+ 
