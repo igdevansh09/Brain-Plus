@@ -1,18 +1,17 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import "../global.css";
 import { ToastProvider } from "../context/ToastContext";
 
 // --- IMPORT FIREBASE CONFIG FIRST ---
-import "../config/firebaseConfig"; // Ensure Firebase is initialized
+import "../config/firebaseConfig";
 
-// --- REFACTOR START: Modular Imports ---
+// --- MODULAR FIREBASE MESSAGING ---
 import {
   getMessaging,
   setBackgroundMessageHandler,
 } from "@react-native-firebase/messaging";
-// --- REFACTOR END ---
 
 import {
   NotificationListener,
@@ -22,20 +21,17 @@ import NotificationManager from "../components/NotificationManager";
 import AnimatedSplashScreen from "../components/AnimatedSplashScreen";
 import { ThemeProvider } from "../context/ThemeContext";
 
-// --- REFACTOR START: Modular Background Handler ---
-// 1. Initialize instance
+// --- BACKGROUND HANDLER ---
 const messaging = getMessaging();
-
-// 2. Use the functional syntax: setBackgroundMessageHandler(instance, callback)
 setBackgroundMessageHandler(messaging, async (remoteMessage) => {
   console.log("Message handled in the background!", remoteMessage);
 });
-// --- REFACTOR END ---
 
 const InitialLayout = () => {
   const { user, userRole, loading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+  const [isReady, setIsReady] = useState(false); // New state to prevent redirect flash
 
   // --- Notifications Setup ---
   useEffect(() => {
@@ -52,6 +48,7 @@ const InitialLayout = () => {
     };
   }, []);
 
+  // --- AUTH NAVIGATION LOGIC ---
   useEffect(() => {
     if (loading) return;
 
@@ -61,21 +58,34 @@ const InitialLayout = () => {
     const inStudentGroup = segments[0] === "(student)";
 
     if (user && userRole) {
+      // User is logged in - Redirect to their specific dashboard
+      // The `isReady` check ensures we don't show the Stack until we are sure
+
       if (userRole === "admin" && !inAdminGroup) {
         router.replace("/(admin)/admindashboard");
       } else if (userRole === "teacher" && !inTeacherGroup) {
         router.replace("/(teacher)/teacherdashboard");
       } else if (userRole === "student" && !inStudentGroup) {
         router.replace("/(student)/studentdashboard");
+      } else {
+        // We are in the correct place
+        setIsReady(true);
       }
     } else if (!user) {
+      // User is NOT logged in
       if (inAdminGroup || inTeacherGroup || inStudentGroup) {
-        router.replace("/");
+        router.replace("/"); // Send to Welcome/Login Screen
+      } else {
+        setIsReady(true); // We are at Login/Welcome, so it's safe to render
       }
     }
   }, [user, userRole, loading, segments]);
 
-  if (loading) {
+  // --- RENDER LOGIC ---
+
+  // 1. Show Splash if Firebase is still checking (loading)
+  // 2. Show Splash if we are redirecting (isReady is false)
+  if (loading || !isReady) {
     return <AnimatedSplashScreen />;
   }
 
@@ -90,7 +100,6 @@ const InitialLayout = () => {
         <Stack.Screen name="(student)" />
         <Stack.Screen name="(guest)" />
       </Stack>
-      {/* Placed after Stack to ensure it overlays on top if it has UI */}
       <NotificationManager />
     </ToastProvider>
   );
@@ -105,4 +114,3 @@ export default function RootLayout() {
     </AuthProvider>
   );
 }
- 
