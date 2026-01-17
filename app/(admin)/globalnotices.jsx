@@ -350,3 +350,4 @@ const ManageNotices = () => {
 };
 
 export default ManageNotices;
+ 

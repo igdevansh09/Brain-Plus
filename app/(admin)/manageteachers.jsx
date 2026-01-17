@@ -1028,3 +1028,4 @@ const ManageTeachers = () => {
 };
 
 export default ManageTeachers;
+ 

@@ -22,3 +22,4 @@ const functions = getFunctions(app); // 2. Initialize Functions
 // 3. Export everything (including functions)
 export { db, auth, storage, functions, app };
 export default app;
+ 

@@ -430,4 +430,4 @@ const AdminViewNotifications = () => {
   );
 };
 
-export default AdminViewNotifications;
+export default AdminViewNotifications; 

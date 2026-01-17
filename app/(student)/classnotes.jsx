@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,14 +7,14 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
+  Alert, // Added for user feedback
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime"; // REQUIRED for .fromNow()
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
-
-// --- REFACTOR START: Modular Imports ---
 import {
   collection,
   doc,
@@ -24,8 +24,10 @@ import {
   where,
   orderBy,
 } from "@react-native-firebase/firestore";
-import { auth, db } from "../../config/firebaseConfig"; // Import instances
-// --- REFACTOR END ---
+import { auth, db } from "../../config/firebaseConfig";
+
+// Init dayjs plugin once
+dayjs.extend(relativeTime);
 
 const StudentNotes = () => {
   const router = useRouter();
@@ -35,24 +37,40 @@ const StudentNotes = () => {
   const [notes, setNotes] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState("All");
 
-  // --- FETCH NOTES (MODULAR) ---
-  const fetchNotes = async () => {
+  const fetchNotes = useCallback(async () => {
     try {
-      // Modular: Access currentUser property directly
+      // 1. Robust Auth Check
       const user = auth.currentUser;
-      if (!user) return;
-
-      // Modular: doc + getDoc
-      const userDocRef = doc(db, "users", user.uid);
-      const userDoc = await getDoc(userDocRef);
-      const studentClass = userDoc.data()?.standard;
-
-      if (!studentClass) {
+      if (!user) {
+        // If called manually (refresh), alert. If auto, maybe redirect to login?
+        console.warn("No user found. Auth might not be ready.");
         setLoading(false);
         return;
       }
 
-      // Modular: query + getDocs
+      // 2. Fetch User Class
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists()) {
+        console.error("User document not found");
+        setLoading(false);
+        return;
+      }
+
+      const studentClass = userDoc.data()?.standard;
+
+      if (!studentClass) {
+        Alert.alert(
+          "Profile Incomplete",
+          "Please update your profile with your Class/Standard."
+        );
+        setLoading(false);
+        return;
+      }
+
+      // 3. Query with Index Awareness
+      // NOTE: Ensure Composite Index exists in Firebase Console for: classId (Asc) + createdAt (Desc)
       const q = query(
         collection(db, "materials"),
         where("classId", "==", studentClass),
@@ -60,20 +78,25 @@ const StudentNotes = () => {
       );
 
       const snapshot = await getDocs(q);
-
       const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setNotes(data);
     } catch (error) {
-      console.log("Notes Fetch Error:", error);
+      console.error("Notes Fetch Error:", error);
+      // Specific error handling for missing index
+      if (error.code === "failed-precondition") {
+        console.error("FIREBASE INDEX MISSING: Check console link");
+      }
+      Alert.alert("Error", "Failed to load notes. Please try again.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []); // Dependencies empty is fine here if auth/db imports are stable
 
+  // Initial Fetch
   useEffect(() => {
     fetchNotes();
-  }, []);
+  }, [fetchNotes]);
 
   const filteredData = useMemo(() => {
     if (selectedSubject === "All") return notes;
@@ -98,103 +121,106 @@ const StudentNotes = () => {
     });
   };
 
-  const renderNoteItem = ({ item }) => {
-    const displayAttachments =
-      item.attachments ||
-      (item.link
-        ? [{ name: item.attachmentName, url: item.link, type: item.fileType }]
-        : []);
+  // --- OPTIMIZATION: Moved RenderItem to useCallback ---
+  const renderNoteItem = useCallback(
+    ({ item }) => {
+      const displayAttachments =
+        item.attachments ||
+        (item.link
+          ? [{ name: item.attachmentName, url: item.link, type: item.fileType }]
+          : []);
 
-    // Dynamic Color Strip based on Subject
-    const getStripColor = (subj) => {
-      if (subj === "Maths") return theme.info || "#29B6F6";
-      if (subj === "Science") return theme.success || "#66BB6A";
-      return theme.accent;
-    };
+      const getStripColor = (subj) => {
+        if (subj === "Maths") return theme.info || "#29B6F6";
+        if (subj === "Science") return theme.success || "#66BB6A";
+        return theme.accent;
+      };
 
-    return (
-      <View
-        style={{
-          backgroundColor: theme.bgSecondary,
-          borderColor: theme.border,
-          shadowColor: theme.shadow,
-        }}
-        className="w-[92%] self-center rounded-2xl mb-4 border shadow-sm overflow-hidden flex-row"
-      >
-        {/* Left color strip */}
+      return (
         <View
-          style={{ backgroundColor: getStripColor(item.subject) }}
-          className="w-1.5 h-full"
-        />
+          style={{
+            backgroundColor: theme.bgSecondary,
+            borderColor: theme.border,
+            shadowColor: theme.shadow,
+          }}
+          className="w-[92%] self-center rounded-2xl mb-4 border shadow-sm overflow-hidden flex-row"
+        >
+          <View
+            style={{ backgroundColor: getStripColor(item.subject) }}
+            className="w-1.5 h-full"
+          />
 
-        <View className="flex-1 p-4 flex-row items-center justify-between">
-          <View className="flex-1 mr-3">
-            <View className="flex-row items-center mb-1">
-              <View
-                style={{
-                  backgroundColor: theme.bgTertiary,
-                  borderColor: theme.border,
-                }}
-                className="px-2 py-0.5 rounded mr-2 border"
-              >
-                <Text
-                  style={{ color: theme.textMuted }}
-                  className="text-[9px] font-bold uppercase tracking-wider"
+          <View className="flex-1 p-4 flex-row items-center justify-between">
+            <View className="flex-1 mr-3">
+              <View className="flex-row items-center mb-1">
+                <View
+                  style={{
+                    backgroundColor: theme.bgTertiary,
+                    borderColor: theme.border,
+                  }}
+                  className="px-2 py-0.5 rounded mr-2 border"
                 >
-                  {item.subject}
+                  <Text
+                    style={{ color: theme.textMuted }}
+                    className="text-[9px] font-bold uppercase tracking-wider"
+                  >
+                    {item.subject}
+                  </Text>
+                </View>
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-[10px] font-medium"
+                >
+                  {/* SAFE CHECK FOR TIMESTAMP */}
+                  {item.createdAt?.toDate
+                    ? dayjs(item.createdAt.toDate()).fromNow()
+                    : "Recently"}
                 </Text>
               </View>
+
               <Text
-                style={{ color: theme.textSecondary }}
-                className="text-[10px] font-medium"
+                style={{ color: theme.textPrimary }}
+                className="font-bold text-base mb-1 leading-tight"
               >
-                {item.createdAt?.toDate
-                  ? dayjs(item.createdAt.toDate()).fromNow()
-                  : "Recently"}
+                {item.title}
               </Text>
+
+              {item.description ? (
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-xs leading-relaxed mb-2"
+                  numberOfLines={2}
+                >
+                  {item.description}
+                </Text>
+              ) : null}
             </View>
 
-            <Text
-              style={{ color: theme.textPrimary }}
-              className="font-bold text-base mb-1 leading-tight"
-            >
-              {item.title}
-            </Text>
-
-            {item.description ? (
-              <Text
-                style={{ color: theme.textSecondary }}
-                className="text-xs leading-relaxed mb-2"
-                numberOfLines={2}
+            {displayAttachments.length > 0 && (
+              <TouchableOpacity
+                onPress={() =>
+                  openAttachment(
+                    item.id,
+                    0,
+                    displayAttachments[0].name,
+                    displayAttachments[0].type
+                  )
+                }
+                style={{
+                  backgroundColor: theme.bgPrimary,
+                  borderColor: theme.accentSoft50 || theme.border,
+                }}
+                className="h-11 w-11 rounded-xl border items-center justify-center shadow-lg"
               >
-                {item.description}
-              </Text>
-            ) : null}
+                <Ionicons name="open-outline" size={20} color={theme.accent} />
+              </TouchableOpacity>
+            )}
           </View>
-
-          {displayAttachments.length > 0 && (
-            <TouchableOpacity
-              onPress={() =>
-                openAttachment(
-                  item.id,
-                  0,
-                  displayAttachments[0].name,
-                  displayAttachments[0].type
-                )
-              }
-              style={{
-                backgroundColor: theme.bgPrimary,
-                borderColor: theme.accentSoft50 || theme.border,
-              }}
-              className="h-11 w-11 rounded-xl border items-center justify-center shadow-lg"
-            >
-              <Ionicons name="open-outline" size={20} color={theme.accent} />
-            </TouchableOpacity>
-          )}
         </View>
-      </View>
-    );
-  };
+      );
+    },
+    [theme, router]
+  ); // Re-create only if theme changes
 
   if (loading) {
     return (
@@ -214,7 +240,6 @@ const StudentNotes = () => {
         barStyle={isDark ? "light-content" : "dark-content"}
       />
 
-      {/* Header */}
       <View className="flex-row items-center justify-between px-5 py-4 pt-3">
         <TouchableOpacity
           onPress={() => router.back()}
@@ -235,7 +260,6 @@ const StudentNotes = () => {
         <View className="w-10" />
       </View>
 
-      {/* Subject filter */}
       <View className="px-5 mb-4">
         <FlatList
           horizontal
@@ -257,7 +281,7 @@ const StudentNotes = () => {
                 style={{
                   color:
                     selectedSubject === item
-                      ? theme.textDark
+                      ? theme.textDark || "#FFF" // Handle contrast safely
                       : theme.textSecondary,
                 }}
                 className="font-bold text-xs"
@@ -269,7 +293,6 @@ const StudentNotes = () => {
         />
       </View>
 
-      {/* Notes list */}
       <FlatList
         data={filteredData}
         keyExtractor={(item) => item.id}
@@ -307,3 +330,4 @@ const StudentNotes = () => {
 };
 
 export default StudentNotes;
+ 

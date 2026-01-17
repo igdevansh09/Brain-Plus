@@ -334,4 +334,4 @@ const TeacherStudentLeaves = () => {
   );
 };
 
-export default TeacherStudentLeaves;
+export default TeacherStudentLeaves; 
