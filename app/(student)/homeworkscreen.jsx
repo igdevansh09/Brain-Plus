@@ -2,18 +2,16 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
-  StatusBar,
   TouchableOpacity,
   FlatList,
-  ActivityIndicator,
   RefreshControl,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
 
 // --- REFACTOR START: Modular Imports ---
 import {
@@ -25,7 +23,7 @@ import {
   doc,
   getDoc,
 } from "@react-native-firebase/firestore";
-import { auth, db } from "../../config/firebaseConfig"; // Import instances
+import { auth, db } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 dayjs.extend(relativeTime);
@@ -41,11 +39,9 @@ const StudentHomework = () => {
   // --- FETCH HOMEWORK (MODULAR) ---
   const fetchHomework = async () => {
     try {
-      // Modular: auth.currentUser
       const user = auth.currentUser;
       if (!user) return;
 
-      // Modular: getDoc
       const userDocRef = doc(db, "users", user.uid);
       const userDoc = await getDoc(userDocRef);
       const studentClass = userDoc.data()?.standard || userDoc.data()?.class;
@@ -55,14 +51,12 @@ const StudentHomework = () => {
         return;
       }
 
-      // Modular: query
       const q = query(
         collection(db, "homework"),
         where("classId", "==", studentClass),
-        orderBy("createdAt", "desc")
+        orderBy("createdAt", "desc"),
       );
 
-      // Modular: getDocs
       const snapshot = await getDocs(q);
 
       const data = snapshot.docs.map((doc) => ({
@@ -193,7 +187,7 @@ const StudentHomework = () => {
                   item.id,
                   0,
                   displayAttachments[0].name,
-                  displayAttachments[0].type
+                  displayAttachments[0].type,
                 )
               }
               style={{
@@ -211,34 +205,10 @@ const StudentHomework = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
-      <StatusBar
-        backgroundColor={theme.bgPrimary}
-        barStyle={isDark ? "light-content" : "dark-content"}
-      />
-
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       {/* Header */}
-      <View className="px-5 pt-3 pb-2">
-        <View className="flex-row items-center justify-between mb-5">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={{
-              backgroundColor: theme.bgSecondary,
-              borderColor: theme.border,
-            }}
-            className="w-9 h-9 rounded-full border items-center justify-center"
-          >
-            <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-          </TouchableOpacity>
-          <Text
-            style={{ color: theme.textPrimary }}
-            className="text-xl font-bold"
-          >
-            Homework
-          </Text>
-          <View className="w-9" />
-        </View>
-
+      <View className="px-5 pb-2 pt-4">
         {/* Filter Pills */}
         <View className="mb-2">
           <FlatList
@@ -325,9 +295,8 @@ const StudentHomework = () => {
           </View>
         )}
       />
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default StudentHomework;
- 

@@ -2,19 +2,19 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
-  StatusBar,
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
   RefreshControl,
-  Alert, // Added for user feedback
+  Alert,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime"; // REQUIRED for .fromNow()
-import { SafeAreaView } from "react-native-safe-area-context";
+import relativeTime from "dayjs/plugin/relativeTime";
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
+
 import {
   collection,
   doc,
@@ -42,7 +42,6 @@ const StudentNotes = () => {
       // 1. Robust Auth Check
       const user = auth.currentUser;
       if (!user) {
-        // If called manually (refresh), alert. If auto, maybe redirect to login?
         console.warn("No user found. Auth might not be ready.");
         setLoading(false);
         return;
@@ -63,18 +62,17 @@ const StudentNotes = () => {
       if (!studentClass) {
         Alert.alert(
           "Profile Incomplete",
-          "Please update your profile with your Class/Standard."
+          "Please update your profile with your Class/Standard.",
         );
         setLoading(false);
         return;
       }
 
       // 3. Query with Index Awareness
-      // NOTE: Ensure Composite Index exists in Firebase Console for: classId (Asc) + createdAt (Desc)
       const q = query(
         collection(db, "materials"),
         where("classId", "==", studentClass),
-        orderBy("createdAt", "desc")
+        orderBy("createdAt", "desc"),
       );
 
       const snapshot = await getDocs(q);
@@ -82,7 +80,6 @@ const StudentNotes = () => {
       setNotes(data);
     } catch (error) {
       console.error("Notes Fetch Error:", error);
-      // Specific error handling for missing index
       if (error.code === "failed-precondition") {
         console.error("FIREBASE INDEX MISSING: Check console link");
       }
@@ -91,7 +88,7 @@ const StudentNotes = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []); // Dependencies empty is fine here if auth/db imports are stable
+  }, []);
 
   // Initial Fetch
   useEffect(() => {
@@ -203,7 +200,7 @@ const StudentNotes = () => {
                     item.id,
                     0,
                     displayAttachments[0].name,
-                    displayAttachments[0].type
+                    displayAttachments[0].type,
                   )
                 }
                 style={{
@@ -219,48 +216,29 @@ const StudentNotes = () => {
         </View>
       );
     },
-    [theme, router]
-  ); // Re-create only if theme changes
+    [theme, router],
+  );
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ backgroundColor: theme.bgPrimary }}
-        className="flex-1 items-center justify-center"
+      <View
+        style={{
+          backgroundColor: theme.bgPrimary,
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
         <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
-      <StatusBar
-        backgroundColor={theme.bgPrimary}
-        barStyle={isDark ? "light-content" : "dark-content"}
-      />
-
-      <View className="flex-row items-center justify-between px-5 py-4 pt-3">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.border,
-          }}
-          className="p-2 rounded-full border"
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-2xl font-bold"
-        >
-          Class Notes
-        </Text>
-        <View className="w-10" />
-      </View>
-
-      <View className="px-5 mb-4">
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
+      {/* Subject Filter - Added pt-4 for spacing */}
+      <View className="px-5 mb-4 pt-4">
         <FlatList
           horizontal
           data={uniqueSubjects}
@@ -281,7 +259,7 @@ const StudentNotes = () => {
                 style={{
                   color:
                     selectedSubject === item
-                      ? theme.textDark || "#FFF" // Handle contrast safely
+                      ? theme.textDark || "#FFF"
                       : theme.textSecondary,
                 }}
                 className="font-bold text-xs"
@@ -325,9 +303,8 @@ const StudentNotes = () => {
           </View>
         )}
       />
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default StudentNotes;
- 

@@ -274,7 +274,7 @@ const TeacherDashboard = () => {
       id: "5",
       name: "Student Leaves",
       icon: "eye-outline",
-      route: "/(teacher)/applyleaves",
+      route: "/(teacher)/student_leaves",
     },
     {
       id: "6",

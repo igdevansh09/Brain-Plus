@@ -14,8 +14,9 @@ import {
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
+import CustomHeader from "../../components/CustomHeader"; // <--- IMPORTED
 
 // --- REFACTOR START: Modular Imports ---
 import {
@@ -26,7 +27,7 @@ import {
   query,
   where,
 } from "@react-native-firebase/firestore";
-import { auth, db } from "../../config/firebaseConfig"; // Import instances
+import { auth, db } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
@@ -91,8 +92,8 @@ const TeacherMyStudents = () => {
           setUniqueClasses(["All", ...classes]);
           setTeachingProfile(
             classes.flatMap((c) =>
-              subjects.map((s) => ({ class: c, subject: s }))
-            )
+              subjects.map((s) => ({ class: c, subject: s })),
+            ),
           );
           classesToFetch = classes;
         }
@@ -103,7 +104,7 @@ const TeacherMyStudents = () => {
           const q = query(
             collection(db, "users"),
             where("role", "==", "student"),
-            where("standard", "in", classesToFetch)
+            where("standard", "in", classesToFetch),
           );
 
           const studentSnap = await getDocs(q);
@@ -116,7 +117,7 @@ const TeacherMyStudents = () => {
           list.sort(
             (a, b) =>
               a.standard.localeCompare(b.standard) ||
-              a.name.localeCompare(b.name)
+              a.name.localeCompare(b.name),
           );
 
           setAllStudents(list);
@@ -155,7 +156,9 @@ const TeacherMyStudents = () => {
       // Check if student has this subject (if enrolledSubjects exists)
       // Otherwise, assume they take it if they are in the class
       result = result.filter((s) =>
-        s.enrolledSubjects ? s.enrolledSubjects.includes(selectedSubject) : true
+        s.enrolledSubjects
+          ? s.enrolledSubjects.includes(selectedSubject)
+          : true,
       );
     }
 
@@ -166,7 +169,7 @@ const TeacherMyStudents = () => {
         (s) =>
           s.name?.toLowerCase().includes(lower) ||
           s.rollNo?.toLowerCase().includes(lower) ||
-          s.phone?.includes(lower)
+          s.phone?.includes(lower),
       );
     }
 
@@ -243,7 +246,8 @@ const TeacherMyStudents = () => {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor={theme.bgPrimary}
@@ -255,29 +259,8 @@ const TeacherMyStudents = () => {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      {/* --- HEADER --- */}
-      <View className="px-5 py-4 pt-3 flex-row items-center justify-between">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.border,
-          }}
-          className="p-2 rounded-full border"
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-xl font-bold"
-        >
-          My Students
-        </Text>
-        <View className="w-10" />
-      </View>
-
       {/* --- SEARCH --- */}
-      <View className="px-5 mb-4">
+      <View className="px-5 mb-4 pt-4">
         <View
           style={{
             backgroundColor: theme.bgSecondary,
@@ -573,9 +556,8 @@ const TeacherMyStudents = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default TeacherMyStudents;
- 

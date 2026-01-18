@@ -31,11 +31,12 @@ import {
   serverTimestamp,
 } from "@react-native-firebase/firestore";
 import { httpsCallable } from "@react-native-firebase/functions";
-import { db, functions } from "../../config/firebaseConfig"; // Import instances
+import { db, functions } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
 import CustomAlert from "../../components/CustomAlert";
+import CustomHeader from "../../components/CustomHeader"; // <--- IMPORTED
 import { useTheme } from "../../context/ThemeContext";
 
 // --- SALARY CARD COMPONENT ---
@@ -48,7 +49,6 @@ const SalaryCard = ({ item, onInitiatePayment }) => {
     const fetchAvatar = async () => {
       if (item.teacherId) {
         try {
-          // Modular: getDoc
           const docRef = doc(db, "users", item.teacherId);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists() && isMounted) {
@@ -214,7 +214,6 @@ const TeacherSalaryReports = () => {
 
   // --- 1. REAL-TIME LISTENER (MODULAR) ---
   useEffect(() => {
-    // Modular: query(collection, orderBy)
     const q = query(collection(db, "salaries"), orderBy("createdAt", "desc"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -242,12 +241,11 @@ const TeacherSalaryReports = () => {
       const fetchTeachers = async () => {
         setLoadingTeachers(true);
         try {
-          // Modular: query + getDocs
           const q = query(
             collection(db, "users"),
             where("role", "==", "teacher"),
             where("verified", "==", true),
-            where("salaryType", "==", "Commission")
+            where("salaryType", "==", "Commission"),
           );
           const snap = await getDocs(q);
           const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -269,7 +267,6 @@ const TeacherSalaryReports = () => {
 
   const confirmPayment = async () => {
     try {
-      // Modular: updateDoc
       const salaryRef = doc(db, "salaries", selectedSalaryId);
       await updateDoc(salaryRef, {
         status: "Paid",
@@ -289,7 +286,6 @@ const TeacherSalaryReports = () => {
     }
     setSubmitting(true);
     try {
-      // Modular: addDoc + serverTimestamp
       await addDoc(collection(db, "salaries"), {
         teacherId: selectedTeacher.id,
         teacherName: selectedTeacher.name || "Unknown",
@@ -327,7 +323,6 @@ const TeacherSalaryReports = () => {
     setGenerateConfirm({ ...generateConfirm, visible: false });
     setGenerating(true);
     try {
-      // Modular: httpsCallable
       const fn = httpsCallable(functions, "generateMonthlySalaries");
       const result = await fn();
       showToast(result.data.message, "success");
@@ -352,62 +347,48 @@ const TeacherSalaryReports = () => {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      {/* --- HEADER --- */}
-      <View className="px-5 py-4 flex-row items-center justify-between">
-        <View className="flex-row items-center">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={{
-              backgroundColor: theme.bgSecondary,
-              borderColor: theme.border,
-            }}
-            className="p-2 rounded-full border"
-          >
-            <Ionicons name="arrow-back" size={22} color={theme.textPrimary} />
-          </TouchableOpacity>
-          <Text
-            style={{ color: theme.textPrimary }}
-            className="text-2xl font-bold ml-4"
-          >
-            Salary Ledger
-          </Text>
-        </View>
+      {/* --- REPLACED MANUAL HEADER WITH CUSTOM HEADER --- */}
+      <CustomHeader
+        title="Salary Ledger"
+        showBack={true}
+        onBackPress={() => router.back()}
+        rightComponent={
+          <View className="flex-row gap-3">
+            {/* THUNDERBOLT BUTTON */}
+            <TouchableOpacity
+              onPress={handleGenerateSalaries}
+              disabled={generating}
+              style={{
+                backgroundColor: generating
+                  ? theme.bgTertiary
+                  : theme.accentSoft20,
+                borderColor: theme.border,
+              }}
+              className="p-2 rounded-full border"
+            >
+              {generating ? (
+                <ActivityIndicator size="small" color={theme.accent} />
+              ) : (
+                <Ionicons name="flash" size={22} color={theme.accent} />
+              )}
+            </TouchableOpacity>
 
-        <View className="flex-row gap-3">
-          {/* THUNDERBOLT BUTTON */}
-          <TouchableOpacity
-            onPress={handleGenerateSalaries}
-            disabled={generating}
-            style={{
-              backgroundColor: generating
-                ? theme.bgTertiary
-                : theme.accentSoft20,
-              borderColor: theme.border,
-            }}
-            className="p-2 rounded-full border"
-          >
-            {generating ? (
-              <ActivityIndicator size="small" color={theme.accent} />
-            ) : (
-              <Ionicons name="flash" size={24} color={theme.accent} />
-            )}
-          </TouchableOpacity>
+            {/* ADD BUTTON */}
+            <TouchableOpacity
+              onPress={() => setIsAdding(true)}
+              style={{
+                backgroundColor: theme.bgSecondary,
+                borderColor: theme.accent,
+              }}
+              className="p-2 rounded-full border"
+            >
+              <Ionicons name="add" size={22} color={theme.accent} />
+            </TouchableOpacity>
+          </View>
+        }
+      />
 
-          {/* ADD BUTTON */}
-          <TouchableOpacity
-            onPress={() => setIsAdding(true)}
-            style={{
-              backgroundColor: theme.bgSecondary,
-              borderColor: theme.accent,
-            }}
-            className="p-2 rounded-full border"
-          >
-            <Ionicons name="add" size={24} color={theme.accent} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View className="px-5 mb-4">
+      <View className="px-5 mb-4 mt-2">
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {FILTER_OPTIONS.map((opt) => (
             <TouchableOpacity
@@ -688,4 +669,3 @@ const TeacherSalaryReports = () => {
 };
 
 export default TeacherSalaryReports;
- 

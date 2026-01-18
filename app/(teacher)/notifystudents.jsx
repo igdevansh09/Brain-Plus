@@ -13,8 +13,9 @@ import {
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
+import CustomHeader from "../../components/CustomHeader"; // <--- IMPORTED
 
 // --- REFACTOR START: Modular Imports ---
 import {
@@ -28,7 +29,7 @@ import {
   onSnapshot,
   serverTimestamp,
 } from "@react-native-firebase/firestore";
-import { auth, db } from "../../config/firebaseConfig"; // Import instances
+import { auth, db } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
@@ -70,7 +71,6 @@ const TeacherClassUpdates = () => {
         const user = auth.currentUser;
         if (!user) return;
 
-        // Modular: doc + getDoc
         const userDocRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userDocRef);
 
@@ -91,8 +91,8 @@ const TeacherClassUpdates = () => {
             setUniqueClasses(classes);
             setTeachingProfile(
               classes.flatMap((c) =>
-                subjects.map((s) => ({ class: c, subject: s }))
-              )
+                subjects.map((s) => ({ class: c, subject: s })),
+              ),
             );
             if (classes.length > 0) {
               setSelectedClass(classes[0]);
@@ -116,11 +116,10 @@ const TeacherClassUpdates = () => {
 
     setLoading(true);
 
-    // Modular: query + onSnapshot
     const q = query(
       collection(db, "class_notices"),
       where("teacherId", "==", user.uid),
-      orderBy("createdAt", "desc")
+      orderBy("createdAt", "desc"),
     );
 
     const unsubscribe = onSnapshot(
@@ -136,7 +135,7 @@ const TeacherClassUpdates = () => {
       (error) => {
         console.error("History Listener Error:", error);
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -168,7 +167,6 @@ const TeacherClassUpdates = () => {
 
     setSending(true);
     try {
-      // Modular: addDoc + serverTimestamp
       await addDoc(collection(db, "class_notices"), {
         title: title.trim(),
         subject: selectedSubject,
@@ -254,17 +252,22 @@ const TeacherClassUpdates = () => {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ backgroundColor: theme.bgPrimary }}
-        className="flex-1 justify-center items-center"
+      <View
+        style={{
+          backgroundColor: theme.bgPrimary,
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
         <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor={theme.bgPrimary}
@@ -275,26 +278,6 @@ const TeacherClassUpdates = () => {
         type={toast.type}
         onHide={() => setToast({ ...toast, visible: false })}
       />
-
-      <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.border,
-          }}
-          className="p-2 rounded-full border"
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-xl font-bold"
-        >
-          New Announcement
-        </Text>
-        <View className="w-10" />
-      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -474,9 +457,8 @@ const TeacherClassUpdates = () => {
           <View className="h-10" />
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default TeacherClassUpdates;
- 

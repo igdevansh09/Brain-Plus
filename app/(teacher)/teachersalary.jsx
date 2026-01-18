@@ -7,10 +7,10 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../context/ThemeContext";
-import { SafeAreaView } from "react-native-safe-area-context";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
+import CustomHeader from "../../components/CustomHeader"; // <--- IMPORTED
 
 // --- REFACTOR START: Modular Imports ---
 import {
@@ -40,7 +40,7 @@ const TeacherSalary = () => {
       // Modular: query(collection, where)
       const q = query(
         collection(db, "salaries"),
-        where("teacherId", "==", user.uid)
+        where("teacherId", "==", user.uid),
       );
 
       // Modular: getDocs
@@ -121,40 +121,29 @@ const TeacherSalary = () => {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ backgroundColor: theme.bgPrimary }}
-        className="flex-1 justify-center items-center"
+      <View
+        style={{
+          backgroundColor: theme.bgPrimary,
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
         <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: theme.bgPrimary }}
-    >
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor={theme.bgPrimary}
       />
-      <View className="px-4 pb-4 py-7 flex-row items-center">
-        <Ionicons
-          name="arrow-back"
-          size={24}
-          color={theme.textPrimary}
-          onPress={() => router.back()}
-        />
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-2xl font-semibold ml-4"
-        >
-          My Salary
-        </Text>
-      </View>
 
       <ScrollView
-        className="flex-1 px-4"
+        className="flex-1 px-4 pt-4"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -231,9 +220,8 @@ const TeacherSalary = () => {
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default TeacherSalary;
- 

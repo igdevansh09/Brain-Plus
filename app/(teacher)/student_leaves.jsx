@@ -10,12 +10,13 @@ import {
   Alert,
   Image,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
+import CustomHeader from "../../components/CustomHeader"; // <--- IMPORTED
 
-// --- MODULAR IMPORTS ---
+// --- REFACTOR START: Modular Imports ---
 import {
   collection,
   doc,
@@ -26,6 +27,7 @@ import {
   where,
 } from "@react-native-firebase/firestore";
 import { auth, db } from "../../config/firebaseConfig"; // Import instances
+// --- REFACTOR END ---
 
 // Helper: Calculate Days
 const getDaysCount = (start, end) => {
@@ -217,11 +219,17 @@ const TeacherStudentLeaves = () => {
         let teacherClasses = [];
 
         // Support both old (classesTaught) and new (teachingProfile) structures
-        if (teacherData.teachingProfile && teacherData.teachingProfile.length > 0) {
+        if (
+          teacherData.teachingProfile &&
+          teacherData.teachingProfile.length > 0
+        ) {
           teacherClasses = [
             ...new Set(teacherData.teachingProfile.map((p) => p.class)),
           ];
-        } else if (teacherData.classesTaught && teacherData.classesTaught.length > 0) {
+        } else if (
+          teacherData.classesTaught &&
+          teacherData.classesTaught.length > 0
+        ) {
           teacherClasses = teacherData.classesTaught;
         }
 
@@ -237,15 +245,15 @@ const TeacherStudentLeaves = () => {
         const studentsQuery = query(
           collection(db, "users"),
           where("role", "==", "student"),
-          where("standard", "in", teacherClasses)
+          where("standard", "in", teacherClasses),
         );
-        
+
         const studentsSnap = await getDocs(studentsQuery);
         const validStudentIds = new Set(studentsSnap.docs.map((d) => d.id));
 
         // 3. Fetch leaves and filter LOCALLY by validStudentIds
         const leavesCollection = collection(db, "leaves");
-        
+
         unsubscribe = onSnapshot(leavesCollection, (snapshot) => {
           const filteredList = snapshot.docs
             .map((doc) => ({ id: doc.id, ...doc.data() }))
@@ -261,7 +269,6 @@ const TeacherStudentLeaves = () => {
           setLeaves(filteredList);
           setLoading(false);
         });
-
       } catch (error) {
         console.error("Error loading leaves:", error);
         setLoading(false);
@@ -274,31 +281,12 @@ const TeacherStudentLeaves = () => {
   }, []);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       <StatusBar
         backgroundColor={theme.bgPrimary}
         barStyle={isDark ? "light-content" : "dark-content"}
       />
-
-      {/* --- HEADER --- */}
-      <View className="px-5 py-4 flex-row items-center">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.border,
-          }}
-          className="p-2 rounded-full border mr-4"
-        >
-          <Ionicons name="arrow-back" size={22} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-2xl font-bold"
-        >
-          Student Leaves
-        </Text>
-      </View>
 
       {/* --- LIST --- */}
       {loading ? (
@@ -312,7 +300,7 @@ const TeacherStudentLeaves = () => {
           data={leaves}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <StudentLeaveCard item={item} />}
-          contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+          contentContainerStyle={{ padding: 10, paddingBottom: 100 }}
           ListEmptyComponent={
             <View className="mt-20 items-center opacity-30">
               <MaterialCommunityIcons
@@ -330,8 +318,8 @@ const TeacherStudentLeaves = () => {
           }
         />
       )}
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
-export default TeacherStudentLeaves; 
+export default TeacherStudentLeaves;

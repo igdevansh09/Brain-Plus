@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  StatusBar,
   TextInput,
   FlatList,
   ActivityIndicator,
@@ -14,8 +13,8 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
 
 // --- REFACTOR START: Modular Imports ---
 import {
@@ -23,14 +22,13 @@ import {
   doc,
   getDoc,
   addDoc,
-  deleteDoc,
   query,
   where,
   orderBy,
   onSnapshot,
   serverTimestamp,
 } from "@react-native-firebase/firestore";
-import { auth, db } from "../../config/firebaseConfig"; // Import instances
+import { auth, db } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
@@ -74,13 +72,11 @@ const ApplyLeave = () => {
 
   // --- 1. FETCH PROFILE & HISTORY (MODULAR) ---
   useEffect(() => {
-    // Modular: auth.currentUser
     const user = auth.currentUser;
     if (!user) return;
 
     const fetchProfile = async () => {
       try {
-        // Modular: doc + getDoc
         const docRef = doc(db, "users", user.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) setStudentProfile(docSnap.data());
@@ -90,11 +86,10 @@ const ApplyLeave = () => {
     };
     fetchProfile();
 
-    // Modular: query + onSnapshot
     const q = query(
       collection(db, "leaves"),
       where("studentId", "==", user.uid),
-      orderBy("createdAt", "desc")
+      orderBy("createdAt", "desc"),
     );
 
     const unsubscribe = onSnapshot(
@@ -111,7 +106,7 @@ const ApplyLeave = () => {
       (err) => {
         console.log("History Error:", err);
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -156,7 +151,6 @@ const ApplyLeave = () => {
     try {
       const user = auth.currentUser;
 
-      // Modular: addDoc + serverTimestamp
       await addDoc(collection(db, "leaves"), {
         studentId: user.uid,
         studentName: studentProfile?.name || user.displayName || "Student",
@@ -267,21 +261,22 @@ const ApplyLeave = () => {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ backgroundColor: theme.bgPrimary }}
-        className="flex-1 justify-center items-center"
+      <View
+        style={{
+          backgroundColor: theme.bgPrimary,
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
         <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
-      <StatusBar
-        backgroundColor={theme.bgPrimary}
-        barStyle={isDark ? "light-content" : "dark-content"}
-      />
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
@@ -297,27 +292,6 @@ const ApplyLeave = () => {
         onConfirm={alertConfig.onConfirm}
         onCancel={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
       />
-
-      {/* --- HEADER --- */}
-      <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.border,
-          }}
-          className="p-2 rounded-full border"
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-xl font-bold"
-        >
-          Submit Leave
-        </Text>
-        <View className="w-10" />
-      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -530,9 +504,8 @@ const ApplyLeave = () => {
           minimumDate={startDate}
         />
       )}
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default ApplyLeave;
- 

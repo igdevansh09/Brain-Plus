@@ -14,8 +14,9 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
+import CustomHeader from "../../components/CustomHeader"; // <--- IMPORTED
 
 // --- MODULAR IMPORTS ---
 import {
@@ -28,7 +29,7 @@ import {
   onSnapshot,
   serverTimestamp,
 } from "@react-native-firebase/firestore";
-import { auth, db } from "../../config/firebaseConfig"; // Import instances
+import { auth, db } from "../../config/firebaseConfig";
 
 import CustomToast from "../../components/CustomToast";
 
@@ -79,12 +80,10 @@ const TeacherLeaveRequest = () => {
     };
     fetchProfile();
 
-    // B. Real-time History Listener (FIXED FOR INSTANT UPDATES)
+    // B. Real-time History Listener
     const q = query(
       collection(db, "teacher_leaves"),
-      where("teacherId", "==", user.uid)
-      // REMOVED: orderBy("createdAt", "desc")
-      // Removing 'orderBy' lets the listener receive the 'pending' local write immediately.
+      where("teacherId", "==", user.uid),
     );
 
     const unsubscribe = onSnapshot(
@@ -94,8 +93,6 @@ const TeacherLeaveRequest = () => {
 
         const list = snapshot.docs.map((doc) => {
           const data = doc.data();
-          // Handle pending timestamps (null locally) by defaulting to now
-          // This ensures the new item sits at the top immediately
           const createdTime = data.createdAt
             ? data.createdAt
             : { toDate: () => new Date() };
@@ -120,7 +117,7 @@ const TeacherLeaveRequest = () => {
       (error) => {
         console.log("History Error:", error);
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -174,7 +171,7 @@ const TeacherLeaveRequest = () => {
         reason: reason.trim(),
         duration: getDuration(),
         status: "Informed",
-        createdAt: serverTimestamp(), // This initially creates a null value locally
+        createdAt: serverTimestamp(),
       });
 
       showToast("Admin Notified Successfully!", "success");
@@ -270,17 +267,22 @@ const TeacherLeaveRequest = () => {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ backgroundColor: theme.bgPrimary }}
-        className="flex-1 justify-center items-center"
+      <View
+        style={{
+          backgroundColor: theme.bgPrimary,
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
         <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       <StatusBar
         backgroundColor={theme.bgPrimary}
         barStyle={isDark ? "light-content" : "dark-content"}
@@ -292,33 +294,12 @@ const TeacherLeaveRequest = () => {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      {/* --- HEADER --- */}
-      <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.border,
-          }}
-          className="p-2 rounded-full border"
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-xl font-bold"
-        >
-          Inform Absence
-        </Text>
-        <View className="w-10" />
-      </View>
-
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
       >
         <ScrollView
-          className="flex-1 px-5 pt-4"
+          className="flex-1 px-5 pt-3"
           showsVerticalScrollIndicator={false}
         >
           {/* --- APPLICATION FORM --- */}
@@ -529,9 +510,8 @@ const TeacherLeaveRequest = () => {
           minimumDate={startDate}
         />
       )}
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default TeacherLeaveRequest;
- 

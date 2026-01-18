@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { View, ScrollView, RefreshControl, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../context/ThemeContext"; // Import Theme Hook
+import { useTheme } from "../context/ThemeContext";
 
 const ScreenWrapper = ({
   children,
@@ -9,8 +9,10 @@ const ScreenWrapper = ({
   scrollable = true,
   contentContainerStyle,
   className,
+  // NEW PROP: Allow overriding edges (Default includes top)
+  edges = ["top", "left", "right"],
 }) => {
-  const { theme, isDark } = useTheme(); // Get dynamic theme values
+  const { theme, isDark } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = useCallback(async () => {
@@ -28,11 +30,10 @@ const ScreenWrapper = ({
 
   return (
     <SafeAreaView
-      style={{ backgroundColor: theme.bgPrimary, flex: 1 }} // Dynamic Background
+      style={{ backgroundColor: theme.bgPrimary, flex: 1 }}
       className={className || ""}
-      edges={["top", "left", "right"]}
+      edges={edges} // <--- PASS THE PROP HERE
     >
-      {/* Dynamic Status Bar */}
       <StatusBar
         backgroundColor={theme.bgPrimary}
         barStyle={isDark ? "light-content" : "dark-content"}
@@ -47,8 +48,8 @@ const ScreenWrapper = ({
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                tintColor={theme.accent} // Dynamic Spinner Color (iOS)
-                colors={[theme.accent]} // Dynamic Spinner Color (Android)
+                tintColor={theme.accent}
+                colors={[theme.accent]}
               />
             ) : null
           }
@@ -63,4 +64,3 @@ const ScreenWrapper = ({
 };
 
 export default ScreenWrapper;
- 
