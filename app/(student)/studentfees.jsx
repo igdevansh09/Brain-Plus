@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  StatusBar,
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
@@ -13,7 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../context/ThemeContext";
-import { SafeAreaView } from "react-native-safe-area-context";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
 
 // --- REFACTOR START: Modular Imports ---
 import {
@@ -64,7 +63,7 @@ const StudentFees = () => {
       // Modular: query(collection, where)
       const q = query(
         collection(db, "fees"),
-        where("studentId", "==", user.uid)
+        where("studentId", "==", user.uid),
       );
 
       // Modular: getDocs
@@ -76,7 +75,7 @@ const StudentFees = () => {
       }));
 
       const pending = allFees.filter(
-        (f) => f.status === "Pending" || f.status === "Verifying"
+        (f) => f.status === "Pending" || f.status === "Verifying",
       );
       const history = allFees.filter((f) => f.status === "Paid");
 
@@ -214,23 +213,22 @@ const StudentFees = () => {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ backgroundColor: theme.bgPrimary }}
-        className="flex-1 justify-center items-center"
+      <View
+        style={{
+          backgroundColor: theme.bgPrimary,
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
         <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: theme.bgPrimary }}
-    >
-      <StatusBar
-        backgroundColor={theme.bgPrimary}
-        barStyle={isDark ? "light-content" : "dark-content"}
-      />
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
@@ -238,20 +236,8 @@ const StudentFees = () => {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      <View className="px-4 pb-4 py-7 flex-row items-center">
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-2xl font-semibold ml-4"
-        >
-          Fee Status
-        </Text>
-      </View>
-
       <ScrollView
-        className="flex-1 px-4"
+        className="flex-1 px-4 pt-4"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -418,8 +404,8 @@ const StudentFees = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
-export default StudentFees; 
+export default StudentFees;

@@ -16,8 +16,9 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
+import CustomHeader from "../../components/CustomHeader"; // <--- IMPORTED
 
 // --- REFACTOR START: Modular Imports ---
 import {
@@ -32,12 +33,8 @@ import {
   onSnapshot,
   serverTimestamp,
 } from "@react-native-firebase/firestore";
-import {
-  ref,
-  getDownloadURL,
-  // uploadBytes, // REMOVED: Incompatible with RN local files
-} from "@react-native-firebase/storage";
-import { auth, db, storage } from "../../config/firebaseConfig"; // Import instances
+import { ref, getDownloadURL } from "@react-native-firebase/storage";
+import { auth, db, storage } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
@@ -112,7 +109,7 @@ const TeacherNotesUploader = () => {
             setMyClasses(classes);
 
             const artificialProfile = classes.flatMap((c) =>
-              subjects.map((s) => ({ class: c, subject: s }))
+              subjects.map((s) => ({ class: c, subject: s })),
             );
             setTeachingProfile(artificialProfile);
 
@@ -125,7 +122,7 @@ const TeacherNotesUploader = () => {
         const q = query(
           collection(db, "materials"),
           where("teacherId", "==", currentUser.uid),
-          orderBy("createdAt", "desc")
+          orderBy("createdAt", "desc"),
         );
 
         unsubscribeSnapshot = onSnapshot(
@@ -143,7 +140,7 @@ const TeacherNotesUploader = () => {
           (error) => {
             console.log("History Error:", error);
             setLoading(false);
-          }
+          },
         );
       } catch (error) {
         console.log("Init Error:", error);
@@ -463,17 +460,22 @@ const TeacherNotesUploader = () => {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ backgroundColor: theme.bgPrimary }}
-        className="flex-1 justify-center items-center"
+      <View
+        style={{
+          backgroundColor: theme.bgPrimary,
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
         <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor={theme.bgPrimary}
@@ -493,27 +495,6 @@ const TeacherNotesUploader = () => {
         onConfirm={alertConfig.onConfirm}
         onCancel={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
       />
-
-      {/* --- HEADER --- */}
-      <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.border,
-          }}
-          className="p-2 rounded-full border"
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-xl font-bold"
-        >
-          Upload Notes
-        </Text>
-        <View className="w-10" />
-      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -760,7 +741,12 @@ const TeacherNotesUploader = () => {
                       {/* Close Button */}
                       <TouchableOpacity
                         onPress={() => removeAttachment(idx)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        hitSlop={{
+                          top: 10,
+                          bottom: 10,
+                          left: 10,
+                          right: 10,
+                        }}
                         style={{
                           position: "absolute",
                           top: 0,
@@ -842,9 +828,8 @@ const TeacherNotesUploader = () => {
           />
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default TeacherNotesUploader;
- 

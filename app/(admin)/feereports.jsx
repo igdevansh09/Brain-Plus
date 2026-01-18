@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, Stack } from "expo-router"; // Added Stack import
 
 // --- REFACTOR START: Modular Imports ---
 import {
@@ -25,14 +25,15 @@ import {
   updateDoc,
 } from "@react-native-firebase/firestore";
 import { httpsCallable } from "@react-native-firebase/functions";
-import { db, functions } from "../../config/firebaseConfig"; // Import instances
+import { db, functions } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
 import CustomAlert from "../../components/CustomAlert";
+import CustomHeader from "../../components/CustomHeader"; // Import CustomHeader
 import { useTheme } from "../../context/ThemeContext";
 
-// --- FEE CARD COMPONENT (Handles Avatar Fetching) ---
+// --- FEE CARD COMPONENT ---
 const FeeCard = ({ item, onUpdateStatus }) => {
   const { theme } = useTheme();
   const [studentImg, setStudentImg] = useState(null);
@@ -42,7 +43,6 @@ const FeeCard = ({ item, onUpdateStatus }) => {
     const fetchAvatar = async () => {
       if (item.studentId) {
         try {
-          // Modular: getDoc(doc(db, ...))
           const docSnap = await getDoc(doc(db, "users", item.studentId));
           if (docSnap.exists() && isMounted) {
             setStudentImg(docSnap.data().profileImage);
@@ -65,7 +65,6 @@ const FeeCard = ({ item, onUpdateStatus }) => {
 
   const isVerifying = item.status === "Verifying";
 
-  // Dynamic Status Badge Colors
   const getStatusColor = (status) => {
     switch (status) {
       case "Paid":
@@ -245,12 +244,8 @@ const FeeReports = () => {
     "CS",
   ];
 
-  // --- REAL-TIME LISTENER (MODULAR) ---
   useEffect(() => {
-    // Modular: query(collection(db, ...), orderBy(...))
     const q = query(collection(db, "fees"), orderBy("createdAt", "desc"));
-
-    // Modular: onSnapshot(query, callback)
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (!snapshot) return;
       const list = snapshot.docs.map((doc) => ({
@@ -273,13 +268,13 @@ const FeeReports = () => {
     if (selectedClassFilter === "All") setFilteredFees(fees);
     else
       setFilteredFees(
-        fees.filter((f) => f.studentClass === selectedClassFilter)
+        fees.filter((f) => f.studentClass === selectedClassFilter),
       );
   }, [selectedClassFilter, fees]);
 
   const totalExpected = filteredFees.reduce(
     (acc, curr) => acc + Number(curr.amount),
-    0
+    0,
   );
   const totalCollected = filteredFees
     .filter((f) => f.status === "Paid")
@@ -304,7 +299,6 @@ const FeeReports = () => {
       if (newStatus === "Paid") updateData.paidAt = new Date().toISOString();
       if (newStatus === "Pending") updateData.transactionRef = null;
 
-      // Modular: updateDoc(doc(db, ...))
       const feeRef = doc(db, "fees", id);
       await updateDoc(feeRef, updateData);
 
@@ -326,7 +320,6 @@ const FeeReports = () => {
     setGenerateConfirm({ ...generateConfirm, visible: false });
     setGenerating(true);
     try {
-      // Modular: httpsCallable(functionsInstance, name)
       const fn = httpsCallable(functions, "generateMonthlyFees");
       const result = await fn();
       showToast(result.data.message, "success");
@@ -339,11 +332,15 @@ const FeeReports = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: theme.bgPrimary }}
+      edges={["top"]} // Ensure safe area handles top
+    >
       <StatusBar
         backgroundColor={theme.bgPrimary}
         barStyle={isDark ? "light-content" : "dark-content"}
       />
+
       <CustomToast
         visible={toast.visible}
         message={toast.msg}
@@ -351,159 +348,149 @@ const FeeReports = () => {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      {/* --- HEADER --- */}
-      <View className="px-5 py-4 flex-row items-center justify-between">
-        <View className="flex-row items-center">
+      {/* --- NEW CUSTOM HEADER --- */}
+      <CustomHeader
+        title="Fee Ledger"
+        showBack={true}
+        rightComponent={
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={handleGenerateFees}
+            disabled={generating}
+            style={{
+              backgroundColor: generating
+                ? theme.bgTertiary
+                : theme.accentSoft20,
+              borderColor: theme.border,
+            }}
+            className="p-2 rounded-full border"
+          >
+            {generating ? (
+              <ActivityIndicator size="small" color={theme.accent} />
+            ) : (
+              <Ionicons name="flash" size={24} color={theme.accent} />
+            )}
+          </TouchableOpacity>
+        }
+      />
+
+      {/* CONTENT START */}
+      <View className="flex-1 mt-2">
+        <View className="px-5 mb-6">
+          <View
             style={{
               backgroundColor: theme.bgSecondary,
               borderColor: theme.border,
+              shadowColor: theme.shadow,
             }}
-            className="p-2 rounded-full border mr-4"
+            className="p-5 rounded-3xl border shadow-lg relative overflow-hidden"
           >
-            <Ionicons name="arrow-back" size={22} color={theme.textPrimary} />
-          </TouchableOpacity>
-          <Text
-            style={{ color: theme.textPrimary }}
-            className="text-2xl font-bold"
-          >
-            Fee Ledger
-          </Text>
-        </View>
-
-        {/* THUNDERBOLT BUTTON */}
-        <TouchableOpacity
-          onPress={handleGenerateFees}
-          disabled={generating}
-          style={{
-            backgroundColor: generating ? theme.bgTertiary : theme.accentSoft20,
-            borderColor: theme.border,
-          }}
-          className="p-2 rounded-full border"
-        >
-          {generating ? (
-            <ActivityIndicator size="small" color={theme.accent} />
-          ) : (
-            <Ionicons name="flash" size={24} color={theme.accent} />
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <View className="px-5 mb-6">
-        <View
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.border,
-            shadowColor: theme.shadow,
-          }}
-          className="p-5 rounded-3xl border shadow-lg relative overflow-hidden"
-        >
-          <View className="flex-row justify-between items-end mb-4">
-            <View>
-              <Text
-                style={{ color: theme.textSecondary }}
-                className="text-xs font-bold uppercase tracking-widest mb-1"
-              >
-                Total Collected
-              </Text>
-              <Text
-                style={{ color: theme.textPrimary }}
-                className="text-4xl font-black"
-              >
-                ₹{totalCollected}
-              </Text>
+            <View className="flex-row justify-between items-end mb-4">
+              <View>
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-xs font-bold uppercase tracking-widest mb-1"
+                >
+                  Total Collected
+                </Text>
+                <Text
+                  style={{ color: theme.textPrimary }}
+                  className="text-4xl font-black"
+                >
+                  ₹{totalCollected}
+                </Text>
+              </View>
+              <View className="items-end">
+                <Text
+                  style={{ color: theme.textSecondary }}
+                  className="text-[10px] mb-1"
+                >
+                  Expected: ₹{totalExpected}
+                </Text>
+                <Text style={{ color: theme.accent }} className="font-bold">
+                  {Math.round(collectionRate)}% Paid
+                </Text>
+              </View>
             </View>
-            <View className="items-end">
-              <Text
-                style={{ color: theme.textSecondary }}
-                className="text-[10px] mb-1"
-              >
-                Expected: ₹{totalExpected}
-              </Text>
-              <Text style={{ color: theme.accent }} className="font-bold">
-                {Math.round(collectionRate)}% Paid
-              </Text>
-            </View>
-          </View>
-          <View
-            style={{ backgroundColor: theme.bgPrimary }}
-            className="h-2 w-full rounded-full overflow-hidden"
-          >
             <View
-              style={{
-                width: `${collectionRate}%`,
-                backgroundColor: theme.accent,
-              }}
-              className="h-full"
-            />
+              style={{ backgroundColor: theme.bgPrimary }}
+              className="h-2 w-full rounded-full overflow-hidden"
+            >
+              <View
+                style={{
+                  width: `${collectionRate}%`,
+                  backgroundColor: theme.accent,
+                }}
+                className="h-full"
+              />
+            </View>
           </View>
         </View>
-      </View>
 
-      <View className="px-5 mb-4">
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {FILTER_OPTIONS.map((cls) => (
-            <TouchableOpacity
-              key={cls}
-              onPress={() => setSelectedClassFilter(cls)}
-              style={{
-                backgroundColor:
-                  selectedClassFilter === cls
-                    ? theme.accent
-                    : theme.bgSecondary,
-                borderColor:
-                  selectedClassFilter === cls ? theme.accent : theme.border,
-              }}
-              className="mr-2 px-5 py-2 rounded-2xl border"
-            >
-              <Text
+        <View className="px-5 mb-4">
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {FILTER_OPTIONS.map((cls) => (
+              <TouchableOpacity
+                key={cls}
+                onPress={() => setSelectedClassFilter(cls)}
                 style={{
-                  color:
+                  backgroundColor:
                     selectedClassFilter === cls
-                      ? theme.textDark
-                      : theme.textSecondary,
-                  fontWeight: selectedClassFilter === cls ? "bold" : "normal",
+                      ? theme.accent
+                      : theme.bgSecondary,
+                  borderColor:
+                    selectedClassFilter === cls ? theme.accent : theme.border,
                 }}
+                className="mr-2 px-5 py-2 rounded-2xl border"
               >
-                {cls}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+                <Text
+                  style={{
+                    color:
+                      selectedClassFilter === cls
+                        ? theme.textDark
+                        : theme.textSecondary,
+                    fontWeight: selectedClassFilter === cls ? "bold" : "normal",
+                  }}
+                >
+                  {cls}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {loading ? (
+          <ActivityIndicator
+            size="large"
+            color={theme.accent}
+            className="mt-10"
+          />
+        ) : (
+          <FlatList
+            data={filteredFees}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <FeeCard item={item} onUpdateStatus={handleUpdateStatus} />
+            )}
+            contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+            ListEmptyComponent={
+              <View className="mt-20 items-center opacity-30">
+                <MaterialCommunityIcons
+                  name="receipt"
+                  size={80}
+                  color={theme.textMuted}
+                />
+                <Text
+                  style={{ color: theme.textMuted }}
+                  className="text-center mt-4"
+                >
+                  No records found.
+                </Text>
+              </View>
+            }
+          />
+        )}
       </View>
 
-      {loading ? (
-        <ActivityIndicator
-          size="large"
-          color={theme.accent}
-          className="mt-10"
-        />
-      ) : (
-        <FlatList
-          data={filteredFees}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <FeeCard item={item} onUpdateStatus={handleUpdateStatus} />
-          )}
-          contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-          ListEmptyComponent={
-            <View className="mt-20 items-center opacity-30">
-              <MaterialCommunityIcons
-                name="receipt"
-                size={80}
-                color={theme.textMuted}
-              />
-              <Text
-                style={{ color: theme.textMuted }}
-                className="text-center mt-4"
-              >
-                No records found.
-              </Text>
-            </View>
-          }
-        />
-      )}
       <CustomAlert
         visible={confirmAlert.visible}
         title={"Confirm Action"}
@@ -525,4 +512,3 @@ const FeeReports = () => {
 };
 
 export default FeeReports;
- 

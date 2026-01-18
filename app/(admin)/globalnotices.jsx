@@ -23,11 +23,12 @@ import {
   onSnapshot,
   serverTimestamp,
 } from "@react-native-firebase/firestore";
-import { db } from "../../config/firebaseConfig"; // Import initialized db instance
+import { db } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
+import CustomHeader from "../../components/CustomHeader"; // <--- IMPORTED
 import { useTheme } from "../../context/ThemeContext";
 
 const ManageNotices = () => {
@@ -61,11 +62,8 @@ const ManageNotices = () => {
   // --- FETCH NOTICES (MODULAR) ---
   useEffect(() => {
     setLoading(true);
-
-    // Modular: query(collection(db, ...), orderBy(...))
     const q = query(collection(db, "notices"), orderBy("createdAt", "desc"));
 
-    // Modular: onSnapshot(query, callback)
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -94,12 +92,11 @@ const ManageNotices = () => {
 
     setPosting(true);
     try {
-      // Modular: addDoc(collection(db, ...), data)
       await addDoc(collection(db, "notices"), {
         title: newTitle,
         content: newContent,
         date: new Date().toLocaleDateString("en-GB"),
-        createdAt: serverTimestamp(), // Modular Timestamp
+        createdAt: serverTimestamp(),
       });
 
       showToast("Notice posted successfully!", "success");
@@ -187,38 +184,24 @@ const ManageNotices = () => {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      {/* --- HEADER --- */}
-      <View className="px-5 py-4 flex-row items-center justify-between">
-        <View className="flex-row items-center">
+      {/* --- REPLACED MANUAL HEADER WITH CUSTOM HEADER --- */}
+      <CustomHeader
+        title="Global Notices"
+        showBack={true}
+        onBackPress={() => router.back()}
+        rightComponent={
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => setIsAdding(true)}
             style={{
               backgroundColor: theme.bgSecondary,
-              borderColor: theme.border,
+              borderColor: theme.accent,
             }}
-            className="p-2 rounded-full border mr-3"
+            className="p-2 rounded-full border"
           >
-            <Ionicons name="arrow-back" size={22} color={theme.textPrimary} />
+            <Ionicons name="add" size={22} color={theme.accent} />
           </TouchableOpacity>
-          <Text
-            style={{ color: theme.textPrimary }}
-            className="text-2xl font-bold"
-          >
-            Global Notices
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          onPress={() => setIsAdding(true)}
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.accent,
-          }}
-          className="p-2 rounded-full border"
-        >
-          <Ionicons name="add" size={24} color={theme.accent} />
-        </TouchableOpacity>
-      </View>
+        }
+      />
 
       {/* --- LIST --- */}
       {loading ? (
@@ -232,7 +215,7 @@ const ManageNotices = () => {
           data={notices}
           keyExtractor={(item) => item.id}
           renderItem={renderNotice}
-          contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+          contentContainerStyle={{ padding: 10, paddingBottom: 20 }}
           ListEmptyComponent={() => (
             <View className="mt-20 items-center opacity-30">
               <MaterialCommunityIcons
@@ -350,4 +333,3 @@ const ManageNotices = () => {
 };
 
 export default ManageNotices;
- 

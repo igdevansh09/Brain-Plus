@@ -10,12 +10,13 @@ import {
   Image,
   Modal,
 } from "react-native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
+import CustomHeader from "../../components/CustomHeader"; // <--- IMPORTED
 
 // --- REFACTOR START: Modular Imports ---
 import {
@@ -29,7 +30,7 @@ import {
   where,
   serverTimestamp,
 } from "@react-native-firebase/firestore";
-import { auth, db } from "../../config/firebaseConfig"; // Import instances
+import { auth, db } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
@@ -272,7 +273,6 @@ const TeacherAttendance = () => {
         const user = auth.currentUser;
         if (!user) return;
 
-        // Modular: doc + getDoc
         const teacherDocRef = doc(db, "users", user.uid);
         const teacherDoc = await getDoc(teacherDocRef);
 
@@ -291,8 +291,8 @@ const TeacherAttendance = () => {
             setUniqueClasses(classes);
             setTeachingProfile(
               classes.flatMap((c) =>
-                subjects.map((s) => ({ class: c, subject: s }))
-              )
+                subjects.map((s) => ({ class: c, subject: s })),
+              ),
             );
             if (classes.length > 0) {
               setSelectedClass(classes[0]);
@@ -314,11 +314,10 @@ const TeacherAttendance = () => {
   const fetchMarkedDates = useCallback(async () => {
     if (!selectedClass || !selectedSubject) return;
     try {
-      // Modular: query + getDocs
       const q = query(
         collection(db, "attendance"),
         where("classId", "==", selectedClass),
-        where("subject", "==", selectedSubject)
+        where("subject", "==", selectedSubject),
       );
       const snap = await getDocs(q);
 
@@ -361,7 +360,7 @@ const TeacherAttendance = () => {
         collection(db, "attendance"),
         where("classId", "==", selectedClass),
         where("subject", "==", selectedSubject),
-        where("date", "==", dateStr)
+        where("date", "==", dateStr),
       );
 
       const attSnap = await getDocs(attQuery);
@@ -378,7 +377,7 @@ const TeacherAttendance = () => {
       const userQuery = query(
         collection(db, "users"),
         where("role", "==", "student"),
-        where("standard", "==", selectedClass)
+        where("standard", "==", selectedClass),
       );
 
       const snapshot = await getDocs(userQuery);
@@ -434,7 +433,7 @@ const TeacherAttendance = () => {
 
   const handleSubmit = async () => {
     const absentCount = Object.values(attendanceData).filter(
-      (s) => s === "Absent"
+      (s) => s === "Absent",
     ).length;
     const total = students.length;
 
@@ -453,7 +452,7 @@ const TeacherAttendance = () => {
             collection(db, "attendance"),
             where("classId", "==", selectedClass),
             where("subject", "==", selectedSubject),
-            where("date", "==", dateStr)
+            where("date", "==", dateStr),
           );
 
           const snap = await getDocs(q);
@@ -563,17 +562,22 @@ const TeacherAttendance = () => {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ backgroundColor: theme.bgPrimary }}
-        className="flex-1 justify-center items-center"
+      <View
+        style={{
+          backgroundColor: theme.bgPrimary,
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
         <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor={theme.bgPrimary}
@@ -609,29 +613,8 @@ const TeacherAttendance = () => {
         />
       </Modal>
 
-      {/* HEADER */}
-      <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.border,
-          }}
-          className="p-2 rounded-full border"
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-xl font-bold"
-        >
-          Attendance
-        </Text>
-        <View className="w-10" />
-      </View>
-
       <ScrollView
-        className="flex-1 px-5 pt-2"
+        className="flex-1 px-5 pt-4"
         showsVerticalScrollIndicator={false}
       >
         {/* TOP CARD: DATE & CLASS */}
@@ -778,7 +761,7 @@ const TeacherAttendance = () => {
             scrollEnabled={false}
             ListEmptyComponent={() => (
               <View className="items-center py-10 opacity-30">
-                <MaterialCommunityIcons
+                <Ionicons
                   name="account-off"
                   size={50}
                   color={theme.textMuted}
@@ -842,9 +825,8 @@ const TeacherAttendance = () => {
           )}
         </View>
       )}
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default TeacherAttendance;
- 

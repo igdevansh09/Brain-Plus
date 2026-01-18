@@ -4,13 +4,11 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  StatusBar,
   ActivityIndicator,
   Linking,
   Alert,
   Image,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -23,10 +21,12 @@ import {
   doc,
   getDoc,
 } from "@react-native-firebase/firestore";
-import { db } from "../../config/firebaseConfig"; // Import initialized db instance
+import { db } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
+import CustomHeader from "../../components/CustomHeader"; // <--- IMPORTED
 
 const getDaysCount = (start, end) => {
   try {
@@ -61,7 +61,6 @@ const LeaveCard = ({ item, type }) => {
     const fetchProfile = async () => {
       try {
         if (userId) {
-          // Modular: getDoc(doc(db, ...))
           const userDoc = await getDoc(doc(db, "users", userId));
           if (isMounted && userDoc.exists()) {
             setUserData(userDoc.data());
@@ -238,10 +237,9 @@ const AllLeaves = () => {
     // Modular: query(collection, orderBy)
     const q = query(
       collection(db, collectionName),
-      orderBy("createdAt", "desc")
+      orderBy("createdAt", "desc"),
     );
 
-    // Modular: onSnapshot(query, callback)
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -260,41 +258,18 @@ const AllLeaves = () => {
       (err) => {
         console.log("Error fetching leaves:", err);
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
   }, [activeTab]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
-      <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
-        backgroundColor={theme.bgPrimary}
-      />
-
-      {/* --- HEADER --- */}
-      <View className="px-5 py-4 flex-row items-center">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.border,
-          }}
-          className="p-2 rounded-full border mr-4"
-        >
-          <Ionicons name="arrow-back" size={22} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-2xl font-bold"
-        >
-          Absence Log
-        </Text>
-      </View>
+    // FIX: Using ScreenWrapper with 'edges' to exclude top padding
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
 
       {/* --- TABS --- */}
-      <View className="flex-row px-5 mb-4">
+      <View className="flex-row px-5 mb-4 pt-2">
         <TouchableOpacity
           onPress={() => setActiveTab("Teachers")}
           style={{
@@ -363,9 +338,8 @@ const AllLeaves = () => {
           }
         />
       )}
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default AllLeaves;
- 

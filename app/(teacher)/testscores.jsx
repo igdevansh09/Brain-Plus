@@ -7,18 +7,19 @@ import {
   FlatList,
   ActivityIndicator,
   ScrollView,
-  TextInput,
   Image,
   Modal,
+  TextInput,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
+import CustomHeader from "../../components/CustomHeader"; // <--- IMPORTED
 
 // --- REFACTOR START: Modular Imports ---
 import {
@@ -31,7 +32,7 @@ import {
   where,
   serverTimestamp,
 } from "@react-native-firebase/firestore";
-import { auth, db } from "../../config/firebaseConfig"; // Import instances
+import { auth, db } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 import CustomToast from "../../components/CustomToast";
@@ -298,8 +299,8 @@ const TeacherScoreSubmission = () => {
             setUniqueClasses(classes);
             setTeachingProfile(
               classes.flatMap((c) =>
-                subjects.map((s) => ({ class: c, subject: s }))
-              )
+                subjects.map((s) => ({ class: c, subject: s })),
+              ),
             );
             if (classes.length > 0) {
               setSelectedClass(classes[0]);
@@ -325,7 +326,7 @@ const TeacherScoreSubmission = () => {
       const q = query(
         collection(db, "exam_results"),
         where("classId", "==", selectedClass),
-        where("subject", "==", selectedSubject)
+        where("subject", "==", selectedSubject),
       );
       const snap = await getDocs(q);
 
@@ -368,7 +369,7 @@ const TeacherScoreSubmission = () => {
         collection(db, "exam_results"),
         where("classId", "==", selectedClass),
         where("subject", "==", selectedSubject),
-        where("date", "==", dateStr)
+        where("date", "==", dateStr),
       );
 
       const resSnap = await getDocs(resQuery);
@@ -391,7 +392,7 @@ const TeacherScoreSubmission = () => {
       const userQuery = query(
         collection(db, "users"),
         where("role", "==", "student"),
-        where("standard", "==", selectedClass)
+        where("standard", "==", selectedClass),
       );
 
       const snapshot = await getDocs(userQuery);
@@ -430,7 +431,7 @@ const TeacherScoreSubmission = () => {
     if (existingData) return;
     const newScore = text.replace(/[^0-9]/g, "");
     setStudents((prev) =>
-      prev.map((s) => (s.id === studentId ? { ...s, score: newScore } : s))
+      prev.map((s) => (s.id === studentId ? { ...s, score: newScore } : s)),
     );
   };
 
@@ -524,6 +525,7 @@ const TeacherScoreSubmission = () => {
               <Image
                 source={{ uri: item.profileImage }}
                 className="w-full h-full"
+                resizeMode="cover"
               />
             ) : (
               <Text
@@ -585,17 +587,22 @@ const TeacherScoreSubmission = () => {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ backgroundColor: theme.bgPrimary }}
-        className="flex-1 justify-center items-center"
+      <View
+        style={{
+          backgroundColor: theme.bgPrimary,
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
         <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor={theme.bgPrimary}
@@ -630,27 +637,6 @@ const TeacherScoreSubmission = () => {
           onClose={() => setCalendarVisible(false)}
         />
       </Modal>
-
-      {/* HEADER */}
-      <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.border,
-          }}
-          className="p-2 rounded-full border"
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-xl font-bold"
-        >
-          {existingData ? "View Scores" : "Upload Scores"}
-        </Text>
-        <View className="w-10" />
-      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -895,9 +881,8 @@ const TeacherScoreSubmission = () => {
             </TouchableOpacity>
           </View>
         )}
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default TeacherScoreSubmission;
- 

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  StatusBar,
   ActivityIndicator,
   FlatList,
   Dimensions,
@@ -12,8 +11,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import dayjs from "dayjs";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
 
 // Modular Imports
 import {
@@ -60,7 +59,7 @@ const AttendanceCalendar = () => {
 
       const q = query(
         collection(db, "attendance"),
-        where("classId", "==", studentClass)
+        where("classId", "==", studentClass),
       );
       const querySnapshot = await getDocs(q);
 
@@ -253,43 +252,28 @@ const AttendanceCalendar = () => {
         </View>
       );
     },
-    [colWidth, theme]
+    [colWidth, theme],
   );
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ backgroundColor: theme.bgPrimary }}
-        className="flex-1 justify-center items-center"
+      <View
+        style={{
+          backgroundColor: theme.bgPrimary,
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
         <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
-      <StatusBar
-        backgroundColor={theme.bgPrimary}
-        barStyle={isDark ? "light-content" : "dark-content"}
-      />
-
-      <View className="px-4 pb-4 py-7 flex-row items-center">
-        <Ionicons
-          name="arrow-back"
-          size={24}
-          color={theme.textPrimary}
-          onPress={() => router.back()}
-        />
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-2xl font-semibold ml-4"
-        >
-          Attendance
-        </Text>
-      </View>
-
-      <ScrollView className="flex-1 px-4">
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
+      <ScrollView className="flex-1 px-4 pt-4">
         {/* Subject Filter */}
         <View className="mb-6">
           <FlatList
@@ -467,9 +451,8 @@ const AttendanceCalendar = () => {
 
         <View className="h-10" />
       </ScrollView>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default AttendanceCalendar;
- 

@@ -4,13 +4,11 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  StatusBar,
   ActivityIndicator,
   Modal,
   ScrollView,
   Image,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -30,6 +28,7 @@ import { db } from "../../config/firebaseConfig"; // Import instance
 // --- REFACTOR END ---
 
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
 
 const AdminViewNotifications = () => {
   const router = useRouter();
@@ -56,7 +55,7 @@ const AdminViewNotifications = () => {
     // Listener 1: Global Notices
     const qGlobal = query(
       collection(db, "notices"),
-      orderBy("createdAt", "desc")
+      orderBy("createdAt", "desc"),
     );
     const unsubGlobal = onSnapshot(qGlobal, (snap) => {
       const list = snap.docs.map((doc) => ({
@@ -71,7 +70,7 @@ const AdminViewNotifications = () => {
     // Listener 2: Class Notices
     const qClass = query(
       collection(db, "class_notices"),
-      orderBy("createdAt", "desc")
+      orderBy("createdAt", "desc"),
     );
     const unsubClass = onSnapshot(qClass, (snap) => {
       const list = snap.docs.map((doc) => ({
@@ -106,7 +105,7 @@ const AdminViewNotifications = () => {
                 const qAdmin = query(
                   collection(db, "users"),
                   where("role", "==", "admin"),
-                  limit(1)
+                  limit(1),
                 );
                 const adminSnap = await getDocs(qAdmin);
 
@@ -140,7 +139,7 @@ const AdminViewNotifications = () => {
               console.log("Failed to enrich notice with author image", e);
             }
             return { ...item, authorImage: null };
-          })
+          }),
         );
 
         all = enriched;
@@ -168,7 +167,7 @@ const AdminViewNotifications = () => {
       setFilteredNotices(combinedNotices);
     } else {
       setFilteredNotices(
-        combinedNotices.filter((n) => n.sourceType === filter)
+        combinedNotices.filter((n) => n.sourceType === filter),
       );
     }
     setLoading(false);
@@ -277,34 +276,8 @@ const AdminViewNotifications = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
-      <StatusBar
-        backgroundColor={theme.bgPrimary}
-        barStyle={isDark ? "light-content" : "dark-content"}
-      />
-
-      {/* HEADER */}
-      <View className="px-5 py-4 flex-row items-center justify-between">
-        <View className="flex-row items-center">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={{
-              backgroundColor: theme.bgSecondary,
-              borderColor: theme.border,
-            }}
-            className="p-2 rounded-full border mr-4"
-          >
-            <Ionicons name="arrow-back" size={22} color={theme.textPrimary} />
-          </TouchableOpacity>
-          <Text
-            style={{ color: theme.textPrimary }}
-            className="text-xl font-bold"
-          >
-            Notifications Log
-          </Text>
-        </View>
-      </View>
-
+    // FIX: Using ScreenWrapper with 'edges' prop to avoid double top padding
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       {/* LIST */}
       {loading ? (
         <ActivityIndicator
@@ -317,7 +290,11 @@ const AdminViewNotifications = () => {
           data={filteredNotices}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingBottom: 20,
+            paddingTop: 10,
+          }}
           ListEmptyComponent={
             <View className="mt-20 items-center opacity-50">
               <MaterialCommunityIcons
@@ -426,8 +403,8 @@ const AdminViewNotifications = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
-export default AdminViewNotifications; 
+export default AdminViewNotifications;

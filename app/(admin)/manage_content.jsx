@@ -5,13 +5,11 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  StatusBar,
   Image,
   ScrollView,
   Modal,
   FlatList,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -33,13 +31,13 @@ import {
   ref,
   getDownloadURL,
   deleteObject,
-  // uploadBytes, // REMOVED: Incompatible with RN local files
 } from "@react-native-firebase/storage";
-import { db, storage } from "../../config/firebaseConfig"; // Import instances
+import { db, storage } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 import CustomAlert from "../../components/CustomAlert";
 import CustomToast from "../../components/CustomToast";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
 import { useTheme } from "../../context/ThemeContext";
 
 // --- SELECTION CONSTANTS ---
@@ -150,7 +148,7 @@ const ManageContent = () => {
       (error) => {
         console.log("Firestore Error:", error);
         setLoading(false);
-      }
+      },
     );
     return () => unsubscribe();
   }, []);
@@ -288,7 +286,7 @@ const ManageContent = () => {
     setFetchingVideo(true);
     try {
       const response = await fetch(
-        `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
+        `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
       );
       const data = await response.json();
 
@@ -466,15 +464,8 @@ const ManageContent = () => {
 
   // --- RENDER ---
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: theme.bgPrimary }}
-      className="pt-2"
-    >
-      <StatusBar
-        backgroundColor={theme.bgPrimary}
-        barStyle={isDark ? "light-content" : "dark-content"}
-      />
-
+    // FIX: Using ScreenWrapper with 'edges' prop excludes top padding, removing the space.
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       <CustomAlert
         visible={alertVisible}
         title={alertTitle}
@@ -491,30 +482,9 @@ const ManageContent = () => {
         onHide={() => setToast({ ...toast, visible: false })}
       />
 
-      {/* HEADER */}
-      <View className="px-4 py-4 flex-row items-center justify-between">
-        <View className="flex-row items-center">
-          <TouchableOpacity onPress={() => router.back()} className="mr-3">
-            <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-          </TouchableOpacity>
-          <Text
-            style={{ color: theme.textPrimary }}
-            className="text-xl font-bold"
-          >
-            Manage Content
-          </Text>
-        </View>
-        {isEditing && activeTab === "courses" && (
-          <TouchableOpacity onPress={resetForm}>
-            <Text style={{ color: theme.accent }} className="font-bold">
-              Cancel Edit
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
       {/* --- TABS --- */}
-      <View className="flex-row px-4 mb-4">
+      {/* Added pt-4 to give a small breathing room from the header line */}
+      <View className="flex-row px-4 mb-4 pt-2">
         <TouchableOpacity
           onPress={() => setActiveTab("banners")}
           style={{
@@ -891,7 +861,9 @@ const ManageContent = () => {
             <TouchableOpacity
               onPress={handleSaveOrUpdate}
               disabled={uploading}
-              style={{ backgroundColor: isEditing ? theme.info : theme.accent }}
+              style={{
+                backgroundColor: isEditing ? theme.info : theme.accent,
+              }}
               className="py-4 rounded-xl items-center mt-4"
             >
               {uploading ? (
@@ -1037,9 +1009,8 @@ const ManageContent = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default ManageContent;
- 

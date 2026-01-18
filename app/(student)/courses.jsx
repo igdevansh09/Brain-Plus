@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
-  StatusBar,
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
@@ -11,8 +10,8 @@ import {
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
 
 // --- REFACTOR START: Modular Imports ---
 import {
@@ -23,7 +22,7 @@ import {
   query,
   orderBy,
 } from "@react-native-firebase/firestore";
-import { auth, db } from "../../config/firebaseConfig"; // Import instances
+import { auth, db } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 const MyCourses = () => {
@@ -53,7 +52,6 @@ const MyCourses = () => {
       const enrolledSubjects = userData.enrolledSubjects || []; // e.g., ["Physics", "CS"]
 
       // 2. Fetch All Courses and Filter Locally
-      // (Fetching all is necessary because Firestore queries with mixed OR logic on different fields are limited)
       const q = query(collection(db, "courses"), orderBy("createdAt", "desc"));
       const snapshot = await getDocs(q);
 
@@ -64,17 +62,15 @@ const MyCourses = () => {
 
       // --- FILTER LOGIC ---
       const filteredCourses = allCourses.filter((course) => {
-        // Condition A: Course matches student's standard exactly (e.g. "12th" matches "12th")
-        // Logic: Check if target starts with the class name
+        // Condition A: Course matches student's standard exactly
         if (course.target.startsWith(studentClass)) return true;
 
         // Condition B: CS Course Exception
-        // If the course target is "CS", show it to students in class "CS" OR students with "CS" subject
         if (course.target.startsWith("CS")) {
           const hasCSSubject = enrolledSubjects.some(
             (sub) =>
               sub.trim().toUpperCase() === "CS" ||
-              sub.trim().toUpperCase() === "COMPUTER SCIENCE"
+              sub.trim().toUpperCase() === "COMPUTER SCIENCE",
           );
           if (studentClass === "CS" || hasCSSubject) return true;
         }
@@ -191,43 +187,22 @@ const MyCourses = () => {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ backgroundColor: theme.bgPrimary }}
-        className="flex-1 justify-center items-center"
+      <View
+        style={{
+          backgroundColor: theme.bgPrimary,
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
         <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
-      <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
-        backgroundColor={theme.bgPrimary}
-      />
-
-      {/* --- HEADER --- */}
-      <View className="px-5 pt-3 pb-4 flex-row items-center justify-between">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.border,
-          }}
-          className="p-2 rounded-full border"
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-xl font-bold"
-        >
-          My Courses
-        </Text>
-        <View className="w-10" />
-      </View>
-
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
       {/* --- LIST --- */}
       <FlatList
         data={courses}
@@ -260,9 +235,8 @@ const MyCourses = () => {
           </View>
         )}
       />
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default MyCourses;
- 

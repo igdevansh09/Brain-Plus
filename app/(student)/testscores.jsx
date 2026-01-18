@@ -2,16 +2,15 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
-  StatusBar,
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
   ScrollView,
 } from "react-native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
+import ScreenWrapper from "../../components/ScreenWrapper"; // <--- IMPORTED
 
 // --- REFACTOR START: Modular Imports ---
 import {
@@ -22,7 +21,7 @@ import {
   query,
   where,
 } from "@react-native-firebase/firestore";
-import { auth, db } from "../../config/firebaseConfig"; // Import instances
+import { auth, db } from "../../config/firebaseConfig";
 // --- REFACTOR END ---
 
 const TestScores = () => {
@@ -35,14 +34,12 @@ const TestScores = () => {
   // --- 1. DATA FETCHING (MODULAR) ---
   const fetchScores = async () => {
     try {
-      // Modular: auth.currentUser
       const user = auth.currentUser;
       if (!user) return;
 
       console.log("Fetching profile for:", user.uid);
 
       // A. Get Student's Class (Standard) first
-      // Modular: doc + getDoc
       const userDocRef = doc(db, "users", user.uid);
       const userDoc = await getDoc(userDocRef);
       const studentClass = userDoc.data()?.standard;
@@ -56,10 +53,9 @@ const TestScores = () => {
       console.log("Fetching exams for class:", studentClass);
 
       // B. Fetch Exams for this Class from 'exam_results'
-      // Modular: query + getDocs
       const q = query(
         collection(db, "exam_results"),
-        where("classId", "==", studentClass)
+        where("classId", "==", studentClass),
       );
       const snapshot = await getDocs(q);
 
@@ -71,10 +67,8 @@ const TestScores = () => {
       const data = snapshot.docs
         .map((docSnap) => {
           const exam = docSnap.data();
-          // The teacher saves scores in a map: { "uid123": 85, "uid456": 90 }
           const myScore = exam.results ? exam.results[user.uid] : null;
 
-          // Only show exams where this student has a score
           if (myScore !== null && myScore !== undefined && myScore !== "") {
             return {
               id: docSnap.id,
@@ -82,18 +76,17 @@ const TestScores = () => {
               subject: exam.subject || "General",
               totalMarks: exam.maxScore || 100,
               marksObtained: myScore,
-              date: exam.date, // Stored as "DD/MM/YYYY" string
+              date: exam.date,
             };
           }
           return null;
         })
-        .filter((item) => item !== null); // Remove nulls
+        .filter((item) => item !== null);
 
-      // D. Sort by Date (Handling DD/MM/YYYY string)
+      // D. Sort by Date
       data.sort((a, b) => {
         const parseDate = (str) => {
           if (!str) return new Date(0);
-          // Handle Firestore Timestamp if present (rare case here but good safety)
           if (str.toDate) return str.toDate();
           const parts = str.split("/");
           if (parts.length === 3)
@@ -234,48 +227,31 @@ const TestScores = () => {
         </View>
       );
     },
-    [theme]
+    [theme],
   );
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ backgroundColor: theme.bgPrimary }}
-        className="flex-1 justify-center items-center"
+      <View
+        style={{
+          backgroundColor: theme.bgPrimary,
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
         <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
-      <StatusBar
-        backgroundColor={theme.bgPrimary}
-        barStyle={isDark ? "light-content" : "dark-content"}
-      />
-
-      {/* Header */}
-      <View className="px-5 pt-3 pb-4 flex-row items-center">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: theme.bgSecondary,
-            borderColor: theme.border,
-          }}
-          className="p-2 rounded-full border mr-4"
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-2xl font-bold"
-        >
-          Test Scores
-        </Text>
-      </View>
-
-      <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
+    // FIX: Using ScreenWrapper with 'edges' prop to remove top padding space
+    <ScreenWrapper scrollable={false} edges={["left", "right", "bottom"]}>
+      <ScrollView
+        className="flex-1 px-5 pt-4"
+        showsVerticalScrollIndicator={false}
+      >
         {/* Performance Summary */}
         <View
           style={{
@@ -387,9 +363,8 @@ const TestScores = () => {
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 };
 
 export default TestScores;
- 

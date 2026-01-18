@@ -348,7 +348,11 @@ const ManageTeachers = () => {
   );
 
   return (
-    <ScreenWrapper scrollable={false}>
+    <ScreenWrapper
+      scrollable={false}
+      edges={["left", "right", "bottom"]}
+      className="pt-2"
+    >
       <CustomAlert
         visible={alert.visible}
         title={alert.title}
@@ -364,22 +368,6 @@ const ManageTeachers = () => {
         type={toast.type}
         onHide={() => setToast({ ...toast, visible: false })}
       />
-
-      <View className="px-4 py-4 flex-row items-center">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ backgroundColor: theme.bgSecondary }}
-          className="mr-4 p-2 rounded-full"
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={{ color: theme.textPrimary }}
-          className="text-2xl font-bold"
-        >
-          Teachers Staff
-        </Text>
-      </View>
 
       <View className="px-4 mb-4">
         <View
